@@ -1,171 +1,209 @@
 # STMP Specification
 
+**VERSION: 1.0**
+
+**Note**: `text` is only used for `WebSockets`, it contains message length already, so we do not need `<LENGTH>` field.
+
 1. Client handshake
 
-    - binary
-    
-        ```text
-        <LENGTH><VERSION MAJOR><VERSION MINOR>
-        <KEY>:<VALUE>
-        ```
+   - binary
 
-    - text
+     ```text
+     STMP<VERSION MAJOR><VERSION MINOR><LENGTH>
+     <KEY>:<VALUE>
+     ...
+     ```
 
-        *reuse WebSockets handshake request*
-        
-        - All the query will be treated as headers
-        - `stmp-version`: with format `<major>.<minor>`
-    
-    - headers
-    
-        - `Content-Type`: determine the `content-type` for full connection
-        - `Encoding`: the compress mode, only allow `gzip` or empty
-        - `Action-Kind`: the action kind, only `string` or `varint`
-    
-    - `VERSION MAJOR`, `VERSION MINOR`: each use one byte as its value
-        result is `uint16`
+   - text
+
+     _reuse WebSockets handshake request_
+
+     - All the query will be treated as headers
+     - `stmp-version`: with format `<major>.<minor>`
+
+   - `KEY`
+
+     - `Accept`: the accepted `Content-Type` types, see [RFC7231#5.3.2](https://tools.ietf.org/html/rfc7231#section-5.3.2).
+     - `Accept-Encoding`: the accepted `Encoding` types, see [RFC7231#5.3.4](https://tools.ietf.org/html/rfc7231#section-5.3.2).
+     - `Accept-Format`: the accepted `Format` types, see `Server handshake` section.
+
+   - `VERSION MAJOR`, `VERSION MINOR`: each use one byte as its value result is `uint16`
 
 2. Server handshake
 
-    - binary
-    
-        ```text
-        <HANDSHAKE STATUS>[PAYLOAD LENGTH][PAYLOAD]
-        ```
-    
-    - text
-    
-        ```text
-        <HANDSHAKE STATUS>[MESSAGE]
-        ```
-      
-        - *WebSockets handshake response is deprecated, because client cannot access it*
-    
-    - `HANDSHAKE STATUS`, first bit is used for with `PAYLOAD` or not, if with load
-        the `PAYLOAD LENGTH` and `PAYLOAD` is required
+   - binary
 
-        - `0x0`: OK
-        - `0x1`: Authenticate failed
+     ```text
+     STMP<HANDSHAKE STATUS><LENGTH>
+     <KEY>:<VALUE>
+     ...
+
+     [MESSAGE]
+     ```
+
+   - text
+
+     ```text
+     STMP<HANDSHAKE STATUS>
+     <KEY>:<VALUE>
+     ...
+
+     [MESSAGE]
+     ```
+
+     - _WebSockets handshake response is deprecated, because client cannot access it_
+
+   - `HANDSHAKE STATUS`
+
+     - `0x0`: OK
+
+     - `0x1`: Authenticate failed
+     - `0x2`: Unsupported protocol version
+     - `0x3`: Protocol error
+     - `0x4`: Unsupported `Content-Type`
+     - `0x5`: Invalid `Format`
+
+     _If `HANDSHAKE STATUS` is not `OK`, both client and server should close the connection._
+
+   - `KEY`
+
+     - `Content-Type`: the content marshall protocol, negotiated by `Accept`, this field must be set, if server cannot parse.
+       all of the types specified by `Accept`, server will response a `0x4` error code, and close connection.
+     - `Encoding`: the exchange full connection encoding, negotiated by `Accept-Encoding`, if not set, means the data is plain packet.
+     - `Format`: the protocol serialize format, supports `text` and `binary`.
+
+   - `MESSAGE`: a `UTF-8` encoded string
 
 3. Exchange message header
 
-    - binary
-    
-        ```text
-        | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 |
-        | M |    KIND   | F |  ENC  | R |
-        | A |           | I |   O   | S |
-        | S |           | N |   D   | V |
-        | K |           |   |  ING  |   |
-        ```
-      
-        - `MASK`: must be `1`, used for distinguishing `text` and `binary` message
-        - `KIND`: message kind
-            - `0b000`: `Ping message`
-            - `0b001`: `Request message`
-            - `0b010`: `Notify message`
-            - `0b011`: `Response message`
-            - `0b100`: `Following message`
-            - `0b101`: `Close message`
-        - `FIN`: only for `Request`, `Notify`, `Response` and `Following`, if fin, means
-            that the message is end, else has more `Following` message with same `MESSAGE ID`,
-            the `PAYLOAD` of the message with same `MESSAGE ID` should be concat
-        - `ENCODING`: the `PAYLOAD` encoding
-            - `0b00`: without payload
-            - `0b01`: binary
-            - `0b10`: `UTF-8` payload
-            - `0b11`: `UTF-16` payload
-        - `RSV`: must be `0`
+   - binary
 
-    - text
-    
-        text message is used for `WebSockets` only, so, it only contains
-        `KIND` field with one byte:
-        
-        - `p`: `Ping message`
-        - `q`: `Request message`
-        - `n`: `Notify message`
-        - `s`: `Response message`
-        - `f`: `Following message`, `deprecated`, for `WebSockets` is frame based
-        - `c`: `Close message`
-        
+     ```text
+     | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 |
+     | F |     K     | H |     R     |
+     | I |     I     | E |     S     |
+     | N |     N     | A |     V     |
+     |   |     D     | D |           |
+     ```
+
+     - `FIN`: only for `Request`, `Notify`, `Response` and `Following`, if fin, means
+       that the message is end, else has more `Following` message with same `MESSAGE ID`,
+       the `PAYLOAD` of the message with same `MESSAGE ID` will be merged.
+     - `KIND`: message kind
+       - `0x0`: Ping message
+       - `0x1`: Request message
+       - `0x2`: Notify message
+       - `0x3`: Response message
+       - `0x4`: Following message
+       - `0x5`: Close message
+     - `HEAD`: the message is head only or with payload, if is `0`, the `PAYLOAD` and `PAYLOAD LENGTH` field will be omitted.
+     - `RSV`: must be `0` currently
+
+   - text
+
+     text message is used for `WebSockets` only, so, it only contains
+     `KIND` field with one byte:
+
+     - `P`: Ping message
+     - `Q`: Request message
+     - `N`: Notify message
+     - `S`: Response message
+     - `F`: Following message
+     - `C`: Close message
+
 4. Request message
 
-    - binary
-    
-        ```text
-        <HEAD><MESSAGE ID>[PAYLOAD LENGTH]<ACTION>
-        [PAYLOAD]
-        ```
-      
-    - text
-    
-        ```text
-        q<MESSAGE ID>,<ACTION>
-        [PAYLOAD]
-        ```
-    
-    - `MESSAGE ID`: a `uint16LE`
-    - `PAYLOAD LENGTH`: `varuint`
-    - `ACTION`: a string or `varuint`
+   - binary
+
+     ```text
+     <HEAD><MESSAGE ID><ACTION>[PAYLOAD LENGTH][PAYLOAD]
+     ```
+
+   - text
+
+     ```text
+     Q<MESSAGE ID>:<ACTION>
+     [PAYLOAD]
+     ```
+
+   - `MESSAGE ID`: a `uint16le` represents the message id, used for connecting `Response` and `Request`, `Following` and not `FIN` messages.
+   - `ACTION`: a `varint` represents method
+   - `PAYLOAD LENGTH`: a `varint` represents the `PAYLOAD` length
+   - `PAYLOAD`: any content will be explained by codec
 
 5. Notify message
 
-    - binary
-    
-        ```text
-        <HEAD>[MESSAGE ID]<ACTION>
-        [PAYLOAD LENGTH][PAYLOAD]
-        ```
-      
-        - If `FIN`, `MESSAGE ID` should be omitted
-        
-    - text
-    
-        ```text
-        n<ACTION>
-        [PAYLOAD]
-        ```
+   - binary
+
+     ```text
+     <HEAD>[MESSAGE ID]<ACTION>[PAYLOAD LENGTH][PAYLOAD]
+     ```
+
+     - If `FIN`, `MESSAGE ID` should be omitted
+
+   - text
+
+     ```text
+     N<ACTION>
+     [PAYLOAD]
+     ```
 
 6. Response message
 
-    - binary
-    
-        ```text
-        <HEAD><RESPONSE STATUS><MESSAGE ID>
-        [PAYLOAD LENGTH][PAYLOAD]
-        ```
-  
-    - text
-    
-        ```text
-        s<RESPONSE STATUS><MESSAGE ID>
-        ```
+   - binary
 
-    - `RESPONSE STATUS`
-        - `0x0`: OK
-        - `0x1`: Client error, should not retry
-        - `0x2`: Server internal error, should retry
-        - `0x3`: Network error, should not appears in messages, just emit to client
+     ```text
+     <HEAD><RESPONSE STATUS><MESSAGE ID>[PAYLOAD LENGTH][PAYLOAD]
+     ```
+
+   - text
+
+     ```text
+     S<MESSAGE ID>:<RESPONSE STATUS>
+     [PAYLOAD]
+     ```
+
+   - `RESPONSE STATUS`: see `Status code`
 
 7. Following message
 
-    - binary
-    
-        ```text
-        <HEAD><MESSAGE ID><PAYLOAD LENGTH><PAYLOAD>
-        ```
+   - binary
+
+     ```text
+     <HEAD><MESSAGE ID>[PAYLOAD LENGTH][PAYLOAD]
+     ```
 
 8. Close message
 
-    - binary
-    
-        ```text
-        <HEAD><CLOSE STATUS>[PAYLOAD LENGTH][PAYLOAD]
-        ```
-  
-    - `CLOSE STATUS`
-    
-        - `0x0`: close normal
-        - `0x1`: connection closed
-        - `0x3`: server close
+   - binary
+
+     ```text
+     <HEAD><CLOSE STATUS>[PAYLOAD LENGTH][PAYLOAD]
+     ```
+
+**Status code**
+
+- `0x00`: Ok, 200
+
+_Network error_
+
+- `0x01`: Network error
+- `0x02`: Protocol error
+- `0x03`: Unsupported protocol version
+- `0x04`: Unsupported `Content-Type`
+- `0x05`: Unsupported `Format`
+
+_Client side error_
+
+- `0x20`: Bad request
+- `0x21`: Unauthorized
+- `0x22`: Not found
+- `0x23`: Request timeout
+- `0x24`: Request entity too large
+- `0x25`: Too many requests
+- `0x26`: Client closed
+
+_Server side error_
+
+- `0x40`: Internal server error
+- `0x41`: Server shutdown

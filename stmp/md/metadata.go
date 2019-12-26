@@ -1,6 +1,6 @@
 // Copyright 2019 yangjunbao <yangjunbao@shimo.im>. All rights reserved.
 // Since 2019-12-23 16:03:13
-package stmp
+package md
 
 type Metadata map[string][]string
 
@@ -41,4 +41,8 @@ func (m Metadata) Del(key string) {
 	if m.Has(key) {
 		delete(m, key)
 	}
+}
+
+func New() Metadata {
+	return map[string][]string{}
 }

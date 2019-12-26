@@ -5,24 +5,36 @@ package stmp
 import (
 	"context"
 	"errors"
+	"github.com/acrazing/stmp-go/stmp/md"
 	"io"
 	"net"
 	"sync"
 )
+
+type Message interface {
+	Marshal() ([]byte, error)
+	Unmarshal(data []byte) error
+}
+
+type SendOptions struct {
+	ActionId   uint32
+	ActionName string
+	Data       Message
+}
 
 type Context interface {
 	context.Context
 	Conn() Connection
 	Server() *Server
 	State() interface{}
+	Async(func() error)
 }
 
 type Connection interface {
 	io.ReadWriteCloser
-	URI() string
-	Query() Metadata
-	Headers() Metadata
+	Headers() md.Metadata
 	Addr() net.TCPAddr
+	Notify(options SendOptions) error
 }
 
 type Listener interface {
