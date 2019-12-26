@@ -1,16 +1,13 @@
 // Copyright 2019 acrazing <joking.young@gmail.com>. All rights reserved.
 // Since 2019-12-23 19:55:29
-package utils
+package stmp
 
 import (
 	"bytes"
 	"encoding/binary"
 	"errors"
-	"github.com/acrazing/stmp-go/stmp"
-	"github.com/acrazing/stmp-go/stmp/md"
 	"github.com/gorilla/websocket"
 	"io"
-	"net/http"
 	"strconv"
 	"strings"
 )
@@ -43,8 +40,8 @@ func ReadVarint(r io.Reader) (n uint64, err error) {
 	}
 }
 
-func ParseHeaders(buf []byte) (md.Metadata, error) {
-	h := md.New()
+func ParseHeaders(buf []byte) (Headers, error) {
+	h := NewHeaders()
 	for _, l := range strings.Split(string(buf), "\n") {
 		sepIndex := strings.IndexByte(l, ':')
 		if sepIndex == -1 {
@@ -60,7 +57,7 @@ func ParseHeaders(buf []byte) (md.Metadata, error) {
 type HandshakeRequest struct {
 	Major   byte
 	Minor   byte
-	Headers md.Metadata
+	Headers Headers
 }
 
 func ReadHandshakeRequest(r io.Reader, maxSize uint64) (*HandshakeRequest, error) {
@@ -88,7 +85,7 @@ func ReadHandshakeRequest(r io.Reader, maxSize uint64) (*HandshakeRequest, error
 }
 
 type HandshakeResponse struct {
-	Status  stmp.HandshakeStatus
+	Status  HandshakeStatus
 	Message string
 }
 
@@ -101,7 +98,7 @@ func ReadHandshakeResponse(r io.Reader, maxSize uint64) (*HandshakeResponse, err
 	status := buf[0]
 	if status&0x80 == 0 {
 		return &HandshakeResponse{
-			Status:  stmp.HandshakeStatus(status),
+			Status:  HandshakeStatus(status),
 			Message: "",
 		}, nil
 	}
@@ -118,22 +115,22 @@ func ReadHandshakeResponse(r io.Reader, maxSize uint64) (*HandshakeResponse, err
 		return nil, err
 	}
 	return &HandshakeResponse{
-		Status:  stmp.HandshakeStatus(status | 0x7F),
+		Status:  HandshakeStatus(status | 0x7F),
 		Message: string(buf),
 	}, nil
 }
 
-func ParseHead(r byte) (format stmp.FormatKind, kind stmp.MessageKind, fin bool, encoding stmp.EncodingKind) {
-	format = stmp.FormatKind(r >> 7)
-	if format == stmp.FormatKindText {
-		kind = stmp.MapTextKind[r]
+func ParseHead(r byte) (format FormatKind, kind MessageKind, fin bool, encoding EncodingKind) {
+	format = FormatKind(r >> 7)
+	if format == FormatKindText {
+		kind = MapTextKind[r]
 		fin = true
-		encoding = stmp.EncodingKindUTF8
+		encoding = EncodingKindUTF8
 		return
 	}
-	kind = stmp.MessageKind(r & 0b01110000)
+	kind = MessageKind(r & 0b01110000)
 	fin = (r & 0b00001000) != 0
-	encoding = stmp.EncodingKind(r & 0b00000110)
+	encoding = EncodingKind(r & 0b00000110)
 	return
 }
 
@@ -159,8 +156,8 @@ func ParseVarint(d []byte) (n uint64, s int, err error) {
 	}
 }
 
-func ParseRequestMessage(d []byte, useActionId bool, format stmp.FormatKind, encoding stmp.EncodingKind) (id uint16, actionId uint64, actionName string, payload []byte, err error) {
-	if format == stmp.FormatKindText {
+func ParseRequestMessage(d []byte, useActionId bool, format FormatKind, encoding EncodingKind) (id uint16, actionId uint64, actionName string, payload []byte, err error) {
+	if format == FormatKindText {
 		idSeq := bytes.IndexByte(d, ',')
 		if idSeq < 0 {
 			err = ErrInvalidMessage
@@ -225,6 +222,6 @@ func ParseRequestMessage(d []byte, useActionId bool, format stmp.FormatKind, enc
 	}
 }
 
-func ReadRequestMessage(r io.Reader, useActionId bool, format stmp.FormatKind, encoding stmp.EncodingKind) (id uint16, actionId uint64, actionName string, payload []byte, err error) {
+func ReadRequestMessage(r io.Reader, useActionId bool, format FormatKind, encoding EncodingKind) (id uint16, actionId uint64, actionName string, payload []byte, err error) {
 	websocket.Upgrade()
 }

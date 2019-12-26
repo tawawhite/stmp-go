@@ -3,66 +3,79 @@
 package stmp
 
 import (
-	"context"
 	"errors"
-	"github.com/acrazing/stmp-go/stmp/md"
-	"io"
+	"github.com/golang/protobuf/proto"
 	"net"
 	"sync"
 )
 
-type Message interface {
-	Marshal() ([]byte, error)
-	Unmarshal(data []byte) error
-}
-
-type SendOptions struct {
-	ActionId   uint32
-	ActionName string
-	Data       Message
-}
-
-type Context interface {
-	context.Context
-	Conn() Connection
-	Server() *Server
-	State() interface{}
-	Async(func() error)
-}
-
-type Connection interface {
-	io.ReadWriteCloser
-	Headers() md.Metadata
-	Addr() net.TCPAddr
-	Notify(options SendOptions) error
+type SendContext struct {
+	Action   int64
+	Data     proto.Message
+	Payloads map[string][]byte
 }
 
 type Listener interface {
-	Accept() (Connection, error)
+	Accept() (Conn, error)
 	Close() error
 }
 
-type AuthenticateFunc func(conn Connection) error
+type AuthenticateFunc func(conn Conn, resHeaders Headers) (status Status, message string, err error)
+
+type Group struct {
+	name  string
+	mu    *sync.RWMutex
+	conns map[Conn]bool
+}
+
+func NewGroup(name string) *Group {
+	return &Group{name: name, mu: &sync.RWMutex{}, conns: map[Conn]bool{}}
+}
 
 type Server struct {
-	mu   *sync.Mutex
-	auth AuthenticateFunc
-	lis  []Listener
-	done chan error
+	mu        *sync.Mutex
+	auth      AuthenticateFunc
+	listeners []Listener
+	conns     map[Conn]bool
+	groups    map[string]*Group
+	done      chan error
 }
 
-func NewServer() *Server {
-	return &Server{}
+var noAuth AuthenticateFunc = func(conn Conn, resHeaders Headers) (status Status, message string, err error) {
+	return StatusOk, "OK", nil
 }
 
-func (s *Server) handleConn(conn Connection) {
+type ServerOption func(srv *Server)
+
+func NewServer(opts ...ServerOption) *Server {
+	srv := &Server{
+		mu:        &sync.Mutex{},
+		auth:      noAuth,
+		listeners: nil,
+		conns:     map[Conn]bool{},
+		groups:    map[string]*Group{},
+		done:      make(chan error),
+	}
+	for _, o := range opts {
+		o(srv)
+	}
+	return srv
+}
+
+func WithAuthenticate(authFn AuthenticateFunc) ServerOption {
+	return func(srv *Server) {
+		srv.auth = authFn
+	}
+}
+
+func (s *Server) handleConn(conn Conn) {
 
 }
 
 func (s *Server) shutdown(err error) {
 	s.mu.Lock()
-	lis := s.lis
-	s.lis = nil
+	lis := s.listeners
+	s.listeners = nil
 	s.mu.Unlock()
 	if lis == nil {
 		return
@@ -80,9 +93,7 @@ func (s *Server) serve(lis Listener) {
 	for {
 		conn, err := lis.Accept()
 		if err != nil {
-			if ne, ok := err.(interface {
-				Temporary() bool
-			}); ok && ne.Temporary() {
+			if ne, ok := err.(net.Error); ok && ne.Temporary() {
 				continue
 			}
 			s.shutdown(err)
@@ -97,11 +108,11 @@ func (s *Server) Serve(lis ...Listener) error {
 		return errors.New("must serve 1 listener at least")
 	}
 	s.mu.Lock()
-	if s.lis != nil {
+	if s.listeners != nil {
 		s.mu.Unlock()
 		return errors.New("server is listening already")
 	}
-	s.lis = lis
+	s.listeners = lis
 	s.mu.Unlock()
 	for _, l := range lis {
 		go s.serve(l)
@@ -111,4 +122,8 @@ func (s *Server) Serve(lis ...Listener) error {
 
 func (s *Server) Close() {
 	s.shutdown(nil)
+}
+
+func (s *Server) JoinGroup(group string, conn Conn) {
+
 }
