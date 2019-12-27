@@ -8,8 +8,10 @@ import (
 )
 
 func main() {
+	stmp.RegisterMediaCodec(stmp.NewJsonCodec(), stmp.NewProtobufCodec())
+	stmp.RegisterEncodingCodec(stmp.NewGzipCodec())
 	srv := stmp.NewServer()
-	go srv.ServeTCP("127.0.0.1:5000")
+	go srv.ListenAndServeTCP("127.0.0.1:5000")
 	err := srv.Wait()
 	if err != nil {
 		println("listen error", err.Error())

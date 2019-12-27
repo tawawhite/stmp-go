@@ -16,25 +16,21 @@ type MediaCodec interface {
 	Unmarshal(data []byte, v interface{}) error
 }
 
-var mediaCodecs = map[string]MediaCodec{}
+var mapMediaCodec = map[string]MediaCodec{}
 
-func RegisterMediaCodec(codec MediaCodec) {
-	mediaCodecs[codec.Name()] = codec
+func RegisterMediaCodec(codecs ...MediaCodec) {
+	for _, codec := range codecs {
+		mapMediaCodec[codec.Name()] = codec
+	}
 }
 
 func GetMediaCodec(name string) MediaCodec {
-	return mediaCodecs[name]
+	return mapMediaCodec[name]
 }
 
 var (
 	ErrCodecInvalidValue = errors.New("invalid value for codec")
 )
-
-func init() {
-	RegisterMediaCodec(NewJsonCodec())
-	RegisterMediaCodec(NewMsgpackCodec())
-	RegisterMediaCodec(NewProtobufCodec())
-}
 
 type jsonCodec struct{}
 

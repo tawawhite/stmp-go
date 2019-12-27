@@ -15,6 +15,12 @@ const (
 	MessageKindClose                 = 0x5
 )
 
+const FlagFin = 0x80
+const FlagPure = 0b1000
+const KindOffset = 4
+
+var PingMessage = []byte{byte(FlagFin | MessageKindPing<<KindOffset | FlagPure)}
+
 var MapTextKind = map[byte]MessageKind{
 	'P': MessageKindPing,
 	'Q': MessageKindRequest,
@@ -79,3 +85,11 @@ func NewStatusError(code Status, err interface{}) error {
 	}
 	return &StatusError{code: code, err: err.(error)}
 }
+
+const AcceptContentType = "Accept"
+const AcceptEncoding = "Accept-Encoding"
+const AcceptPacketFormat = "Accept-Packet-Format"
+
+const DetermineContentType = "Content-Type"
+const DetermineEncoding = "Content-Encoding"
+const DeterminePacketFormat = "Packet-Format"

@@ -3,6 +3,7 @@
 package stmp
 
 import (
+	"bytes"
 	"strings"
 )
 
@@ -60,28 +61,25 @@ func (h Header) Marshal() string {
 
 var invalidHeader = NewStatusError(StatusProtocolError, "invalid header format")
 
-func (h Header) Unmarshal(data string) error {
+func (h Header) Unmarshal(data []byte) error {
 	var sep int
 	var end int
+	var chunk []byte
 	var key string
 	var value string
 	for {
-		sep = strings.IndexByte(data, ':')
+		sep = bytes.IndexByte(data, ':')
 		if sep < 0 {
 			return invalidHeader
 		}
-		key = data[:sep]
-		key = strings.ReplaceAll(key, "%3A", ":")
-		key = strings.ReplaceAll(key, "%25", "%")
-		key = strings.ToLower(key)
-		end = strings.IndexByte(data[sep+1:], '\n')
+		key = string(bytes.ToLower(bytes.ReplaceAll(bytes.ReplaceAll(data[:sep], []byte("%3A"), []byte(":")), []byte("%25"), []byte("%"))))
+		end = bytes.IndexByte(data[sep+1:], '\n')
 		if end == -1 {
-			value = data[sep+1:]
+			chunk = data[sep+1:]
 		} else {
-			value = data[sep+1 : end]
+			chunk = data[sep+1 : end]
 		}
-		value = strings.ReplaceAll(value, "%0A", "\n")
-		value = strings.ReplaceAll(value, "%25", "%")
+		value = string(bytes.ReplaceAll(bytes.ReplaceAll(chunk, []byte("%0A"), []byte("\n")), []byte("%25"), []byte("%")))
 		if len(h[key]) > 0 {
 			h[key] = append(h[key], value)
 		} else {
