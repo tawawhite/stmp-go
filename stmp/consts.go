@@ -2,6 +2,8 @@
 // Since 2019-12-23 15:34:33
 package stmp
 
+import "errors"
+
 type MessageKind byte
 
 const (
@@ -42,3 +44,38 @@ const (
 	StatusInternalServerError               = 0x40
 	StatusServerShutdown                    = 0x41
 )
+
+var MapStatus = map[Status]string{
+	StatusOk:                         "(0x00) Ok",
+	StatusNetworkError:               "(0x01) NetworkError",
+	StatusProtocolError:              "(0x02) ProtocolError",
+	StatusUnsupportedProtocolVersion: "(0x03) UnsupportedProtocolVersion",
+	StatusUnsupportedContentType:     "(0x04) UnsupportedContentType",
+	StatusUnsupportedFormat:          "(0x05) UnsupportedFormat",
+	StatusBadRequest:                 "(0x20) BadRequest",
+	StatusUnauthorized:               "(0x21) Unauthorized",
+	StatusNotFound:                   "(0x22) NotFound",
+	StatusRequestTimeout:             "(0x23) RequestTimeout",
+	StatusRequestEntityTooLarge:      "(0x24) RequestEntityTooLarge",
+	StatusTooManyRequests:            "(0x25) TooManyRequests",
+	StatusClientClosed:               "(0x26) ClientClosed",
+	StatusClientCancelled:            "(0x27) ClientCancelled",
+	StatusInternalServerError:        "(0x40) InternalServerError",
+	StatusServerShutdown:             "(0x41) ServerShutdown",
+}
+
+type StatusError struct {
+	code Status
+	err  error
+}
+
+func (e *StatusError) Error() string {
+	return "STMP" + MapStatus[e.code] + ": " + e.err.Error()
+}
+
+func NewStatusError(code Status, err interface{}) error {
+	if str, ok := err.(string); ok {
+		return &StatusError{code: code, err: errors.New(str)}
+	}
+	return &StatusError{code: code, err: err.(error)}
+}

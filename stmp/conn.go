@@ -7,7 +7,7 @@ import (
 )
 
 type Conn interface {
-	Headers() Headers
+	Headers() Header
 	RemoteAddr() net.TCPAddr
 	LocalAddr() net.TCPAddr
 	Request(options SendContext) error

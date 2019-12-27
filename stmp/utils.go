@@ -40,8 +40,8 @@ func ReadVarint(r io.Reader) (n uint64, err error) {
 	}
 }
 
-func ParseHeaders(buf []byte) (Headers, error) {
-	h := NewHeaders()
+func ParseHeaders(buf []byte) (Header, error) {
+	h := NewHeader()
 	for _, l := range strings.Split(string(buf), "\n") {
 		sepIndex := strings.IndexByte(l, ':')
 		if sepIndex == -1 {
@@ -57,7 +57,7 @@ func ParseHeaders(buf []byte) (Headers, error) {
 type HandshakeRequest struct {
 	Major   byte
 	Minor   byte
-	Headers Headers
+	Headers Header
 }
 
 func ReadHandshakeRequest(r io.Reader, maxSize uint64) (*HandshakeRequest, error) {

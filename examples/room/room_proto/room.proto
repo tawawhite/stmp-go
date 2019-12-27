@@ -1,0 +1,77 @@
+// Copyright 2019 acrazing <joking.young@gmail.com>. All rights reserved.
+// Since 2019-12-27 13:27:58
+syntax = "proto3";
+package stmp.examples.room;
+
+option go_package = "github.com/acrazing/stmp-go/examples/room/room_proto";
+
+import "github.com/golang/protobuf/ptypes/empty/empty.proto";
+
+message UserModel {
+    int64 id = 1;
+    string nickname = 2;
+    string avatar = 3;
+}
+
+// a simple room, no seat, no stand by, anyone could join it
+message RoomModel {
+    int64 id = 1;
+    string name = 2;
+    map<int64, UserModel> users = 3;
+}
+
+message CreateRoomInput {
+    string name = 1;
+}
+
+message ListRoomInput {
+    int64 limit = 1;
+    int64 offset = 2;
+}
+
+message ListRoomOutput {
+    int64 total = 1;
+    repeated RoomModel rooms = 2;
+}
+
+message JoinRoomInput {
+    int64 id = 1;
+}
+
+message ExitRoomInput {
+    int64 id = 1;
+}
+
+service RoomService {
+    rpc CreateRoom(CreateRoomInput) returns (RoomModel) {
+
+    }
+    rpc ListRoom(ListRoomInput) returns (ListRoomOutput) {
+
+    }
+    rpc JoinRoom(JoinRoomInput) returns (RoomModel) {
+
+    }
+    rpc ExitRoom(ExitRoomInput) returns (google.protobuf.Empty) {
+
+    }
+}
+
+message UserEnterEvent {
+    int64 roomId = 1;
+    UserModel user = 2;
+}
+
+message UserExitEvent {
+    int64 roomId = 1;
+    int64 userId = 2;
+}
+
+service RoomEvents {
+    rpc UserEnter(UserEnterEvent) returns (google.protobuf.Empty) {
+
+    }
+    rpc UserExit(UserExitEvent) returns (google.protobuf.Empty) {
+
+    }
+}

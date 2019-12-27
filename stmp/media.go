@@ -8,17 +8,32 @@ import (
 	"github.com/json-iterator/go"
 	"github.com/tinylib/msgp/msgp"
 	"github.com/vmihailenco/msgpack"
-	"google.golang.org/grpc/encoding"
 )
+
+type MediaCodec interface {
+	Name() string
+	Marshal(v interface{}) ([]byte, error)
+	Unmarshal(data []byte, v interface{}) error
+}
+
+var mediaCodecs = map[string]MediaCodec{}
+
+func RegisterMediaCodec(codec MediaCodec) {
+	mediaCodecs[codec.Name()] = codec
+}
+
+func GetMediaCodec(name string) MediaCodec {
+	return mediaCodecs[name]
+}
 
 var (
 	ErrCodecInvalidValue = errors.New("invalid value for codec")
 )
 
 func init() {
-	encoding.RegisterCodec(NewJsonCodec())
-	encoding.RegisterCodec(NewMsgpackCodec())
-	encoding.RegisterCodec(NewProtobufCodec())
+	RegisterMediaCodec(NewJsonCodec())
+	RegisterMediaCodec(NewMsgpackCodec())
+	RegisterMediaCodec(NewProtobufCodec())
 }
 
 type jsonCodec struct{}
@@ -35,7 +50,7 @@ func (j jsonCodec) Unmarshal(data []byte, v interface{}) error {
 	return jsoniter.Unmarshal(data, v)
 }
 
-func NewJsonCodec() encoding.Codec {
+func NewJsonCodec() MediaCodec {
 	return jsonCodec{}
 }
 
@@ -60,7 +75,7 @@ func (m msgpackCodec) Unmarshal(data []byte, v interface{}) error {
 	return msgpack.Unmarshal(data, v)
 }
 
-func NewMsgpackCodec() encoding.Codec {
+func NewMsgpackCodec() MediaCodec {
 	return msgpackCodec{}
 }
 
@@ -84,6 +99,6 @@ func (p protobufCodec) Unmarshal(data []byte, v interface{}) error {
 	return ErrCodecInvalidValue
 }
 
-func NewProtobufCodec() encoding.Codec {
+func NewProtobufCodec() MediaCodec {
 	return protobufCodec{}
 }
