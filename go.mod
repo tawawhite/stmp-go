@@ -5,6 +5,7 @@ go 1.13
 require (
 	github.com/gogo/protobuf v1.3.1
 	github.com/golang/protobuf v1.3.2
+	github.com/google/brotli v1.0.7
 	github.com/gorilla/websocket v1.4.1
 	github.com/json-iterator/go v1.1.9
 	github.com/klauspost/cpuid v1.2.2 // indirect
