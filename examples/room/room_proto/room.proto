@@ -73,7 +73,7 @@ message UserExitEvent {
 }
 
 service RoomEvents {
-    option (stmp.event) = 0x02;
+    option (stmp.service) = 0x02;
     rpc UserEnter(UserEnterEvent) returns (google.protobuf.Empty) {
         option (stmp.method) = 0x01;
     }

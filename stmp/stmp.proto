@@ -9,10 +9,16 @@ import "github.com/golang/protobuf/protoc-gen-go/descriptor/descriptor.proto";
 
 extend google.protobuf.ServiceOptions {
     // 0x5(3)5(4)4(d)5(0) -> STMP
+    // the service id, could contains 7 bytes at most,
+    // this is required
     uint64 service = 0x554501;
-    uint64 event = 0x554502;
 }
 
 extend google.protobuf.MethodOptions {
-    uint64 method = 0x554503;
+    // the method id, could only contains 1 byte at most,
+    // which means a service only could contains 256 methods at most
+    // this is required
+    //
+    // the final id for a rpc is (service << 8) | (method & 0xff)
+    uint64 method = 0x554502;
 }
