@@ -13,7 +13,6 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 )
@@ -26,25 +25,17 @@ type SendContext struct {
 
 type AuthenticateFunc func(reqHeader Header, resHeader Header) (status Status, message string, err error)
 
-type Group struct {
-	name  string
-	mu    *sync.RWMutex
-	conns map[Conn]bool
-}
-
-func NewGroup(name string) *Group {
-	return &Group{name: name, mu: &sync.RWMutex{}, conns: map[Conn]bool{}}
-}
-
 type Server struct {
 	mu        *sync.Mutex
 	listeners []io.Closer
 	conns     map[Conn]bool
-	groups    map[string]*Group
 	done      chan error
 	Id        string
 	Log       *zap.Logger
-	// [1, 9]
+	// default is host, user-agent
+	// if set as nil, will not log access
+	LogAccessFields []string
+	// [1, 9], default is 6
 	CompressLevel    int
 	Authenticate     AuthenticateFunc
 	MaxPacketSize    uint64
@@ -68,10 +59,10 @@ func NewServer() *Server {
 		mu:               &sync.Mutex{},
 		listeners:        []io.Closer{},
 		conns:            map[Conn]bool{},
-		groups:           map[string]*Group{},
 		done:             make(chan error),
 		Id:               "",
 		Log:              log.With(zap.String("source", "stmp")),
+		LogAccessFields:  []string{"user-agent", "host"},
 		CompressLevel:    6,
 		Authenticate:     noAuth,
 		MaxPacketSize:    1 << 24, // 16Mb
@@ -79,6 +70,27 @@ func NewServer() *Server {
 		WriteTimeout:     time.Minute,
 		ReadTimeout:      time.Minute,
 	}
+}
+
+type readonlyHeader interface {
+	Get(key string) string
+}
+
+func (s *Server) logAccess(event string, localAddr string, remoteAddr string, h readonlyHeader) {
+	if s.LogAccessFields == nil {
+		return
+	}
+	fields := []zap.Field{
+		zap.String("server", localAddr),
+		zap.String("addr", remoteAddr),
+	}
+	for _, k := range s.LogAccessFields {
+		fields = append(fields, zap.String(k, h.Get(k)))
+	}
+	if event == "" {
+		event = "new connection"
+	}
+	s.Log.Info(event, fields...)
 }
 
 func (s *Server) writeConn(nc *netConn, w EncodingWriter) {
@@ -97,6 +109,129 @@ func (s *Server) writeConn(nc *netConn, w EncodingWriter) {
 		if err != nil {
 			// TODO
 			break
+		}
+	}
+}
+
+func (s *Server) handleRequest(mid uint16, action uint64, payload []byte) ([]byte, error) {
+	return nil, nil
+}
+
+func (s *Server) handleNotify(action uint64, payload []byte) {
+}
+
+func (s *Server) handleResponse(status Status, payload []byte) {
+}
+
+func (s *Server) handleClose(status byte, message string) {
+
+}
+
+func (s *Server) readConn(nc *netConn, r io.ReadCloser) {
+	var action uint64
+	var status byte
+	var err error
+	var mid uint16
+	var h byte
+	var fin bool
+	var pure bool
+	var kind MessageKind
+	var ps uint64
+	var payload []byte
+	for {
+		nc.SetReadDeadline(time.Now().Add(s.ReadTimeout))
+		h, err = nc.ReadByte()
+		if err != nil {
+			nc.Terminate(StatusProtocolError, "")
+			break
+		}
+		fin, kind, pure, err = ParseHead(h)
+		if err != nil {
+			nc.Terminate(StatusProtocolError, err.Error())
+			return
+		}
+		switch kind {
+		case MessageKindPing:
+			// TODO handle ping
+		case MessageKindClose:
+			// receive close message, must response
+			status, err = nc.ReadByte()
+			payload = nil
+			if !pure && err == nil {
+				ps, err = binary.ReadUvarint(nc)
+				if err == nil {
+					payload = make([]byte, ps)
+					_, err = nc.Read(payload)
+				}
+			}
+			// TODO handle close safe
+			s.handleClose(status, string(payload))
+			return
+		case MessageKindRequest:
+			mid, err = nc.ReadInt16()
+			if err != nil {
+				nc.Terminate(StatusProtocolError, err.Error())
+				return
+			}
+			action, err = binary.ReadUvarint(nc)
+			if err != nil {
+				nc.Terminate(StatusProtocolError, err.Error())
+				return
+			}
+			payload = nil
+			if !pure {
+				ps, err = binary.ReadUvarint(nc)
+				if err != nil {
+					nc.Terminate(StatusProtocolError, err.Error())
+					return
+				}
+				payload = make([]byte, ps)
+				_, err = nc.Read(payload)
+				if err != nil {
+					nc.Terminate(StatusProtocolError, err.Error())
+					return
+				}
+			}
+			if fin {
+				// TODO this should be handled by conn, and server should implement
+				// 	a interface for adapt client and server side
+				s.handleRequest(mid, action, payload)
+			} else {
+				if payload == nil {
+					payload = make([]byte, 0)
+				}
+				nc.pendingIncoming[mid] = &incomingEvent{kind: kind, payload: payload, action: action}
+				nc.CheckPendingVolume()
+			}
+		case MessageKindNotify:
+			if !fin {
+				mid, err = nc.ReadInt16()
+				if err != nil {
+					nc.Terminate(StatusProtocolError, "")
+					return
+				}
+			}
+			action, err = binary.ReadUvarint(nc)
+			if err != nil {
+				nc.Terminate(StatusProtocolError, "")
+				return
+			}
+			if pure {
+				payload = nil
+			} else {
+				ps, err = binary.ReadUvarint(nc)
+				if err != nil {
+					nc.Terminate(StatusProtocolError, "")
+					return
+				}
+				payload = make([]byte, ps)
+			}
+			if fin {
+				s.handleNotify(action, payload)
+			} else {
+				nc.pendingIncoming[mid] = &incomingEvent{kind: kind, payload: payload, action: action}
+			}
+		case MessageKindResponse:
 		}
 	}
 }
@@ -159,14 +294,21 @@ func (s *Server) HandleConn(conn net.Conn) {
 		}
 	}
 	var wc EncodingWriter
+	var rc io.ReadCloser
 	if encoding != nil {
 		wc, err = encoding.Writer(conn, s.CompressLevel)
 		if err != nil {
 			nc.Handshake(StatusInternalServerError, resHeader, "")
 			return
 		}
+		rc, err = encoding.Reader(conn)
+		if err != nil {
+			nc.Handshake(StatusInternalServerError, resHeader, "")
+			return
+		}
 	} else {
 		wc = nc
+		rc = nc
 	}
 	status, message, err := s.Authenticate(nc.header, resHeader)
 	if err != nil {
@@ -180,66 +322,7 @@ func (s *Server) HandleConn(conn net.Conn) {
 		return
 	}
 	go s.writeConn(nc, wc)
-	for {
-		nc.SetReadDeadline(time.Now().Add(s.ReadTimeout))
-		h, err := nc.ReadByte()
-		if err != nil {
-			nc.Terminate(StatusProtocolError, "")
-			break
-		}
-		fin, kind, pure, err := ParseHead(h)
-		if err != nil {
-			nc.Terminate(StatusProtocolError, err.Error())
-			return
-		}
-		switch kind {
-		case MessageKindPing:
-			nc.writeChan <- PingMessage
-		case MessageKindClose:
-			// TODO
-			nc.Close()
-		case MessageKindRequest:
-			mid, err := nc.ReadUint16()
-			if err != nil {
-				nc.Terminate(StatusProtocolError, err.Error())
-				return
-			}
-			action, err := binary.ReadUvarint(nc)
-			if err != nil {
-				nc.Terminate(StatusProtocolError, err.Error())
-				return
-			}
-			var payload []byte
-			if !pure {
-				ps, err := binary.ReadUvarint(nc)
-				if err != nil {
-					nc.Terminate(StatusProtocolError, err.Error())
-					return
-				}
-				payload = make([]byte, ps)
-				_, err = nc.Read(payload)
-				if err != nil {
-					nc.Terminate(StatusProtocolError, err.Error())
-					return
-				}
-			}
-			if fin {
-				s.handleRequest(mid, action, payload)
-			} else {
-				if payload == nil {
-					payload = make([]byte, 0)
-				}
-				nc.pendingRequest[mid] = &incomingEvent{payload: payload, action: action}
-				nc.CheckPendingVolume()
-			}
-		case MessageKindNotify:
-		case MessageKindResponse:
-		case MessageKindFollowing:
-		}
-	}
-}
-
-func (s *Server) handleRequest(mid uint16, action uint64, payload []byte) {
+	go s.readConn(nc, rc)
 }
 
 func (s *Server) HandleWebsocketConn(conn *websocket.Conn, req *http.Request) {
@@ -338,17 +421,24 @@ func (s *Server) ListenAndServeKCPWithTLS(addr string, certFile, keyFile string)
 }
 
 func (s *Server) newWsServer(addr, path string) *http.Server {
-	upgrader := &websocket.Upgrader{}
-	mu := http.NewServeMux()
-	mu.HandleFunc("/"+strings.TrimPrefix(path, "/"), func(writer http.ResponseWriter, request *http.Request) {
-		conn, err := upgrader.Upgrade(writer, request, nil)
-		if err != nil {
-			s.shutdown(err)
+	if path == "" {
+		path = "/"
+	}
+	up := &websocket.Upgrader{}
+	var handler http.HandlerFunc = func(w http.ResponseWriter, q *http.Request) {
+		if q.URL.Path != path {
+			s.logAccess("404 not found", addr, "ws://"+q.RemoteAddr+q.RequestURI, q.Header)
+			w.WriteHeader(404)
 			return
 		}
-		s.HandleWebsocketConn(conn, request)
-	})
-	hs := &http.Server{Addr: addr, Handler: mu}
+		conn, err := up.Upgrade(w, q, nil)
+		if err != nil {
+			s.logAccess("500 upgrade error: "+err.Error(), addr, "ws://"+q.RemoteAddr+q.RequestURI, q.Header)
+			return
+		}
+		s.HandleWebsocketConn(conn, q)
+	}
+	hs := &http.Server{Addr: addr, Handler: handler}
 	s.mu.Lock()
 	s.listeners = append(s.listeners, hs)
 	s.mu.Unlock()

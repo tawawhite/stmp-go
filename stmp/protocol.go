@@ -31,11 +31,11 @@ func ParseHead(h byte) (fin bool, kind MessageKind, pure bool, err error) {
 		err = invalidReservedHeadBits
 		return
 	}
-	pure = h&0b1000 > 0
-	fin = h&0x80 > 0
+	fin = h&0x80 != 0
 	kind = MessageKind((h >> 4) & 0b111)
+	pure = h&0b1000 != 0
 	switch kind {
-	case MessageKindFollowing, MessageKindResponse, MessageKindRequest, MessageKindNotify:
+	case MessageKindResponse, MessageKindRequest, MessageKindNotify:
 	case MessageKindPing:
 		if !fin || !pure {
 			err = invalidHeadFlags

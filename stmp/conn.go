@@ -13,11 +13,11 @@ type Conn interface {
 	LocalAddr() net.Addr
 	Request(options SendContext) error
 	Notify(options SendContext) error
-	Groups() map[*Group]bool
 	Terminate(status Status, message string) error
 }
 
 type incomingEvent struct {
+	kind    MessageKind
 	action  uint64
 	payload []byte
 }
@@ -38,9 +38,8 @@ type netConn struct {
 	b1              []byte
 	b2              []byte
 	requests        map[uint16]chan *responseEvent
-	pendingRequest  map[uint16]*incomingEvent
-	pendingNotify   map[uint16]*incomingEvent
-	pendingResponse map[uint16]responseEvent
+	pendingIncoming map[uint16]*incomingEvent
+	pendingResponse map[uint16]*responseEvent
 }
 
 func (n *netConn) Flush() error {
@@ -59,16 +58,12 @@ func (n *netConn) Notify(options SendContext) error {
 	panic("implement me")
 }
 
-func (n *netConn) Groups() map[*Group]bool {
-	panic("implement me")
-}
-
 func (n *netConn) ReadByte() (byte, error) {
 	_, err := n.Read(n.b1)
 	return n.b1[0], err
 }
 
-func (n *netConn) ReadUint16() (v uint16, err error) {
+func (n *netConn) ReadInt16() (v uint16, err error) {
 	_, err = n.Read(n.b2)
 	if err != nil {
 		return

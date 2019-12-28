@@ -53,17 +53,7 @@
 
      - _WebSockets handshake response is deprecated, because client cannot access it_
 
-   - `HANDSHAKE STATUS`
-
-     - `0x0`: OK
-
-     - `0x1`: Authenticate failed
-     - `0x2`: Unsupported protocol version
-     - `0x3`: Protocol error
-     - `0x4`: Unsupported `Content-Type`
-     - `0x5`: Invalid `Format`
-
-     _If `HANDSHAKE STATUS` is not `OK`, both client and server should close the connection._
+   - `HANDSHAKE STATUS`: _If `HANDSHAKE STATUS` is not `OK`, both client and server should close the connection._
 
    - `KEY`
 
@@ -108,7 +98,6 @@
      - `Q`: Request message
      - `N`: Notify message
      - `S`: Response message
-     - `F`: Following message
      - `C`: Close message
 
 4. Request message
@@ -126,7 +115,8 @@
      [PAYLOAD]
      ```
 
-   - `MESSAGE ID`: a `uint16le` represents the message id, used for connecting `Response` and `Request`, `Following` and not `FIN` messages.
+   - `MESSAGE ID`: a `int16le` represents the message id, used for connecting `Response` and `Request`, `Following` and not `FIN` `Notify` messages.
+      if the message from server, it should be a negative value, else it should be a positive value.
    - `ACTION`: a `varint` represents method
    - `PAYLOAD LENGTH`: a `varint` represents the `PAYLOAD` length
    - `PAYLOAD`: any content will be explained by codec
