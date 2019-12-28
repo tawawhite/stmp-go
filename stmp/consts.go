@@ -2,7 +2,10 @@
 // Since 2019-12-23 15:34:33
 package stmp
 
-import "errors"
+import (
+	"errors"
+	"strconv"
+)
 
 type MessageKind byte
 
@@ -34,40 +37,47 @@ type Status byte
 
 const (
 	StatusOk                         Status = 0x00
-	StatusNetworkError                      = 0x01
-	StatusProtocolError                     = 0x02
-	StatusUnsupportedProtocolVersion        = 0x03
-	StatusUnsupportedContentType            = 0x04
-	StatusUnsupportedFormat                 = 0x05
-	StatusBadRequest                        = 0x20
-	StatusUnauthorized                      = 0x21
-	StatusNotFound                          = 0x22
-	StatusRequestTimeout                    = 0x23
-	StatusRequestEntityTooLarge             = 0x24
-	StatusTooManyRequests                   = 0x25
-	StatusClientClosed                      = 0x26
-	StatusClientCancelled                   = 0x27
-	StatusInternalServerError               = 0x40
-	StatusServerShutdown                    = 0x41
+	StatusNetworkError               Status = 0x01
+	StatusProtocolError              Status = 0x02
+	StatusUnsupportedProtocolVersion Status = 0x03
+	StatusUnsupportedContentType     Status = 0x04
+	StatusUnsupportedFormat          Status = 0x05
+	StatusBadRequest                 Status = 0x20
+	StatusUnauthorized               Status = 0x21
+	StatusNotFound                   Status = 0x22
+	StatusRequestTimeout             Status = 0x23
+	StatusRequestEntityTooLarge      Status = 0x24
+	StatusTooManyRequests            Status = 0x25
+	StatusClientClosed               Status = 0x26
+	StatusClientCancelled            Status = 0x27
+	StatusInternalServerError        Status = 0x40
+	StatusServerShutdown             Status = 0x41
 )
 
 var MapStatus = map[Status]string{
-	StatusOk:                         "(0x00) Ok",
-	StatusNetworkError:               "(0x01) NetworkError",
-	StatusProtocolError:              "(0x02) ProtocolError",
-	StatusUnsupportedProtocolVersion: "(0x03) UnsupportedProtocolVersion",
-	StatusUnsupportedContentType:     "(0x04) UnsupportedContentType",
-	StatusUnsupportedFormat:          "(0x05) UnsupportedFormat",
-	StatusBadRequest:                 "(0x20) BadRequest",
-	StatusUnauthorized:               "(0x21) Unauthorized",
-	StatusNotFound:                   "(0x22) NotFound",
-	StatusRequestTimeout:             "(0x23) RequestTimeout",
-	StatusRequestEntityTooLarge:      "(0x24) RequestEntityTooLarge",
-	StatusTooManyRequests:            "(0x25) TooManyRequests",
-	StatusClientClosed:               "(0x26) ClientClosed",
-	StatusClientCancelled:            "(0x27) ClientCancelled",
-	StatusInternalServerError:        "(0x40) InternalServerError",
-	StatusServerShutdown:             "(0x41) ServerShutdown",
+	StatusOk:                         "Ok",
+	StatusNetworkError:               "Network error",
+	StatusProtocolError:              "Protocol error",
+	StatusUnsupportedProtocolVersion: "Unsupported protocol version",
+	StatusUnsupportedContentType:     "Unsupported content type",
+	StatusUnsupportedFormat:          "Unsupported format",
+	StatusBadRequest:                 "Bad request",
+	StatusUnauthorized:               "Unauthorized",
+	StatusNotFound:                   "Not found",
+	StatusRequestTimeout:             "Request timeout",
+	StatusRequestEntityTooLarge:      "Request entity too large",
+	StatusTooManyRequests:            "Too many requests",
+	StatusClientClosed:               "Client closed",
+	StatusClientCancelled:            "Client cancelled",
+	StatusInternalServerError:        "Internal server error",
+	StatusServerShutdown:             "Server shutdown",
+}
+
+func (s Status) Error() string {
+	if m, ok := MapStatus[s]; ok {
+		return m
+	}
+	return "Unknown (0x" + strconv.FormatUint(uint64(s), 16) + ")"
 }
 
 type StatusError struct {
@@ -76,14 +86,27 @@ type StatusError struct {
 }
 
 func (e *StatusError) Error() string {
-	return "STMP" + MapStatus[e.code] + ": " + e.err.Error()
+	return "STMP " + e.code.Error() + ": " + e.err.Error()
 }
 
 func NewStatusError(code Status, err interface{}) error {
+	if err == nil {
+		return &StatusError{code: code, err: errors.New(MapStatus[code])}
+	}
 	if str, ok := err.(string); ok {
 		return &StatusError{code: code, err: errors.New(str)}
 	}
 	return &StatusError{code: code, err: err.(error)}
+}
+
+func DetectError(err error, rollbackStatus Status) (Status, []byte) {
+	if se, ok := err.(*StatusError); ok {
+		return se.code, []byte(se.err.Error())
+	}
+	if sc, ok := err.(Status); ok {
+		return sc, []byte(sc.Error())
+	}
+	return rollbackStatus, []byte(err.Error())
 }
 
 const AcceptContentType = "Accept"
