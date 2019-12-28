@@ -1,0 +1,18 @@
+// Copyright 2019 acrazing <joking.young@gmail.com>. All rights reserved.
+// Since 2019-12-28 15:22:08
+syntax = "proto3";
+package stmp;
+
+option go_package = "github.com/acrazing/stmp-go/stmp";
+
+import "github.com/golang/protobuf/protoc-gen-go/descriptor/descriptor.proto";
+
+extend google.protobuf.ServiceOptions {
+    // 0x5(3)5(4)4(d)5(0) -> STMP
+    uint64 service = 0x554501;
+    uint64 event = 0x554502;
+}
+
+extend google.protobuf.MethodOptions {
+    uint64 method = 0x554503;
+}

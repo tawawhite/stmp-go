@@ -6,6 +6,10 @@ package stmp.examples.room;
 option go_package = "github.com/acrazing/stmp-go/examples/room/room_proto";
 
 import "github.com/golang/protobuf/ptypes/empty/empty.proto";
+// import "github.com/acrazing/stmp-go/stmp/stmp.proto";
+// for any other repo, please use upon import statement, instead of the following one
+import "stmp/stmp.proto";
+
 
 message UserModel {
     int64 id = 1;
@@ -43,17 +47,18 @@ message ExitRoomInput {
 }
 
 service RoomService {
+    option (stmp.service) = 0x01;
     rpc CreateRoom(CreateRoomInput) returns (RoomModel) {
-
+        option (stmp.method) = 0x01;
     }
     rpc ListRoom(ListRoomInput) returns (ListRoomOutput) {
-
+        option (stmp.method) = 0x02;
     }
     rpc JoinRoom(JoinRoomInput) returns (RoomModel) {
-
+        option (stmp.method) = 0x03;
     }
     rpc ExitRoom(ExitRoomInput) returns (google.protobuf.Empty) {
-
+        option (stmp.method) = 0x04;
     }
 }
 
@@ -68,10 +73,11 @@ message UserExitEvent {
 }
 
 service RoomEvents {
+    option (stmp.event) = 0x02;
     rpc UserEnter(UserEnterEvent) returns (google.protobuf.Empty) {
-
+        option (stmp.method) = 0x01;
     }
     rpc UserExit(UserExitEvent) returns (google.protobuf.Empty) {
-
+        option (stmp.method) = 0x02;
     }
 }
