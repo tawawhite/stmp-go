@@ -25,7 +25,7 @@
 
      - `Accept`: the accepted `Content-Type` types, see [RFC7231#5.3.2](https://tools.ietf.org/html/rfc7231#section-5.3.2).
      - `Accept-Encoding`: the accepted `Encoding` types, see [RFC7231#5.3.4](https://tools.ietf.org/html/rfc7231#section-5.3.2).
-     - `Accept-Format`: the accepted `Format` types, see `Server handshake` section.
+     - `Accept-Packet-Format`: the accepted `Packet-Format` types, see `Server handshake` section.
 
    - `VERSION MAJOR`, `VERSION MINOR`: each use one byte as its value result is `uint16`
 
@@ -60,7 +60,7 @@
      - `Content-Type`: the content marshall protocol, negotiated by `Accept`, this field must be set, if server cannot parse.
        all of the types specified by `Accept`, server will response a `0x4` error code, and close connection.
      - `Encoding`: the exchange full connection encoding, negotiated by `Accept-Encoding`, if not set, means the data is plain packet.
-     - `Format`: the protocol serialize format, supports `text` and `binary`.
+     - `Packet-Format`: the protocol serialize format, supports `text` and `binary` for `websocket`, else supports `binary` only.
 
    - `MESSAGE`: a `UTF-8` encoded string
 
