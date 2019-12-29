@@ -42,9 +42,9 @@ func (h Header) Del(key string) {
 	delete(h, strings.ToLower(key))
 }
 
-func (h Header) Marshal() string {
+func (h Header) Marshal() []byte {
 	if len(h) == 0 {
-		return ""
+		return nil
 	}
 	chunks := make([]string, 0, len(h))
 	for k, vs := range h {
@@ -56,7 +56,7 @@ func (h Header) Marshal() string {
 			chunks = append(chunks, k+":"+v)
 		}
 	}
-	return "\n" + strings.Join(chunks, "\n")
+	return []byte(strings.Join(chunks, "\n"))
 }
 
 var invalidHeader = NewStatusError(StatusProtocolError, "invalid header format")

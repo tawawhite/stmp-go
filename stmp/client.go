@@ -18,16 +18,32 @@ import (
 )
 
 type DialOptions struct {
-	Header           Header
-	HandshakeTimeout time.Duration
-	WriteTimeout     time.Duration
-	ReadTimeout      time.Duration
-	PacketFormat     string
-	Encoding         string
-	ContentType      string
+	Header             Header
+	HandshakeTimeout   time.Duration
+	WriteTimeout       time.Duration
+	ReadTimeout        time.Duration
+	PacketFormat       string
+	Encoding           string
+	CompressLevel      int
+	ContentType        string
+	Host               string
+	Message            string
+	ServerName         string
+	InsecureSkipVerify bool
 }
 
-func dialOptionsDefaulter(opts *DialOptions) {
+func dialOptionsDefaulter(addr string, opts *DialOptions) {
+	if opts.ServerName == "" {
+		URL, err := url.Parse(addr)
+		if err != nil {
+			panic(err)
+		}
+		host := URL.Hostname()
+		ip := net.ParseIP(host)
+		if ip == nil {
+			opts.ServerName = host
+		}
+	}
 	if opts.HandshakeTimeout == 0 {
 		opts.HandshakeTimeout = time.Minute
 	}
@@ -45,6 +61,9 @@ func dialOptionsDefaulter(opts *DialOptions) {
 	}
 	if opts.Encoding != "" {
 		opts.Header.Set(AcceptEncoding, opts.Encoding)
+		if opts.CompressLevel == 0 {
+			opts.CompressLevel = 6
+		}
 	}
 	if opts.ContentType == "" {
 		if opts.PacketFormat == "text" {
@@ -56,15 +75,10 @@ func dialOptionsDefaulter(opts *DialOptions) {
 	opts.Header.Set(AcceptContentType, opts.ContentType)
 }
 
-func DialTCP(addr string, opts *DialOptions) (conn *Conn, err error) {
-	nc, err := net.Dial("tcp", addr)
-	if err != nil {
-		return nil, err
+func loadTLSClientConfig(certFile string, opts *DialOptions) (*tls.Config, error) {
+	if opts.ServerName == "" && !opts.InsecureSkipVerify {
+		return nil, errors.New("opts.ServerName is required for tls connection")
 	}
-	conn := newConn()
-}
-
-func loadTLSClientConfig(certFile string) (*tls.Config, error) {
 	b, err := ioutil.ReadFile(certFile)
 	if err != nil {
 		return nil, err
@@ -73,11 +87,176 @@ func loadTLSClientConfig(certFile string) (*tls.Config, error) {
 	if !cp.AppendCertsFromPEM(b) {
 		return nil, errors.New("tls failed to append certificates")
 	}
-	return &tls.Config{RootCAs: cp}, nil
+	return &tls.Config{
+		RootCAs:            cp,
+		ServerName:         opts.ServerName,
+		InsecureSkipVerify: opts.InsecureSkipVerify,
+	}, nil
+}
+
+// create a client conn from nc, will handshake automatically
+func Client(nc net.Conn, opts *DialOptions) (c *Conn, err error) {
+	c = newConn()
+	defer func() {
+		if err != nil {
+			nc.Close()
+		}
+		if c.reader != nil {
+			c.reader.Close()
+		}
+		if c.writer != nil {
+			c.writer.Close()
+		}
+	}()
+	c.ClientHeader = opts.Header
+	c.nc = nc
+	c.handshakeTimeout = opts.HandshakeTimeout
+	c.readTimeout = opts.ReadTimeout
+	c.writeTimeout = opts.WriteTimeout
+	c.ClientHeader = opts.Header
+	c.ClientMessage = opts.Message
+	input := make([]byte, 6)
+	copy(input, "STMP")
+	input[4] = c.Major
+	input[5] = c.Minor
+	rawHeaders := c.ClientHeader.Marshal()
+	if len(rawHeaders) > 0 {
+		input = append(input, '\n')
+		input = append(input, rawHeaders...)
+	}
+	if len(c.ClientMessage) > 0 {
+		input = append(input, "\n\n"...)
+		input = append(input, c.ClientMessage...)
+	}
+	c.nc.SetWriteDeadline(time.Now().Add(c.handshakeTimeout))
+	_, err = c.nc.Write(input)
+	if err != nil {
+		err = NewStatusError(StatusNetworkError, err)
+		return
+	}
+	_, err = c.nc.Read(input[:5])
+	if err != nil {
+		err = NewStatusError(StatusNetworkError, err)
+		return
+	}
+	size, err := c.readUvarint()
+	if err != nil {
+		err = NewStatusError(StatusNetworkError, err)
+		return
+	}
+	input = make([]byte, size)
+	_, err = c.nc.Read(input)
+	if err != nil {
+		err = NewStatusError(StatusNetworkError, err)
+		return
+	}
+	sep := bytes.Index(input, []byte("\n\n"))
+	if sep == -1 {
+		sep = len(input)
+	} else {
+		c.ServerMessage = string(input[sep+2:])
+	}
+	c.ServerHeader = NewHeader()
+	err = c.ServerHeader.Unmarshal(input[0:sep])
+	if err != nil {
+		return
+	}
+	err = c.initEncoding(opts.CompressLevel)
+	if err != nil {
+		return
+	}
+	// TODO bootstrap read and write channel
+	return
+}
+
+func WebSocketClient(wc *websocket.Conn, opts *DialOptions) (c *Conn, err error) {
+	c = newConn()
+	defer func() {
+		if err != nil {
+			wc.Close()
+		}
+		if c.reader != nil {
+			c.reader.Close()
+		}
+		if c.writer != nil {
+			c.writer.Close()
+		}
+	}()
+	c.ClientHeader = opts.Header
+	c.wc = wc
+	c.handshakeTimeout = opts.HandshakeTimeout
+	c.readTimeout = opts.ReadTimeout
+	c.writeTimeout = opts.WriteTimeout
+	c.ClientHeader = opts.Header
+	c.ClientMessage = opts.Message
+	kind, data, err := wc.ReadMessage()
+	// read header
+	if err != nil {
+		err = NewStatusError(StatusNetworkError, err)
+		return
+	}
+	if len(data) < 6 || bytes.Equal(data[0:4], []byte("STMP")) {
+		// must container headers, with STMP<STATUS>\n
+		err = StatusProtocolError
+		return
+	}
+	var sep int
+	if kind == websocket.TextMessage {
+		sep = bytes.IndexByte(data, '\n')
+		if sep == -1 {
+			// no new line for header
+			err = StatusProtocolError
+			return
+		}
+		status, err := strconv.ParseUint(string(data[4:sep]), 16, 8)
+		if err != nil {
+			// invalid status
+			err = NewStatusError(StatusProtocolError, err)
+			return
+		}
+		if status != 0 {
+			// bad status
+			err = Status(status)
+			return
+		}
+		data = data[sep+1:]
+	} else {
+		if data[4] != 0 {
+			// bad status
+			err = Status(data[4])
+			return
+		}
+		data = data[5:]
+	}
+	sep = bytes.Index(data, []byte("\n\n"))
+	if sep == -1 {
+		sep = len(data)
+	} else {
+		c.ServerMessage = string(data[sep+2])
+	}
+	c.ServerHeader = NewHeader()
+	err = c.ServerHeader.Unmarshal(data[0:sep])
+	if err != nil {
+		return
+	}
+	// ws do not process encoding
+	c.media = GetMediaCodec(c.ServerHeader.Get(DetermineContentType))
+	// TODO start read and write channel
+	return
+}
+
+func DialTCP(addr string, opts *DialOptions) (*Conn, error) {
+	dialOptionsDefaulter(addr, opts)
+	nc, err := net.Dial("tcp", addr)
+	if err != nil {
+		return nil, err
+	}
+	return Client(nc, opts)
 }
 
 func DialTCPWithTLS(addr, certFile string, opts *DialOptions) (*Conn, error) {
-	tc, err := loadTLSClientConfig(certFile)
+	dialOptionsDefaulter(addr, opts)
+	tc, err := loadTLSClientConfig(certFile, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -85,19 +264,21 @@ func DialTCPWithTLS(addr, certFile string, opts *DialOptions) (*Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-	return newConn(nc, nil), nil
+	return Client(nc, opts)
 }
 
 func DialKCP(addr string, opts *DialOptions) (*Conn, error) {
+	dialOptionsDefaulter(addr, opts)
 	nc, err := kcp.Dial(addr)
 	if err != nil {
 		return nil, err
 	}
-	return newConn(nc, nil), nil
+	return Client(nc, opts)
 }
 
 func DialKCPWithTLS(addr, certFile string, opts *DialOptions) (*Conn, error) {
-	tc, err := loadTLSClientConfig(certFile)
+	dialOptionsDefaulter(addr, opts)
+	tc, err := loadTLSClientConfig(certFile, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -109,18 +290,12 @@ func DialKCPWithTLS(addr, certFile string, opts *DialOptions) (*Conn, error) {
 	if err = tlsConn.Handshake(); err != nil {
 		return nil, err
 	}
-	return newConn(tlsConn, nil), nil
+	return Client(tlsConn, opts)
 }
 
 // the gorilla/websocket only accepts public verified tls config for tls connection
-func DialWebSocket(urlStr string, opts *DialOptions) (conn *Conn, err error) {
-	dialOptionsDefaulter(opts)
-	defer func() {
-		if err != nil && conn != nil {
-			conn.Close(StatusProtocolError, "")
-			conn = nil
-		}
-	}()
+func DialWebSocket(urlStr string, opts *DialOptions) (*Conn, error) {
+	dialOptionsDefaulter(urlStr, opts)
 	if len(opts.Header) > 0 {
 		headStr := url.Values(opts.Header).Encode()
 		if strings.IndexByte(urlStr, '?') > 0 {
@@ -132,57 +307,7 @@ func DialWebSocket(urlStr string, opts *DialOptions) (conn *Conn, err error) {
 	dialer := websocket.Dialer{HandshakeTimeout: opts.HandshakeTimeout}
 	wc, _, err := dialer.Dial(urlStr, nil)
 	if err != nil {
-		return
+		return nil, err
 	}
-	conn = newConn()
-	conn.ClientHeader = opts.Header
-	conn.nc = wc.UnderlyingConn()
-	conn.wc = wc
-	kind, data, err := wc.ReadMessage()
-	if err != nil {
-		err = NewStatusError(StatusNetworkError, err)
-		return
-	}
-	if len(data) < 6 || bytes.Equal(data[0:4], []byte("STMP")) {
-		err = StatusProtocolError
-		return
-	}
-	var sep int
-	if kind == websocket.TextMessage {
-		sep = bytes.IndexByte(data, '\n')
-		if sep == -1 {
-			err = StatusProtocolError
-			return
-		}
-		status, err := strconv.ParseUint(string(data[4:sep]), 16, 8)
-		if err != nil {
-			err = NewStatusError(StatusProtocolError, err)
-			return
-		}
-		if status != 0 {
-			err = Status(status)
-			return
-		}
-		data = data[sep+1:]
-	} else {
-		if data[4] != 0 {
-			err = Status(data[4])
-			return
-		}
-		data = data[5:]
-	}
-	sep = bytes.Index(data, []byte("\n\n"))
-	if sep == -1 {
-		sep = len(data)
-	} else {
-		conn.HandshakeMessage = string(data[sep+2])
-	}
-	conn.ServerHeader = NewHeader()
-	err = conn.ServerHeader.Unmarshal(data[0:sep])
-	if err != nil {
-		return
-	}
-	// ws do not process encoding
-	conn.media = GetMediaCodec(conn.ServerHeader.Get(DetermineContentType))
-	return
+	return WebSocketClient(wc, opts)
 }

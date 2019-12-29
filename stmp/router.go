@@ -30,14 +30,19 @@ func NewRouter() *Router {
 	}
 }
 
-func (r *Router) Before(handlers ...MiddlewareFunc) {
+// add bypass handler, the handler will not intercept the request
+// unless the handler returns error
+func (r *Router) Middleware(handlers ...MiddlewareFunc) {
 	r.middlewares = append(r.middlewares, handlers...)
 }
 
+// intercept will intercept request, if done == true, will not pass
+// the request to next handlers
 func (r *Router) Intercept(handlers ...InterceptFunc) {
 	r.interceptors = append(r.interceptors, handlers...)
 }
 
+// action bound handler
 func (r *Router) Register(action uint64, factory ModelFactory, handlers ...HandlerFunc) {
 	if r.handlers[action] == nil {
 		r.handlers[action] = &HandlerOptions{factory: factory, handlers: handlers}
@@ -46,6 +51,7 @@ func (r *Router) Register(action uint64, factory ModelFactory, handlers ...Handl
 	}
 }
 
+// dispatch a request to handlers
 func (r *Router) Dispatch(ctx context.Context, action uint64, payload []byte, codec MediaCodec) (Status, []byte) {
 	var err error
 	for _, f := range r.middlewares {

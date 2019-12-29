@@ -7,6 +7,7 @@ import (
 	"compress/gzip"
 	"github.com/google/brotli/go/cbrotli"
 	"io"
+	"net"
 )
 
 var mapEncodingCodec = map[string]EncodingCodec{}
@@ -84,4 +85,16 @@ func (b brotliCodec) Writer(w io.Writer, level int) (EncodingWriter, error) {
 
 func NewBrotliCodec() EncodingCodec {
 	return brotliCodec{}
+}
+
+type plainEncoding struct {
+	net.Conn
+}
+
+func (plainEncoding) Close() error {
+	return nil
+}
+
+func (plainEncoding) Flush() error {
+	return nil
 }
