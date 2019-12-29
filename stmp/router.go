@@ -22,6 +22,14 @@ type Router struct {
 	handlers     map[uint64]*HandlerOptions
 }
 
+func NewRouter() *Router {
+	return &Router{
+		middlewares:  []MiddlewareFunc{},
+		interceptors: []InterceptFunc{},
+		handlers:     map[uint64]*HandlerOptions{},
+	}
+}
+
 func (r *Router) Before(handlers ...MiddlewareFunc) {
 	r.middlewares = append(r.middlewares, handlers...)
 }
@@ -30,7 +38,7 @@ func (r *Router) Intercept(handlers ...InterceptFunc) {
 	r.interceptors = append(r.interceptors, handlers...)
 }
 
-func (r *Router) Invoke(action uint64, factory ModelFactory, handlers ...HandlerFunc) {
+func (r *Router) Register(action uint64, factory ModelFactory, handlers ...HandlerFunc) {
 	if r.handlers[action] == nil {
 		r.handlers[action] = &HandlerOptions{factory: factory, handlers: handlers}
 	} else {

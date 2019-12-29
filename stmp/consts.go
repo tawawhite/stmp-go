@@ -42,6 +42,7 @@ const (
 	StatusUnsupportedProtocolVersion Status = 0x03
 	StatusUnsupportedContentType     Status = 0x04
 	StatusUnsupportedFormat          Status = 0x05
+	StatusUnknown                    Status = 0x06
 	StatusBadRequest                 Status = 0x20
 	StatusUnauthorized               Status = 0x21
 	StatusNotFound                   Status = 0x22

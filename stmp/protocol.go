@@ -26,7 +26,7 @@ var (
 	invalidMessageKind      = errors.New("invalid message kind")
 )
 
-func ParseHead(h byte) (fin bool, kind MessageKind, pure bool, err error) {
+func parseHead(h byte) (fin bool, kind MessageKind, pure bool, err error) {
 	if h&0b111 != 0 {
 		err = invalidReservedHeadBits
 		return

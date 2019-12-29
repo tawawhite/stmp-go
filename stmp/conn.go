@@ -4,17 +4,10 @@ package stmp
 
 import (
 	"encoding/binary"
+	"errors"
 	"net"
+	"time"
 )
-
-type Conn interface {
-	Header() Header
-	RemoteAddr() net.Addr
-	LocalAddr() net.Addr
-	Request(options SendContext) error
-	Notify(options SendContext) error
-	Terminate(status Status, message string) error
-}
 
 type incomingEvent struct {
 	kind    MessageKind
@@ -27,68 +20,94 @@ type responseEvent struct {
 	payload []byte
 }
 
-type netConn struct {
-	net.Conn
-	header Header
-	media  MediaCodec
-	major  byte
-	minor  byte
+type wsConn interface {
+	ReadMessage() (messageType int, p []byte, err error)
+	WriteMessage(messageType int, data []byte) error
+}
+
+type Conn struct {
+	*Router
+	Major            byte
+	Minor            byte
+	ClientHeader     Header
+	ServerHeader     Header
+	HandshakeMessage string
+	nc               net.Conn
+	wc               wsConn
+	media            MediaCodec
 	// send a nil well stop write
-	writeChan       chan []byte
-	b1              []byte
-	b2              []byte
+	writeChan chan []byte
+	b1        []byte
+	b2        []byte
+
+	handshakeTimeout time.Duration
+	readTimeout      time.Duration
+	writeTimeout     time.Duration
+
+	// pending requests & responses
 	requests        map[uint16]chan *responseEvent
 	pendingIncoming map[uint16]*incomingEvent
 	pendingResponse map[uint16]*responseEvent
 }
 
-func (n *netConn) Flush() error {
+func (n *Conn) Request(options SendContext) error {
+	panic("implement me")
+}
+
+func (n *Conn) Notify(options SendContext) error {
+	panic("implement me")
+}
+
+func (n *Conn) Close(status Status, message string) error {
 	return nil
 }
 
-func (n *netConn) Header() Header {
-	return n.header
+func newConn() *Conn {
+	return &Conn{
+		Major:           1,
+		Minor:           0,
+		b1:              make([]byte, 1),
+		b2:              make([]byte, 2),
+		writeChan:       make(chan []byte),
+		requests:        map[uint16]chan *responseEvent{},
+		pendingIncoming: map[uint16]*incomingEvent{},
+		pendingResponse: map[uint16]*responseEvent{},
+	}
 }
 
-func (n *netConn) Request(options SendContext) error {
-	panic("implement me")
+// for binary.ReadUvarint
+func (n *Conn) readUvarint() (uint64, error) {
+	var x uint64
+	var s uint
+	for i := 0; ; i++ {
+		_, err := n.nc.Read(n.b1)
+		if err != nil {
+			return x, err
+		}
+		b := n.b1[0]
+		if b < 0x80 {
+			if i > 9 || i == 9 && b > 1 {
+				return x, errors.New("uint64 overflow")
+			}
+			return x | uint64(b)<<s, nil
+		}
+		x |= uint64(b&0x7f) << s
+		s += 7
+	}
 }
 
-func (n *netConn) Notify(options SendContext) error {
-	panic("implement me")
-}
-
-func (n *netConn) ReadByte() (byte, error) {
-	_, err := n.Read(n.b1)
-	return n.b1[0], err
-}
-
-func (n *netConn) ReadInt16() (v uint16, err error) {
-	_, err = n.Read(n.b2)
+func (n *Conn) readUint16() (v uint16, err error) {
+	_, err = n.nc.Read(n.b2)
 	if err != nil {
 		return
 	}
 	v = binary.LittleEndian.Uint16(n.b2)
 	return
 }
-
-func (n *netConn) Handshake(status Status, header Header, message string) error {
+func (n *Conn) handshake(status Status, header Header, message string) error {
 	// TODO
 	return nil
 }
 
-func (n *netConn) Terminate(status Status, message string) error {
-	return nil
-}
-
-func (n *netConn) CheckPendingVolume() {
-}
-
-func newNetConn(conn net.Conn) *netConn {
-	return &netConn{
-		Conn:   conn,
-		b1:     make([]byte, 1),
-		b2:     make([]byte, 2),
-		header: NewHeader(),
-	}
+func (n *Conn) checkPendingVolume() {
 }
