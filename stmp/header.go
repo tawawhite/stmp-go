@@ -4,6 +4,7 @@ package stmp
 
 import (
 	"bytes"
+	"errors"
 	"strings"
 )
 
@@ -59,8 +60,6 @@ func (h Header) Marshal() []byte {
 	return []byte(strings.Join(chunks, "\n"))
 }
 
-var invalidHeader = NewStatusError(StatusProtocolError, "invalid header format")
-
 func (h Header) Unmarshal(data []byte) error {
 	var sep int
 	var end int
@@ -70,7 +69,7 @@ func (h Header) Unmarshal(data []byte) error {
 	for {
 		sep = bytes.IndexByte(data, ':')
 		if sep < 0 {
-			return invalidHeader
+			return errors.New("miss ':' in header")
 		}
 		key = string(bytes.ToLower(bytes.ReplaceAll(bytes.ReplaceAll(data[:sep], []byte("%3A"), []byte(":")), []byte("%25"), []byte("%"))))
 		end = bytes.IndexByte(data[sep+1:], '\n')

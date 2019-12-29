@@ -90,7 +90,7 @@ func (e *StatusError) Error() string {
 	return "STMP " + e.code.Error() + ": " + e.err.Error()
 }
 
-func NewStatusError(code Status, err interface{}) error {
+func NewStatusError(code Status, err interface{}) *StatusError {
 	if err == nil {
 		return &StatusError{code: code, err: errors.New(MapStatus[code])}
 	}

@@ -5,6 +5,7 @@ package stmp
 import (
 	"encoding/binary"
 	"errors"
+	"github.com/gorilla/websocket"
 	"io"
 	"net"
 	"time"
@@ -31,22 +32,17 @@ type Conn struct {
 
 	Major byte
 	Minor byte
-	// client handshake request header
+	// client writeBinaryHandshakeResponse request header
 	ClientHeader Header
-	// server handshake response header
+	// server writeBinaryHandshakeResponse response header
 	ServerHeader Header
-	// client handshake request message
+	// client writeBinaryHandshakeResponse request message
 	ClientMessage string
-	// server handshake response message
+	// server writeBinaryHandshakeResponse response message
 	ServerMessage string
 
 	// network conn
 	nc net.Conn
-	// websocket conn, use for websocket connection
-	wc wsConn
-
-	reader io.ReadCloser
-	writer EncodingWriter
 
 	// content-type codec
 	media MediaCodec
@@ -81,10 +77,11 @@ func (c *Conn) Close(status Status, message string) error {
 	return nil
 }
 
-func newConn() *Conn {
+func newConn(nc net.Conn) *Conn {
 	return &Conn{
 		Major:           1,
 		Minor:           0,
+		nc:              nc,
 		b1:              make([]byte, 1),
 		b2:              make([]byte, 2),
 		writeChan:       make(chan []byte),
@@ -123,37 +120,91 @@ func (c *Conn) readUint16() (v uint16, err error) {
 	v = binary.LittleEndian.Uint16(c.b2)
 	return
 }
-func (c *Conn) handshake(status Status, header Header, message string) error {
-	// TODO
+func (c *Conn) writeBinaryHandshakeResponse(status Status) error {
+	// TODO send writeBinaryHandshakeResponse
 	return nil
 }
 
 func (c *Conn) checkPendingVolume() {
 }
 
-func (c *Conn) initEncoding(compressLevel int) error {
+func (c *Conn) binaryReadChannel(r io.ReadCloser) {
+}
+
+func (c *Conn) binaryWriteChannel(w EncodingWriter) {
+}
+
+func (c *Conn) websocketBinaryReadChannel(wc *websocket.Conn) {
+}
+
+func (c *Conn) websocketBinaryWriteChannel(wc *websocket.Conn) {
+}
+
+func (c *Conn) websocketTextReadChannel(wc *websocket.Conn) {
+}
+
+func (c *Conn) websocketTextWriteChannel(wc *websocket.Conn) {
+}
+
+func (c *Conn) handleNotify(action uint64, payload []byte) {
+}
+
+func (c *Conn) handleRequest(mid uint16, action uint64, payload []byte) {
+}
+
+func (c *Conn) handleResponse(mid uint16, status byte, payload []byte) {
+}
+
+func (c *Conn) negotiate() *StatusError {
+	mediaInput := c.ClientHeader.Get(AcceptContentType)
+	inputLength := 0
+	var inputValue string
+	for inputLength < len(mediaInput) {
+		inputValue, inputLength = ReadNegotiate(mediaInput)
+		if c.media = GetMediaCodec(inputValue); c.media != nil {
+			c.ServerHeader.Set(DetermineContentType, inputValue)
+			break
+		}
+	}
+	if c.media == nil {
+		return NewStatusError(StatusUnsupportedContentType, "")
+	}
+	encodingInput := c.ClientHeader.Get(AcceptEncoding)
+	inputLength = 0
+	var encoding EncodingCodec
+	for inputLength < len(encodingInput) {
+		inputValue, inputLength = ReadNegotiate(encodingInput)
+		if encoding = GetEncodingCodec(inputValue); encoding != nil {
+			c.ServerHeader.Set(DetermineEncoding, inputValue)
+			break
+		}
+	}
+	return nil
+}
+
+func (c *Conn) initEncoding(compressLevel int) (r io.ReadCloser, w EncodingWriter, err error) {
 	c.media = GetMediaCodec(c.ServerHeader.Get(DetermineContentType))
 	if c.media == nil {
-		return errors.New("cannot find the codec for content-type: " + c.ServerHeader.Get(DetermineContentType) + ", please register it at first")
+		err = errors.New("cannot find the codec for content-type: " + c.ServerHeader.Get(DetermineContentType) + ", please register it at first")
+		return
 	}
 	ec := GetEncodingCodec(c.ServerHeader.Get(DetermineEncoding))
 	if ec == nil {
 		rw := plainEncoding{Conn: c.nc}
-		c.reader = rw
-		c.writer = rw
-		return nil
+		r = rw
+		w = rw
+		return
 	} else {
-		r, err := ec.Reader(c.nc)
+		r, err = ec.Reader(c.nc)
 		if err != nil {
-			return err
+			return
 		}
-		w, err := ec.Writer(c.nc, compressLevel)
+		w, err = ec.Writer(c.nc, compressLevel)
 		if err != nil {
 			r.Close()
-			return err
+			r = nil
+			return
 		}
-		c.reader = r
-		c.writer = w
-		return nil
+		return
 	}
 }

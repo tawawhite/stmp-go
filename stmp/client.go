@@ -18,17 +18,34 @@ import (
 )
 
 type DialOptions struct {
-	Header             Header
-	HandshakeTimeout   time.Duration
-	WriteTimeout       time.Duration
-	ReadTimeout        time.Duration
-	PacketFormat       string
-	Encoding           string
-	CompressLevel      int
-	ContentType        string
-	Host               string
-	Message            string
-	ServerName         string
+	// the headers for writeBinaryHandshakeResponse
+	Header Header
+	// writeBinaryHandshakeResponse timeout, each writeBinaryHandshakeResponse packet timeout
+	// which means the final timeout is double
+	HandshakeTimeout time.Duration
+	// write timeout
+	WriteTimeout time.Duration
+	// read timeout
+	ReadTimeout time.Duration
+	// could be text or binary for websocket
+	// else only could be binary
+	// default is binary
+	PacketFormat string
+	// could be gzip, br, deflate
+	// omitted for websocket
+	// default is empty
+	Encoding string
+	// works only if encoding is not empty
+	// range is [1, 9], default is 6
+	CompressLevel int
+	// could be application/json, application/protobuf, application/msgpack
+	// default is application/protobuf
+	ContentType string
+	// the writeBinaryHandshakeResponse message
+	Message string
+	// the server name, if addr is ip & with tls, this is required
+	ServerName string
+	// if with tls and server name is empty, this should be true
 	InsecureSkipVerify bool
 }
 
@@ -94,27 +111,26 @@ func loadTLSClientConfig(certFile string, opts *DialOptions) (*tls.Config, error
 	}, nil
 }
 
-// create a client conn from nc, will handshake automatically
-func Client(nc net.Conn, opts *DialOptions) (c *Conn, err error) {
-	c = newConn()
-	defer func() {
-		if err != nil {
-			nc.Close()
-		}
-		if c.reader != nil {
-			c.reader.Close()
-		}
-		if c.writer != nil {
-			c.writer.Close()
-		}
-	}()
+func newClientConn(nc net.Conn, opts *DialOptions) (c *Conn) {
+	c = newConn(nc)
+	c.Router = NewRouter()
 	c.ClientHeader = opts.Header
-	c.nc = nc
 	c.handshakeTimeout = opts.HandshakeTimeout
 	c.readTimeout = opts.ReadTimeout
 	c.writeTimeout = opts.WriteTimeout
 	c.ClientHeader = opts.Header
 	c.ClientMessage = opts.Message
+	return
+}
+
+// create a client conn from nc, will writeBinaryHandshakeResponse automatically
+func Client(nc net.Conn, opts *DialOptions) (c *Conn, err error) {
+	c = newClientConn(nc, opts)
+	defer func() {
+		if err != nil {
+			nc.Close()
+		}
+	}()
 	input := make([]byte, 6)
 	copy(input, "STMP")
 	input[4] = c.Major
@@ -161,34 +177,22 @@ func Client(nc net.Conn, opts *DialOptions) (c *Conn, err error) {
 	if err != nil {
 		return
 	}
-	err = c.initEncoding(opts.CompressLevel)
+	r, w, err := c.initEncoding(opts.CompressLevel)
 	if err != nil {
 		return
 	}
-	// TODO bootstrap read and write channel
+	go c.binaryReadChannel(r)
+	go c.binaryWriteChannel(w)
 	return
 }
 
 func WebSocketClient(wc *websocket.Conn, opts *DialOptions) (c *Conn, err error) {
-	c = newConn()
+	c = newClientConn(wc.UnderlyingConn(), opts)
 	defer func() {
 		if err != nil {
 			wc.Close()
 		}
-		if c.reader != nil {
-			c.reader.Close()
-		}
-		if c.writer != nil {
-			c.writer.Close()
-		}
 	}()
-	c.ClientHeader = opts.Header
-	c.wc = wc
-	c.handshakeTimeout = opts.HandshakeTimeout
-	c.readTimeout = opts.ReadTimeout
-	c.writeTimeout = opts.WriteTimeout
-	c.ClientHeader = opts.Header
-	c.ClientMessage = opts.Message
 	kind, data, err := wc.ReadMessage()
 	// read header
 	if err != nil {
@@ -241,7 +245,13 @@ func WebSocketClient(wc *websocket.Conn, opts *DialOptions) (c *Conn, err error)
 	}
 	// ws do not process encoding
 	c.media = GetMediaCodec(c.ServerHeader.Get(DetermineContentType))
-	// TODO start read and write channel
+	if c.ServerHeader.Get(DeterminePacketFormat) == "text" {
+		go c.websocketTextReadChannel(wc)
+		go c.websocketTextWriteChannel(wc)
+	} else {
+		go c.websocketBinaryReadChannel(wc)
+		go c.websocketBinaryWriteChannel(wc)
+	}
 	return
 }
 
