@@ -32,13 +32,13 @@ type Conn struct {
 
 	Major byte
 	Minor byte
-	// client writeBinaryHandshakeResponse request header
+	// client writeHandshakeResponse request header
 	ClientHeader Header
-	// server writeBinaryHandshakeResponse response header
+	// server writeHandshakeResponse response header
 	ServerHeader Header
-	// client writeBinaryHandshakeResponse request message
+	// client writeHandshakeResponse request message
 	ClientMessage string
-	// server writeBinaryHandshakeResponse response message
+	// server writeHandshakeResponse response message
 	ServerMessage string
 
 	// network conn
@@ -120,8 +120,13 @@ func (c *Conn) readUint16() (v uint16, err error) {
 	v = binary.LittleEndian.Uint16(c.b2)
 	return
 }
-func (c *Conn) writeBinaryHandshakeResponse(status Status) error {
-	// TODO send writeBinaryHandshakeResponse
+func (c *Conn) writeHandshakeResponse(status Status) error {
+	// TODO
+	return nil
+}
+
+func (c *Conn) websocketWriteHandshakeResponse(status Status) error {
+	// TODO
 	return nil
 }
 
@@ -178,6 +183,10 @@ func (c *Conn) negotiate() *StatusError {
 			c.ServerHeader.Set(DetermineEncoding, inputValue)
 			break
 		}
+	}
+	packetFormat := c.ClientHeader.Get(DeterminePacketFormat)
+	if packetFormat != "" {
+		c.ServerHeader.Set(DeterminePacketFormat, packetFormat)
 	}
 	return nil
 }

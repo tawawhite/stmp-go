@@ -87,7 +87,7 @@ func (s *Server) HandleConn(nc net.Conn) (status *StatusError) {
 	defer func() {
 		if status != nil {
 			c.ServerMessage = status.err.Error()
-			c.writeBinaryHandshakeResponse(status.code)
+			c.writeHandshakeResponse(status.code)
 			c.nc.Close()
 		}
 	}()
@@ -104,6 +104,9 @@ func (s *Server) HandleConn(nc net.Conn) (status *StatusError) {
 	}
 	c.Major = fixHead[4]
 	c.Minor = fixHead[5]
+	if c.Major != 1 || c.Minor != 0 {
+		status = NewStatusError(StatusUnsupportedProtocolVersion, "unsupported STMP version: "+string([]byte{c.Major + '0', '.', c.Minor + '0'}))
+	}
 	// length
 	n, err := c.readUvarint()
 	if err != nil {
@@ -139,7 +142,7 @@ func (s *Server) HandleConn(nc net.Conn) (status *StatusError) {
 		status = NewStatusError(StatusProtocolError, "init encoding error: "+err.Error())
 		return
 	}
-	err = c.writeBinaryHandshakeResponse(StatusOk)
+	err = c.writeHandshakeResponse(StatusOk)
 	if err != nil {
 		c.nc.Close()
 		return
@@ -152,7 +155,61 @@ func (s *Server) HandleConn(nc net.Conn) (status *StatusError) {
 	return
 }
 
-func (s *Server) HandleWebsocketConn(conn *websocket.Conn, req *http.Request) {
+func (s *Server) HandleWebsocketConn(wc *websocket.Conn, req *http.Request) (status *StatusError) {
+	c := s.newClient(wc.UnderlyingConn())
+	defer func() {
+		if status != nil {
+			c.ServerMessage = status.err.Error()
+			c.websocketWriteHandshakeResponse(status.code)
+			wc.Close()
+		}
+	}()
+	for k, v := range req.Header {
+		c.ClientHeader.Set(k, v...)
+	}
+	for k, v := range req.URL.Query() {
+		c.ClientHeader.Set(k, v...)
+	}
+	rawVersion := c.ClientHeader.Get(DetermineStmpVersion)
+	if len(rawVersion) != 3 {
+		status = NewStatusError(StatusUnsupportedProtocolVersion, "unsupported STMP version: "+rawVersion)
+		return
+	}
+	c.Major = rawVersion[0] - '0'
+	c.Minor = rawVersion[2] - '0'
+	if c.Major != 1 || c.Minor != 0 {
+		status = NewStatusError(StatusUnsupportedProtocolVersion, "unsupported STMP version: "+rawVersion)
+		return
+	}
+	status = c.negotiate()
+	if status != nil {
+		return
+	}
+	err := s.Authenticate(c)
+	if err != nil {
+		if se, ok := err.(*StatusError); ok {
+			status = se
+		} else {
+			status = NewStatusError(StatusInternalServerError, "authenticate error: "+err.Error())
+		}
+		return
+	}
+	err = c.websocketWriteHandshakeResponse(StatusOk)
+	if err != nil {
+		wc.Close()
+		return
+	}
+	s.mu.Lock()
+	s.conns[c] = true
+	s.mu.Unlock()
+	if c.ServerHeader.Get(DeterminePacketFormat) == "text" {
+		go c.websocketTextReadChannel(wc)
+		go c.websocketTextWriteChannel(wc)
+	} else {
+		go c.websocketBinaryReadChannel(wc)
+		go c.websocketBinaryWriteChannel(wc)
+	}
+	return
 }
 
 func (s *Server) shutdown(err error) {

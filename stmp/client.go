@@ -18,9 +18,9 @@ import (
 )
 
 type DialOptions struct {
-	// the headers for writeBinaryHandshakeResponse
+	// the headers for writeHandshakeResponse
 	Header Header
-	// writeBinaryHandshakeResponse timeout, each writeBinaryHandshakeResponse packet timeout
+	// writeHandshakeResponse timeout, each writeHandshakeResponse packet timeout
 	// which means the final timeout is double
 	HandshakeTimeout time.Duration
 	// write timeout
@@ -41,7 +41,7 @@ type DialOptions struct {
 	// could be application/json, application/protobuf, application/msgpack
 	// default is application/protobuf
 	ContentType string
-	// the writeBinaryHandshakeResponse message
+	// the writeHandshakeResponse message
 	Message string
 	// the server name, if addr is ip & with tls, this is required
 	ServerName string
@@ -123,7 +123,7 @@ func newClientConn(nc net.Conn, opts *DialOptions) (c *Conn) {
 	return
 }
 
-// create a client conn from nc, will writeBinaryHandshakeResponse automatically
+// create a client conn from nc, will writeHandshakeResponse automatically
 func Client(nc net.Conn, opts *DialOptions) (c *Conn, err error) {
 	c = newClientConn(nc, opts)
 	defer func() {
