@@ -11,6 +11,8 @@ extend google.protobuf.ServiceOptions {
     // 0x5(3)5(4)4(d)5(0) -> STMP
     // the service id, could contains 7 bytes at most,
     // this is required
+    // the value from 0x00 to 0x0f is reserved for register dynamic methods(without service or method option)
+    // dynamic actions is not implemented
     uint64 service = 0x554501;
 }
 

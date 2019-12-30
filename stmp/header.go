@@ -49,12 +49,8 @@ func (h Header) Marshal() []byte {
 	}
 	chunks := make([]string, 0, len(h))
 	for k, vs := range h {
-		k = strings.ReplaceAll(k, "%", "%25")
-		k = strings.ReplaceAll(k, ":", "%3A")
 		for _, v := range vs {
-			v = strings.ReplaceAll(v, "%", "%25")
-			v = strings.ReplaceAll(v, "\n", "%0A")
-			chunks = append(chunks, k+":"+v)
+			chunks = append(chunks, escapeHeadKey(k)+":"+escapeHeadValue(v))
 		}
 	}
 	return []byte(strings.Join(chunks, "\n"))
@@ -63,7 +59,6 @@ func (h Header) Marshal() []byte {
 func (h Header) Unmarshal(data []byte) error {
 	var sep int
 	var end int
-	var chunk []byte
 	var key string
 	var value string
 	for {
@@ -71,14 +66,13 @@ func (h Header) Unmarshal(data []byte) error {
 		if sep < 0 {
 			return errors.New("miss ':' in header")
 		}
-		key = string(bytes.ToLower(bytes.ReplaceAll(bytes.ReplaceAll(data[:sep], []byte("%3A"), []byte(":")), []byte("%25"), []byte("%"))))
+		key = unescapeHeadKey(string(data[:sep]))
 		end = bytes.IndexByte(data[sep+1:], '\n')
 		if end == -1 {
-			chunk = data[sep+1:]
+			value = unescapeHeadValue(string(data[sep+1:]))
 		} else {
-			chunk = data[sep+1 : end]
+			value = unescapeHeadValue(string(data[sep+1 : end]))
 		}
-		value = string(bytes.ReplaceAll(bytes.ReplaceAll(chunk, []byte("%0A"), []byte("\n")), []byte("%25"), []byte("%")))
 		if len(h[key]) > 0 {
 			h[key] = append(h[key], value)
 		} else {

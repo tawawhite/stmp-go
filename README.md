@@ -4,15 +4,33 @@ A lightweight real-time bidirectional framework for Golang.
 
 **Features**
 
-- Supports multiple transport layer protocols, include `TCP`, `KCP`, `WebSockets`
-- Supports `TLS`
-- Supports `gzip`
-- Supports listen multiple ports with different protocol at the same time
-- `Content-Type` free, supports `Protocol Buffers`, `JSON`, `msgpack` internally
-- `WebSockets` optimized specially
-    - Supports text and binary format
-    - Supports `UTF-8` and `UTF-16` for text payload
-- `.proto` based service definition
+- Fast
+    - Supports connection level compression
+    - Supports `KCP`
+    - Supports `Protocol Buffers`, `MsgPack`
+    - Extremely tidy packet format
+    - Supports framing (maybe useless)
+- Easy to use
+    - Supports `WebSockets` and highly optimized for it
+    - Supports `text` format packet for `WebSockets`
+    - Supports `JSON`
+    - Supports compose different listeners in one server
+    - Most concepts are the same as `gRPC`
+    - `.proto` based service definition
+- Secure
+    - Supports `TLS`
+    
+*Supported transport layer protocols*
+
+- `KCP`
+- `TCP`
+- `WebSockets`
+
+*Supported compression algorithms*
+
+- `gzip`
+- `deflate`
+- `br`
 
 ## Install
 

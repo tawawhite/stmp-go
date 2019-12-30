@@ -11,26 +11,17 @@ import (
 	"time"
 )
 
-type incomingEvent struct {
-	kind    MessageKind
-	action  uint64
-	payload []byte
-}
-
-type responseEvent struct {
-	status  Status
-	payload []byte
-}
-
-type wsConn interface {
-	ReadMessage() (messageType int, p []byte, err error)
-	WriteMessage(messageType int, data []byte) error
+type writeEvent struct {
+	p *Packet
+	r chan error
 }
 
 type Conn struct {
+	// router to dispatch actions
 	*Router
-
+	// the stmp major version
 	Major byte
+	// the stmp minor version
 	Minor byte
 	// client writeHandshakeResponse request header
 	ClientHeader Header
@@ -40,29 +31,16 @@ type Conn struct {
 	ClientMessage string
 	// server writeHandshakeResponse response message
 	ServerMessage string
-
 	// network conn
 	nc net.Conn
-
 	// content-type codec
 	media MediaCodec
-
-	compressLevel int
-
-	// send a nil well stop write
-	writeChan chan []byte
-
-	b1 []byte
-	b2 []byte
-
-	handshakeTimeout time.Duration
-	readTimeout      time.Duration
-	writeTimeout     time.Duration
-
+	// write signal
+	writeChan chan *writeEvent
+	// close state
+	closeChan chan struct{}
 	// pending requests & responses
-	requests        map[uint16]chan *responseEvent
-	pendingIncoming map[uint16]*incomingEvent
-	pendingResponse map[uint16]*responseEvent
+	requests map[uint16]chan *writeEvent
 }
 
 func (c *Conn) Request(options SendContext) error {
@@ -79,47 +57,15 @@ func (c *Conn) Close(status Status, message string) error {
 
 func newConn(nc net.Conn) *Conn {
 	return &Conn{
-		Major:           1,
-		Minor:           0,
-		nc:              nc,
-		b1:              make([]byte, 1),
-		b2:              make([]byte, 2),
-		writeChan:       make(chan []byte),
-		requests:        map[uint16]chan *responseEvent{},
-		pendingIncoming: map[uint16]*incomingEvent{},
-		pendingResponse: map[uint16]*responseEvent{},
+		Major:     1,
+		Minor:     0,
+		nc:        nc,
+		writeChan: make(chan *writeEvent),
+		closeChan: make(chan struct{}),
+		requests:  map[uint16]chan *writeEvent{},
 	}
 }
 
-// for binary.ReadUvarint
-func (c *Conn) readUvarint() (uint64, error) {
-	var x uint64
-	var s uint
-	for i := 0; ; i++ {
-		_, err := c.nc.Read(c.b1)
-		if err != nil {
-			return x, err
-		}
-		b := c.b1[0]
-		if b < 0x80 {
-			if i > 9 || i == 9 && b > 1 {
-				return x, errors.New("uint64 overflow")
-			}
-			return x | uint64(b)<<s, nil
-		}
-		x |= uint64(b&0x7f) << s
-		s += 7
-	}
-}
-
-func (c *Conn) readUint16() (v uint16, err error) {
-	_, err = c.nc.Read(c.b2)
-	if err != nil {
-		return
-	}
-	v = binary.LittleEndian.Uint16(c.b2)
-	return
-}
 func (c *Conn) writeHandshakeResponse(status Status) error {
 	// TODO
 	return nil
@@ -133,10 +79,93 @@ func (c *Conn) websocketWriteHandshakeResponse(status Status) error {
 func (c *Conn) checkPendingVolume() {
 }
 
-func (c *Conn) binaryReadChannel(r io.ReadCloser) {
+func (c *Conn) binaryReadChannel(r io.ReadCloser, timeout time.Duration) {
+	b1 := make([]byte, 1)
+	b2 := make([]byte, 2)
+	p := Packet{}
+	for {
+		c.nc.SetReadDeadline(time.Now().Add(timeout))
+		err := p.ReadHead(r, b1)
+		if err == nil {
+			err = p.ReadMid(r, b2)
+		}
+		if err == nil {
+			err = p.ReadAction(r, b1)
+		}
+		if err == nil {
+			err = p.ReadStatus(r, b1)
+		}
+		if err == nil {
+			err = p.ReadPayload(r, b1)
+		}
+		if err != nil {
+			break
+		}
+		switch p.Kind {
+		case MessageKindPing:
+			c.handlePing()
+		case MessageKindRequest:
+			c.handleRequest(p.Mid, p.Action, p.Payload)
+		case MessageKindNotify:
+			c.handleNotify(p.Action, p.Payload)
+		case MessageKindResponse:
+			c.handleResponse(p.Mid, p.Status, p.Payload)
+		case MessageKindClose:
+			c.handleClose(p.Status, string(p.Payload))
+		}
+	}
 }
 
-func (c *Conn) binaryWriteChannel(w EncodingWriter) {
+func (c *Conn) binaryWriteChannel(w EncodingWriter, timeout time.Duration) {
+	b1 := make([]byte, 1)
+	b2 := make([]byte, 2)
+	b10 := make([]byte, 10)
+	var nvi int
+	for {
+		e, ok := <-c.writeChan
+		if !ok {
+			// active closed connection
+			w.Close()
+			return
+		}
+		c.nc.SetWriteDeadline(time.Now().Add(timeout))
+		b1[0] = MessageKindPing << OffsetKind
+		if isFin(e.p.Kind) || e.p.Fin {
+			b1[0] |= MaskFin
+		}
+		if isHead(e.p.Kind) || len(e.p.Payload) == 0 {
+			b1[0] |= MaskHead
+		}
+		w.Write(b1)
+		switch e.p.Kind {
+		case MessageKindClose:
+			b1[0] = byte(e.p.Status)
+			w.Write(b1)
+		case MessageKindRequest:
+			binary.LittleEndian.PutUint16(b2, e.p.Mid)
+			w.Write(b2)
+			nvi = binary.PutUvarint(b10, e.p.Action)
+			w.Write(b10[0:nvi])
+		case MessageKindNotify:
+			if !e.p.Fin {
+				binary.LittleEndian.PutUint16(b2, e.p.Mid)
+				w.Write(b2)
+			}
+			nvi = binary.PutUvarint(b10, e.p.Action)
+			w.Write(b10[0:nvi])
+		case MessageKindResponse:
+			binary.LittleEndian.PutUint16(b2, e.p.Mid)
+			w.Write(b2)
+			b1[0] = byte(e.p.Status)
+			w.Write(b1)
+		}
+		if !isFin(e.p.Kind) && len(e.p.Payload) > 0 {
+			nvi = binary.PutUvarint(b10, uint64(len(e.p.Payload)))
+			w.Write(b10[0:nvi])
+			w.Write(e.p.Payload)
+		}
+		e.r <- w.Flush()
+	}
 }
 
 func (c *Conn) websocketBinaryReadChannel(wc *websocket.Conn) {
@@ -151,13 +180,20 @@ func (c *Conn) websocketTextReadChannel(wc *websocket.Conn) {
 func (c *Conn) websocketTextWriteChannel(wc *websocket.Conn) {
 }
 
+func (c *Conn) handlePing() {
+}
+
+func (c *Conn) handleClose(status Status, message string) {
+
+}
+
 func (c *Conn) handleNotify(action uint64, payload []byte) {
 }
 
 func (c *Conn) handleRequest(mid uint16, action uint64, payload []byte) {
 }
 
-func (c *Conn) handleResponse(mid uint16, status byte, payload []byte) {
+func (c *Conn) handleResponse(mid uint16, status Status, payload []byte) {
 }
 
 func (c *Conn) negotiate() *StatusError {

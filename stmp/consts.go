@@ -7,29 +7,44 @@ import (
 	"strconv"
 )
 
-type MessageKind byte
-
 const (
-	MessageKindPing      MessageKind = 0x0
-	MessageKindRequest               = 0x1
-	MessageKindNotify                = 0x2
-	MessageKindResponse              = 0x3
-	MessageKindFollowing             = 0x4
-	MessageKindClose                 = 0x5
+	MessageKindPing     = 0x0
+	MessageKindRequest  = 0x1
+	MessageKindNotify   = 0x2
+	MessageKindResponse = 0x3
+	// does not implement this currently
+	_MessageKindFollowing = 0x4
+	MessageKindClose      = 0x5
 )
 
-const FlagFin = 0x80
-const FlagPure = 0b1000
-const KindOffset = 4
+func isFin(kind byte) bool {
+	// always true for following is not implemented
+	return true
+}
 
-var PingMessage = []byte{byte(FlagFin | MessageKindPing<<KindOffset | FlagPure)}
+func isHead(kind byte) bool {
+	return kind == MessageKindPing
+}
 
-var MapTextKind = map[byte]MessageKind{
+func isKind(kind byte) bool {
+	switch kind {
+	case MessageKindPing, MessageKindRequest, MessageKindNotify, MessageKindResponse, MessageKindClose:
+		return true
+	default:
+		return false
+	}
+}
+
+const MaskFin = 0x80
+const MaskHead = 0b1000
+const OffsetKind = 4
+
+var MapTextKind = map[byte]byte{
 	'P': MessageKindPing,
 	'Q': MessageKindRequest,
 	'N': MessageKindNotify,
 	'S': MessageKindResponse,
-	'F': MessageKindFollowing,
+	'F': _MessageKindFollowing,
 	'C': MessageKindClose,
 }
 

@@ -20,8 +20,8 @@ import (
 type DialOptions struct {
 	// the headers for writeHandshakeResponse
 	Header Header
-	// writeHandshakeResponse timeout, each writeHandshakeResponse packet timeout
-	// which means the final timeout is double
+	// writeHandshakeResponse timeout, each writeHandshakeResponse p timeout
+	// which means the Fin timeout is double
 	HandshakeTimeout time.Duration
 	// write timeout
 	WriteTimeout time.Duration
@@ -155,7 +155,7 @@ func Client(nc net.Conn, opts *DialOptions) (c *Conn, err error) {
 		err = NewStatusError(StatusNetworkError, err)
 		return
 	}
-	size, err := c.readUvarint()
+	size, err := readUvarint(nc, input[:1])
 	if err != nil {
 		err = NewStatusError(StatusNetworkError, err)
 		return
@@ -205,6 +205,7 @@ func WebSocketClient(wc *websocket.Conn, opts *DialOptions) (c *Conn, err error)
 		return
 	}
 	var sep int
+	var status uint64
 	if kind == websocket.TextMessage {
 		sep = bytes.IndexByte(data, '\n')
 		if sep == -1 {
@@ -212,21 +213,21 @@ func WebSocketClient(wc *websocket.Conn, opts *DialOptions) (c *Conn, err error)
 			err = StatusProtocolError
 			return
 		}
-		status, err := strconv.ParseUint(string(data[4:sep]), 16, 8)
+		status, err = strconv.ParseUint(string(data[4:sep]), 16, 8)
 		if err != nil {
-			// invalid status
+			// invalid Status
 			err = NewStatusError(StatusProtocolError, err)
 			return
 		}
 		if status != 0 {
-			// bad status
+			// bad Status
 			err = Status(status)
 			return
 		}
 		data = data[sep+1:]
 	} else {
 		if data[4] != 0 {
-			// bad status
+			// bad Status
 			err = Status(data[4])
 			return
 		}

@@ -4,12 +4,42 @@ package stmp
 
 import (
 	"context"
+	"strconv"
 )
 
-type MiddlewareFunc func(inCtx context.Context, action uint64, in []byte) (outCtx context.Context, err error)
-type InterceptFunc func(inCtx context.Context, action uint64, in []byte) (outCtx context.Context, done bool, out []byte, err error)
+type MiddlewareFunc func(inCtx context.Context, method string, in []byte) (outCtx context.Context, err error)
+type InterceptFunc func(inCtx context.Context, method string, in []byte) (outCtx context.Context, done bool, out []byte, err error)
 type HandlerFunc func(ctx context.Context, in interface{}) (out interface{}, err error)
 type ModelFactory func() interface{}
+
+var mapMethodAction = map[string]uint64{}
+var mapActionMethod = map[uint64]string{}
+var dynamicActions []uint64
+
+func RegisterMethodAction(method string, action uint64) {
+	if action == 0 {
+		action = uint64(len(dynamicActions))
+		if action > 0x0fff {
+			panic("dynamic method id should range from 0 to 0x0fff")
+		}
+		dynamicActions = append(dynamicActions, action)
+	} else if action < 0x1000 {
+		panic("static method id should range from 0x1000 to max")
+	}
+	if m, ok := mapActionMethod[action]; ok {
+		panic("duplicated Action 0x" + strconv.FormatUint(action, 16) + " for " + m + " and " + method)
+	}
+	mapMethodAction[method] = action
+	mapActionMethod[action] = method
+}
+
+func RegisterMethodActions(pairs ...interface{}) {
+	for i := 0; i < len(pairs); i += 2 {
+		method := pairs[i].(string)
+		action := pairs[i+1].(uint64)
+		RegisterMethodAction(method, action)
+	}
+}
 
 type HandlerOptions struct {
 	factory  ModelFactory
@@ -42,8 +72,12 @@ func (r *Router) Intercept(handlers ...InterceptFunc) {
 	r.interceptors = append(r.interceptors, handlers...)
 }
 
-// action bound handler
-func (r *Router) Register(action uint64, factory ModelFactory, handlers ...HandlerFunc) {
+// Action bound handler
+func (r *Router) Register(method string, factory ModelFactory, handlers ...HandlerFunc) {
+	action, ok := mapMethodAction[method]
+	if !ok {
+		panic("method " + method + " is not registered")
+	}
 	if r.handlers[action] == nil {
 		r.handlers[action] = &HandlerOptions{factory: factory, handlers: handlers}
 	} else {
@@ -53,9 +87,13 @@ func (r *Router) Register(action uint64, factory ModelFactory, handlers ...Handl
 
 // dispatch a request to handlers
 func (r *Router) Dispatch(ctx context.Context, action uint64, payload []byte, codec MediaCodec) (Status, []byte) {
+	method, ok := mapActionMethod[action]
+	if !ok {
+		return StatusNotFound, nil
+	}
 	var err error
 	for _, f := range r.middlewares {
-		ctx, err = f(ctx, action, payload)
+		ctx, err = f(ctx, method, payload)
 		if err != nil {
 			return DetectError(err, StatusInternalServerError)
 		}
@@ -63,7 +101,7 @@ func (r *Router) Dispatch(ctx context.Context, action uint64, payload []byte, co
 	var done bool
 	var out []byte
 	for _, f := range r.interceptors {
-		ctx, done, out, err = f(ctx, action, payload)
+		ctx, done, out, err = f(ctx, method, payload)
 		if err != nil {
 			return DetectError(err, StatusInternalServerError)
 		}

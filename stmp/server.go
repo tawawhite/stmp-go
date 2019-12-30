@@ -26,7 +26,7 @@ type AuthenticateFunc func(c *Conn) (err error)
 
 type Server struct {
 	*Router
-	mu        *sync.Mutex
+	mu        *sync.RWMutex
 	listeners map[io.Closer]bool
 	conns     map[*Conn]bool
 	done      chan error
@@ -55,7 +55,7 @@ func NewServer() *Server {
 	}
 	return &Server{
 		Router:           NewRouter(),
-		mu:               &sync.Mutex{},
+		mu:               &sync.RWMutex{},
 		listeners:        map[io.Closer]bool{},
 		conns:            map[*Conn]bool{},
 		done:             make(chan error),
@@ -108,7 +108,7 @@ func (s *Server) HandleConn(nc net.Conn) (status *StatusError) {
 		status = NewStatusError(StatusUnsupportedProtocolVersion, "unsupported STMP version: "+string([]byte{c.Major + '0', '.', c.Minor + '0'}))
 	}
 	// length
-	n, err := c.readUvarint()
+	n, err := readUvarint(nc, fixHead[:1])
 	if err != nil {
 		status = NewStatusError(StatusBadRequest, "read header length error: "+err.Error())
 		return
@@ -213,10 +213,16 @@ func (s *Server) HandleWebsocketConn(wc *websocket.Conn, req *http.Request) (sta
 }
 
 func (s *Server) shutdown(err error) {
+	s.mu.Lock()
 	for l := range s.listeners {
 		l.Close()
 		delete(s.listeners, l)
 	}
+	for c := range s.conns {
+		c.Close(StatusServerShutdown, "")
+		delete(s.conns, c)
+	}
+	s.mu.Unlock()
 	s.done <- err
 }
 
@@ -232,7 +238,9 @@ func (s *Server) Serve(lis net.Listener) {
 	if _, ok := s.listeners[lis]; ok {
 		panic("the listener " + lis.Addr().Network() + ":" + lis.Addr().String() + " is listening already")
 	}
+	s.mu.Lock()
 	s.listeners[lis] = true
+	s.mu.Unlock()
 	for {
 		conn, err := lis.Accept()
 		if err != nil {
@@ -305,14 +313,16 @@ func (s *Server) newWsServer(addr, path string) *http.Server {
 			w.WriteHeader(404)
 			return
 		}
-		conn, err := up.Upgrade(w, q, nil)
+		wc, err := up.Upgrade(w, q, nil)
 		if err != nil {
 			return
 		}
-		s.HandleWebsocketConn(conn, q)
+		s.HandleWebsocketConn(wc, q)
 	}
 	hs := &http.Server{Addr: addr, Handler: handler}
+	s.mu.Lock()
 	s.listeners[hs] = true
+	s.mu.Unlock()
 	return hs
 }
 

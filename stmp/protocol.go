@@ -3,7 +3,10 @@
 package stmp
 
 import (
+	"encoding/binary"
 	"errors"
+	"io"
+	"math/bits"
 	"strings"
 )
 
@@ -20,32 +23,51 @@ func ReadNegotiate(input string) (v string, n int) {
 	return
 }
 
-var (
-	invalidReservedHeadBits = errors.New("invalid reserved head bits")
-	invalidHeadFlags        = errors.New("invalid head flags")
-	invalidMessageKind      = errors.New("invalid message kind")
-)
+func escapeHeadKey(key string) string {
+	return strings.ReplaceAll(strings.ReplaceAll(key, "%", "%25"), ":", "%3A")
+}
 
-func parseHead(h byte) (fin bool, kind MessageKind, pure bool, err error) {
-	if h&0b111 != 0 {
-		err = invalidReservedHeadBits
+func escapeHeadValue(value string) string {
+	return strings.ReplaceAll(strings.ReplaceAll(value, "%", "%25"), "\n", "%0A")
+}
+
+func unescapeHeadKey(key string) string {
+	return strings.TrimSpace(strings.ReplaceAll(strings.ReplaceAll(key, "%3A", ":"), "%25", "%"))
+}
+
+func unescapeHeadValue(value string) string {
+	return strings.TrimSpace(strings.ReplaceAll(strings.ReplaceAll(value, "%0A", "\n"), "%25", "%"))
+}
+
+func varintLen(x uint64) (n int) {
+	return (bits.Len64(x|1) + 6) / 7
+}
+
+func readUvarint(r io.Reader, b1 []byte) (uint64, error) {
+	var x uint64
+	var s uint
+	for i := 0; ; i++ {
+		_, err := r.Read(b1)
+		if err != nil {
+			return x, err
+		}
+		b := b1[0]
+		if b < 0x80 {
+			if i > 9 || i == 9 && b > 1 {
+				return x, errors.New("uint64 overflow")
+			}
+			return x | uint64(b)<<s, nil
+		}
+		x |= uint64(b&0x7f) << s
+		s += 7
+	}
+}
+
+func readUint16(r io.Reader, b2 []byte) (v uint16, err error) {
+	_, err = r.Read(b2)
+	if err != nil {
 		return
 	}
-	fin = h&0x80 != 0
-	kind = MessageKind((h >> 4) & 0b111)
-	pure = h&0b1000 != 0
-	switch kind {
-	case MessageKindResponse, MessageKindRequest, MessageKindNotify:
-	case MessageKindPing:
-		if !fin || !pure {
-			err = invalidHeadFlags
-		}
-	case MessageKindClose:
-		if !fin {
-			err = invalidHeadFlags
-		}
-	default:
-		err = invalidMessageKind
-	}
+	v = binary.LittleEndian.Uint16(b2)
 	return
 }
