@@ -115,9 +115,6 @@ func newClientConn(nc net.Conn, opts *DialOptions) (c *Conn) {
 	c = newConn(nc)
 	c.Router = NewRouter()
 	c.ClientHeader = opts.Header
-	c.handshakeTimeout = opts.HandshakeTimeout
-	c.readTimeout = opts.ReadTimeout
-	c.writeTimeout = opts.WriteTimeout
 	c.ClientHeader = opts.Header
 	c.ClientMessage = opts.Message
 	return
@@ -144,7 +141,7 @@ func Client(nc net.Conn, opts *DialOptions) (c *Conn, err error) {
 		input = append(input, "\n\n"...)
 		input = append(input, c.ClientMessage...)
 	}
-	c.nc.SetWriteDeadline(time.Now().Add(c.handshakeTimeout))
+	c.nc.SetWriteDeadline(time.Now().Add(opts.HandshakeTimeout))
 	_, err = c.nc.Write(input)
 	if err != nil {
 		err = NewStatusError(StatusNetworkError, err)
@@ -181,8 +178,8 @@ func Client(nc net.Conn, opts *DialOptions) (c *Conn, err error) {
 	if err != nil {
 		return
 	}
-	go c.binaryReadChannel(r)
-	go c.binaryWriteChannel(w)
+	go c.binaryReadChannel(r, opts.ReadTimeout)
+	go c.binaryWriteChannel(w, opts.WriteTimeout)
 	return
 }
 

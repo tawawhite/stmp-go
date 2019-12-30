@@ -76,9 +76,6 @@ func (s *Server) newClient(nc net.Conn) *Conn {
 	c.Router = s.Router
 	c.ClientHeader = NewHeader()
 	c.ServerHeader = NewHeader()
-	c.handshakeTimeout = s.HandshakeTimeout
-	c.readTimeout = s.ReadTimeout
-	c.writeTimeout = s.WriteTimeout
 	return c
 }
 
@@ -150,8 +147,8 @@ func (s *Server) HandleConn(nc net.Conn) (status *StatusError) {
 	s.mu.Lock()
 	s.conns[c] = true
 	s.mu.Unlock()
-	go c.binaryReadChannel(r)
-	go c.binaryWriteChannel(w)
+	go c.binaryReadChannel(r, s.ReadTimeout)
+	go c.binaryWriteChannel(w, s.WriteTimeout)
 	return
 }
 

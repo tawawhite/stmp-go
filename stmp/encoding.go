@@ -3,9 +3,7 @@
 package stmp
 
 import (
-	"compress/flate"
 	"compress/gzip"
-	"github.com/google/brotli/go/cbrotli"
 	"io"
 	"net"
 )
@@ -49,42 +47,6 @@ func (g gzipCodec) Writer(w io.Writer, level int) (EncodingWriter, error) {
 
 func NewGzipCodec() EncodingCodec {
 	return gzipCodec{}
-}
-
-type flateCodec struct{}
-
-func (f flateCodec) Name() string {
-	return "deflate"
-}
-
-func (f flateCodec) Reader(r io.Reader) (io.ReadCloser, error) {
-	return flate.NewReader(r), nil
-}
-
-func (f flateCodec) Writer(w io.Writer, level int) (EncodingWriter, error) {
-	return flate.NewWriter(w, level)
-}
-
-func NewFlateCodec() EncodingCodec {
-	return flateCodec{}
-}
-
-type brotliCodec struct{}
-
-func (b brotliCodec) Name() string {
-	return "br"
-}
-
-func (b brotliCodec) Reader(r io.Reader) (io.ReadCloser, error) {
-	return cbrotli.NewReader(r), nil
-}
-
-func (b brotliCodec) Writer(w io.Writer, level int) (EncodingWriter, error) {
-	return cbrotli.NewWriter(w, cbrotli.WriterOptions{Quality: level}), nil
-}
-
-func NewBrotliCodec() EncodingCodec {
-	return brotliCodec{}
 }
 
 type plainEncoding struct {

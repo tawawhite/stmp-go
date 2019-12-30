@@ -5,7 +5,6 @@ go 1.13
 require (
 	github.com/gogo/protobuf v1.3.1
 	github.com/golang/protobuf v1.3.2
-	github.com/google/brotli v1.0.7
 	github.com/gorilla/websocket v1.4.1
 	github.com/json-iterator/go v1.1.9
 	github.com/klauspost/cpuid v1.2.2 // indirect
@@ -18,5 +17,5 @@ require (
 	github.com/vmihailenco/msgpack v4.0.4+incompatible
 	github.com/xtaci/kcp-go v5.4.20+incompatible
 	go.uber.org/zap v1.13.0
-	google.golang.org/grpc v1.26.0
+	google.golang.org/grpc v1.26.0 // indirect
 )
