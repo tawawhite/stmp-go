@@ -23,6 +23,10 @@ build-example-proto: build-gen-stmp
 		--stmp_out=lang=go+esm+dts:$$GOPATH/src \
 		./examples/room/room_proto/*.proto
 
+build-example-proto-esm:
+	pbjs -t static-module -w es6 -p ./vendor -o ./examples/room/room_proto/room.pb.js ./examples/room/room_proto/room.proto
+	pbts -o ./examples/room/room_proto/room.pb.d.ts ./examples/room/room_proto/room.pb.js
+
 all: init build build-example-proto
 
 run-example-room-server:
