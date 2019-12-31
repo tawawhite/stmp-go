@@ -21,7 +21,7 @@ type DialOptions struct {
 	// the headers for writeHandshakeResponse
 	Header Header
 	// writeHandshakeResponse timeout, each writeHandshakeResponse p timeout
-	// which means the Fin timeout is double
+	// which means the fin timeout is double
 	HandshakeTimeout time.Duration
 	// write timeout
 	WriteTimeout time.Duration
@@ -212,19 +212,19 @@ func WebSocketClient(wc *websocket.Conn, opts *DialOptions) (c *Conn, err error)
 		}
 		status, err = strconv.ParseUint(string(data[4:sep]), 16, 8)
 		if err != nil {
-			// invalid Status
+			// invalid status
 			err = NewStatusError(StatusProtocolError, err)
 			return
 		}
 		if status != 0 {
-			// bad Status
+			// bad status
 			err = Status(status)
 			return
 		}
 		data = data[sep+1:]
 	} else {
 		if data[4] != 0 {
-			// bad Status
+			// bad status
 			err = Status(data[4])
 			return
 		}
@@ -244,11 +244,11 @@ func WebSocketClient(wc *websocket.Conn, opts *DialOptions) (c *Conn, err error)
 	// ws do not process encoding
 	c.media = GetMediaCodec(c.ServerHeader.Get(DetermineContentType))
 	if c.ServerHeader.Get(DeterminePacketFormat) == "text" {
-		go c.websocketTextReadChannel(wc)
-		go c.websocketTextWriteChannel(wc)
+		go c.websocketTextReadChannel(wc, opts.ReadTimeout)
+		go c.websocketTextWriteChannel(wc, opts.WriteTimeout)
 	} else {
-		go c.websocketBinaryReadChannel(wc)
-		go c.websocketBinaryWriteChannel(wc)
+		go c.websocketBinaryReadChannel(wc, opts.ReadTimeout)
+		go c.websocketBinaryWriteChannel(wc, opts.WriteTimeout)
 	}
 	return
 }

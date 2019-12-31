@@ -17,9 +17,24 @@ import (
 )
 
 type SendContext struct {
-	Action   int64
-	Data     proto.Message
+	Action   uint64
+	Input    proto.Message
+	Output   proto.Message
 	Payloads map[string][]byte
+}
+
+func (s *SendContext) Marshal(c MediaCodec) (payload []byte, err error) {
+	var ok bool
+	payload, ok = s.Payloads[c.Name()]
+	if !ok && s.Input != nil {
+		payload, err = c.Marshal(s.Input)
+		if err != nil {
+			err = NewStatusError(StatusMarshalError, err)
+			return
+		}
+		s.Payloads[c.Name()] = payload
+	}
+	return
 }
 
 type AuthenticateFunc func(c *Conn) (err error)
@@ -200,11 +215,11 @@ func (s *Server) HandleWebsocketConn(wc *websocket.Conn, req *http.Request) (sta
 	s.conns[c] = true
 	s.mu.Unlock()
 	if c.ServerHeader.Get(DeterminePacketFormat) == "text" {
-		go c.websocketTextReadChannel(wc)
-		go c.websocketTextWriteChannel(wc)
+		go c.websocketTextReadChannel(wc, s.ReadTimeout)
+		go c.websocketTextWriteChannel(wc, s.WriteTimeout)
 	} else {
-		go c.websocketBinaryReadChannel(wc)
-		go c.websocketBinaryWriteChannel(wc)
+		go c.websocketBinaryReadChannel(wc, s.ReadTimeout)
+		go c.websocketBinaryWriteChannel(wc, s.WriteTimeout)
 	}
 	return
 }

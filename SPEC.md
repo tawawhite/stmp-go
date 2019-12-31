@@ -81,11 +81,12 @@
        the `PAYLOAD` of the message with same `MESSAGE ID` will be merged.
      - `KIND`: message kind
        - `0x0`: Ping message
-       - `0x1`: Request message
-       - `0x2`: Notify message
-       - `0x3`: Response message
-       - `0x4`: Following message
+       - `0x1`: Pong message
+       - `0x2`: Request message
+       - `0x3`: Notify message
+       - `0x4`: Response message
        - `0x5`: Close message
+       - `0x6`: Following message
      - `HEAD`: the message is head only or with payload, if is `0`, the `PAYLOAD` and `PAYLOAD LENGTH` field will be omitted.
      - `RSV`: must be `0` currently
 
@@ -94,11 +95,13 @@
      text message is used for `WebSockets` only, so, it only contains
      `KIND` field with one byte:
 
-     - `P`: Ping message
+     - `I`: Ping message
+     - `O`: Pong message
      - `Q`: Request message
      - `N`: Notify message
      - `S`: Response message
      - `C`: Close message
+     - `F`: Following message
 
 4. Request message
 
@@ -181,7 +184,7 @@ _Network error_
 - `0x02`: Protocol error
 - `0x03`: Unsupported protocol version
 - `0x04`: Unsupported `Content-Type`
-- `0x05`: Unsupported `Format`
+- `0x05`: Unsupported `Packet-Format`
 
 _Client side error_
 

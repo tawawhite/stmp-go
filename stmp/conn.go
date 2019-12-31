@@ -3,22 +3,24 @@
 package stmp
 
 import (
-	"encoding/binary"
 	"errors"
 	"github.com/gorilla/websocket"
 	"io"
 	"net"
+	"sync"
+	"sync/atomic"
 	"time"
 )
 
 type writeEvent struct {
-	p *Packet
+	p *packet
 	r chan error
 }
 
 type Conn struct {
 	// router to dispatch actions
 	*Router
+	mu *sync.Mutex
 	// the stmp major version
 	Major byte
 	// the stmp minor version
@@ -40,18 +42,74 @@ type Conn struct {
 	// close state
 	closeChan chan struct{}
 	// pending requests & responses
-	requests map[uint16]chan *writeEvent
+	requests map[uint16]chan *packet
+
+	mid uint32
 }
 
-func (c *Conn) Request(options SendContext) error {
-	panic("implement me")
+func (c *Conn) Request(options SendContext) (out []byte, err error) {
+	payload, err := options.Marshal(c.media)
+	if err != nil {
+		return nil, err
+	}
+	mid := uint16(atomic.AddUint32(&c.mid, 1))
+	we := &writeEvent{
+		p: &packet{
+			fin:     true,
+			kind:    MessageKindRequest,
+			mid:     mid,
+			action:  options.Action,
+			payload: payload,
+		},
+		r: make(chan error, 1),
+	}
+	r := make(chan *packet, 1)
+	c.mu.Lock()
+	c.requests[mid] = r
+	c.mu.Unlock()
+	c.writeChan <- we
+	err = <-we.r
+	if err != nil {
+		c.mu.Lock()
+		delete(c.requests, mid)
+		c.mu.Unlock()
+		err = NewStatusError(StatusNetworkError, err)
+		return
+	}
+	p := <-r
+	if p.status != StatusOk {
+		err = NewStatusError(p.status, string(p.payload))
+	}
+	out = p.payload
+	if out == nil {
+		options.Output = nil
+		return
+	}
+	err = c.media.Unmarshal(out, options.Output)
+	return
 }
 
-func (c *Conn) Notify(options SendContext) error {
-	panic("implement me")
+func (c *Conn) Notify(options SendContext) (err error) {
+	options.Marshal(c.media)
+	payload, err := options.Marshal(c.media)
+	if err != nil {
+		return err
+	}
+	we := &writeEvent{
+		p: &packet{
+			fin:     true,
+			kind:    MessageKindNotify,
+			action:  options.Action,
+			payload: payload,
+		},
+		r: make(chan error, 1),
+	}
+	c.writeChan <- we
+	return <-we.r
 }
 
 func (c *Conn) Close(status Status, message string) error {
+	// TODO
 	return nil
 }
 
@@ -59,10 +117,11 @@ func newConn(nc net.Conn) *Conn {
 	return &Conn{
 		Major:     1,
 		Minor:     0,
+		mu:        &sync.Mutex{},
 		nc:        nc,
 		writeChan: make(chan *writeEvent),
 		closeChan: make(chan struct{}),
-		requests:  map[uint16]chan *writeEvent{},
+		requests:  map[uint16]chan *packet{},
 	}
 }
 
@@ -79,121 +138,191 @@ func (c *Conn) websocketWriteHandshakeResponse(status Status) error {
 func (c *Conn) checkPendingVolume() {
 }
 
+func (c *Conn) dispatchPacket(p *packet) {
+	switch p.kind {
+	case MessageKindPing:
+		c.handlePing()
+	case MessageKindPong:
+		c.handlePong()
+	case MessageKindRequest:
+		c.handleRequest(p.mid, p.action, p.payload)
+	case MessageKindNotify:
+		c.handleNotify(p.action, p.payload)
+	case MessageKindResponse:
+		c.handleResponse(p.mid, p.status, p.payload)
+	case MessageKindClose:
+		c.handleClose(p.status, string(p.payload))
+	}
+}
+
 func (c *Conn) binaryReadChannel(r io.ReadCloser, timeout time.Duration) {
-	b1 := make([]byte, 1)
-	b2 := make([]byte, 2)
-	p := Packet{}
+	p := new(packet)
+	buf := make([]byte, maxStreamHeadSize, maxStreamHeadSize)
+	var err error
 	for {
 		c.nc.SetReadDeadline(time.Now().Add(timeout))
-		err := p.ReadHead(r, b1)
-		if err == nil {
-			err = p.ReadMid(r, b2)
-		}
-		if err == nil {
-			err = p.ReadAction(r, b1)
-		}
-		if err == nil {
-			err = p.ReadStatus(r, b1)
-		}
-		if err == nil {
-			err = p.ReadPayload(r, b1)
-		}
+		err = p.read(r, buf)
 		if err != nil {
-			break
+			// TODO
+			return
 		}
-		switch p.Kind {
-		case MessageKindPing:
-			c.handlePing()
-		case MessageKindRequest:
-			c.handleRequest(p.Mid, p.Action, p.Payload)
-		case MessageKindNotify:
-			c.handleNotify(p.Action, p.Payload)
-		case MessageKindResponse:
-			c.handleResponse(p.Mid, p.Status, p.Payload)
-		case MessageKindClose:
-			c.handleClose(p.Status, string(p.Payload))
-		}
+		c.dispatchPacket(p)
 	}
 }
 
 func (c *Conn) binaryWriteChannel(w EncodingWriter, timeout time.Duration) {
-	b1 := make([]byte, 1)
-	b2 := make([]byte, 2)
-	b10 := make([]byte, 10)
-	var nvi int
+	var e *writeEvent
+	var ok bool
+	var err error
+	buf := make([]byte, maxStreamHeadSize, maxStreamHeadSize)
 	for {
-		e, ok := <-c.writeChan
+		e, ok = <-c.writeChan
 		if !ok {
-			// active closed connection
-			w.Close()
+			// TODO
 			return
 		}
 		c.nc.SetWriteDeadline(time.Now().Add(timeout))
-		b1[0] = MessageKindPing << OffsetKind
-		if isFin(e.p.Kind) || e.p.Fin {
-			b1[0] |= MaskFin
+		err = e.p.write(w, buf)
+		if e.r != nil {
+			e.r <- err
 		}
-		if isHead(e.p.Kind) || len(e.p.Payload) == 0 {
-			b1[0] |= MaskHead
+		if err != nil {
+			// TODO
+			return
 		}
-		w.Write(b1)
-		switch e.p.Kind {
-		case MessageKindClose:
-			b1[0] = byte(e.p.Status)
-			w.Write(b1)
-		case MessageKindRequest:
-			binary.LittleEndian.PutUint16(b2, e.p.Mid)
-			w.Write(b2)
-			nvi = binary.PutUvarint(b10, e.p.Action)
-			w.Write(b10[0:nvi])
-		case MessageKindNotify:
-			if !e.p.Fin {
-				binary.LittleEndian.PutUint16(b2, e.p.Mid)
-				w.Write(b2)
-			}
-			nvi = binary.PutUvarint(b10, e.p.Action)
-			w.Write(b10[0:nvi])
-		case MessageKindResponse:
-			binary.LittleEndian.PutUint16(b2, e.p.Mid)
-			w.Write(b2)
-			b1[0] = byte(e.p.Status)
-			w.Write(b1)
-		}
-		if !isFin(e.p.Kind) && len(e.p.Payload) > 0 {
-			nvi = binary.PutUvarint(b10, uint64(len(e.p.Payload)))
-			w.Write(b10[0:nvi])
-			w.Write(e.p.Payload)
-		}
-		e.r <- w.Flush()
 	}
 }
 
-func (c *Conn) websocketBinaryReadChannel(wc *websocket.Conn) {
+func (c *Conn) websocketBinaryReadChannel(wc *websocket.Conn, timeout time.Duration) {
+	p := new(packet)
+	var err error
+	var data []byte
+	for {
+		wc.SetReadDeadline(time.Now().Add(timeout))
+		_, data, err = wc.ReadMessage()
+		if err != nil {
+			// TODO
+			return
+		}
+		err = p.unmarshalBinary(data)
+		if err != nil {
+			// TODO
+			return
+		}
+		c.dispatchPacket(p)
+	}
 }
 
-func (c *Conn) websocketBinaryWriteChannel(wc *websocket.Conn) {
+func (c *Conn) websocketBinaryWriteChannel(wc *websocket.Conn, timeout time.Duration) {
+	var e *writeEvent
+	var ok bool
+	var err error
+	var data []byte
+	buf := make([]byte, maxBinaryHeadSize, maxBinaryHeadSize)
+	for {
+		e, ok = <-c.writeChan
+		if !ok {
+			// TODO
+			return
+		}
+		wc.SetWriteDeadline(time.Now().Add(timeout))
+		data = e.p.marshalBinary(buf)
+		err = wc.WriteMessage(websocket.BinaryMessage, data)
+		if e.r != nil {
+			e.r <- err
+		}
+		if err != nil {
+			// TODO
+			return
+		}
+	}
 }
 
-func (c *Conn) websocketTextReadChannel(wc *websocket.Conn) {
+func (c *Conn) websocketTextReadChannel(wc *websocket.Conn, timeout time.Duration) {
+	p := new(packet)
+	var err error
+	var data []byte
+	for {
+		wc.SetReadDeadline(time.Now().Add(timeout))
+		_, data, err = wc.ReadMessage()
+		if err != nil {
+			// TODO
+			return
+		}
+		err = p.unmarshalText(data)
+		if err != nil {
+			// TODO
+			return
+		}
+		c.dispatchPacket(p)
+	}
 }
 
-func (c *Conn) websocketTextWriteChannel(wc *websocket.Conn) {
+func (c *Conn) websocketTextWriteChannel(wc *websocket.Conn, timeout time.Duration) {
+	var e *writeEvent
+	var ok bool
+	var err error
+	var data []byte
+	buf := make([]byte, maxTextHeadSize, maxTextHeadSize)
+	for {
+		e, ok = <-c.writeChan
+		if !ok {
+			// TODO
+			return
+		}
+		wc.SetWriteDeadline(time.Now().Add(timeout))
+		data = e.p.marshalText(buf)
+		err = wc.WriteMessage(websocket.TextMessage, data)
+		if e.r != nil {
+			e.r <- err
+		}
+		if err != nil {
+			// TODO
+			return
+		}
+	}
 }
 
 func (c *Conn) handlePing() {
+	c.writeChan <- &writeEvent{p: &packet{kind: MessageKindPong}}
+}
+
+func (c *Conn) handlePong() {
+	// do nothing for deadline limited pong message receive rate
 }
 
 func (c *Conn) handleClose(status Status, message string) {
-
+	// TODO close connection
+	c.closeHandler(status, message)
 }
 
 func (c *Conn) handleNotify(action uint64, payload []byte) {
+	ctx := NewContext(c)
+	c.Dispatch(ctx, action, payload, c.media)
 }
 
 func (c *Conn) handleRequest(mid uint16, action uint64, payload []byte) {
+	ctx := NewContext(c)
+	status, payload := c.Dispatch(ctx, action, payload, c.media)
+	we := &writeEvent{p: &packet{
+		fin:     true,
+		kind:    MessageKindResponse,
+		mid:     mid,
+		action:  action,
+		status:  status,
+		payload: payload,
+	}}
+	c.writeChan <- we
 }
 
 func (c *Conn) handleResponse(mid uint16, status Status, payload []byte) {
+	c.mu.Lock()
+	q, ok := c.requests[mid]
+	delete(c.requests, mid)
+	c.mu.Unlock()
+	if ok {
+		q <- &packet{status: status, payload: payload}
+	}
 }
 
 func (c *Conn) negotiate() *StatusError {

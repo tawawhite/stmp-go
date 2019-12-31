@@ -10,6 +10,7 @@ import (
 type MiddlewareFunc func(inCtx context.Context, method string, in []byte) (outCtx context.Context, err error)
 type InterceptFunc func(inCtx context.Context, method string, in []byte) (outCtx context.Context, done bool, out []byte, err error)
 type HandlerFunc func(ctx context.Context, in interface{}) (out interface{}, err error)
+type CloseHandlerFunc func(status Status, message string)
 type ModelFactory func() interface{}
 
 var mapMethodAction = map[string]uint64{}
@@ -27,7 +28,7 @@ func RegisterMethodAction(method string, action uint64) {
 		panic("static method id should range from 0x1000 to max")
 	}
 	if m, ok := mapActionMethod[action]; ok {
-		panic("duplicated Action 0x" + strconv.FormatUint(action, 16) + " for " + m + " and " + method)
+		panic("duplicated action 0x" + strconv.FormatUint(action, 16) + " for " + m + " and " + method)
 	}
 	mapMethodAction[method] = action
 	mapActionMethod[action] = method
@@ -50,6 +51,10 @@ type Router struct {
 	middlewares  []MiddlewareFunc
 	interceptors []InterceptFunc
 	handlers     map[uint64]*HandlerOptions
+	closeHandler CloseHandlerFunc
+}
+
+var noopCloseHandler CloseHandlerFunc = func(status Status, message string) {
 }
 
 func NewRouter() *Router {
@@ -57,6 +62,7 @@ func NewRouter() *Router {
 		middlewares:  []MiddlewareFunc{},
 		interceptors: []InterceptFunc{},
 		handlers:     map[uint64]*HandlerOptions{},
+		closeHandler: noopCloseHandler,
 	}
 }
 
@@ -72,7 +78,7 @@ func (r *Router) Intercept(handlers ...InterceptFunc) {
 	r.interceptors = append(r.interceptors, handlers...)
 }
 
-// Action bound handler
+// action bound handler
 func (r *Router) Register(method string, factory ModelFactory, handlers ...HandlerFunc) {
 	action, ok := mapMethodAction[method]
 	if !ok {
@@ -83,6 +89,10 @@ func (r *Router) Register(method string, factory ModelFactory, handlers ...Handl
 	} else {
 		r.handlers[action].handlers = append(r.handlers[action].handlers, handlers...)
 	}
+}
+
+func (r *Router) SetCloseHandler(h CloseHandlerFunc) {
+	r.closeHandler = h
 }
 
 // dispatch a request to handlers

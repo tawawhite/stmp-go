@@ -9,12 +9,11 @@ import (
 
 const (
 	MessageKindPing     = 0x0
-	MessageKindRequest  = 0x1
-	MessageKindNotify   = 0x2
-	MessageKindResponse = 0x3
-	// does not implement this currently
-	_MessageKindFollowing = 0x4
-	MessageKindClose      = 0x5
+	MessageKindPong     = 0x1
+	MessageKindRequest  = 0x2
+	MessageKindNotify   = 0x3
+	MessageKindResponse = 0x4
+	MessageKindClose    = 0x5
 )
 
 func isFin(kind byte) bool {
@@ -23,12 +22,24 @@ func isFin(kind byte) bool {
 }
 
 func isHead(kind byte) bool {
-	return kind == MessageKindPing
+	return kind == MessageKindPing || kind == MessageKindPong
+}
+
+func isMid(kind byte) bool {
+	return kind == MessageKindRequest || kind == MessageKindResponse
+}
+
+func isAction(kind byte) bool {
+	return kind == MessageKindRequest || kind == MessageKindNotify
+}
+
+func isStatus(kind byte) bool {
+	return kind == MessageKindResponse || kind == MessageKindClose
 }
 
 func isKind(kind byte) bool {
 	switch kind {
-	case MessageKindPing, MessageKindRequest, MessageKindNotify, MessageKindResponse, MessageKindClose:
+	case MessageKindPing, MessageKindPong, MessageKindRequest, MessageKindNotify, MessageKindResponse, MessageKindClose:
 		return true
 	default:
 		return false
@@ -40,12 +51,22 @@ const MaskHead = 0b1000
 const OffsetKind = 4
 
 var MapTextKind = map[byte]byte{
-	'P': MessageKindPing,
+	'I': MessageKindPing,
+	'O': MessageKindPong,
 	'Q': MessageKindRequest,
 	'N': MessageKindNotify,
 	'S': MessageKindResponse,
-	'F': _MessageKindFollowing,
 	'C': MessageKindClose,
+	//'F': MessageKindFollowing,
+}
+
+var MapKindText = map[byte]byte{
+	MessageKindPing:     'I',
+	MessageKindPong:     'O',
+	MessageKindRequest:  'Q',
+	MessageKindNotify:   'N',
+	MessageKindResponse: 'S',
+	MessageKindClose:    'C',
 }
 
 type Status byte
@@ -58,6 +79,8 @@ const (
 	StatusUnsupportedContentType     Status = 0x04
 	StatusUnsupportedFormat          Status = 0x05
 	StatusUnknown                    Status = 0x06
+	StatusUnmarshalError             Status = 0x07
+	StatusMarshalError               Status = 0x08
 	StatusBadRequest                 Status = 0x20
 	StatusUnauthorized               Status = 0x21
 	StatusNotFound                   Status = 0x22
@@ -77,6 +100,9 @@ var MapStatus = map[Status]string{
 	StatusUnsupportedProtocolVersion: "Unsupported protocol version",
 	StatusUnsupportedContentType:     "Unsupported content type",
 	StatusUnsupportedFormat:          "Unsupported format",
+	StatusUnknown:                    "Unknown",
+	StatusUnmarshalError:             "Unmarshal error",
+	StatusMarshalError:               "Marshal error",
 	StatusBadRequest:                 "Bad request",
 	StatusUnauthorized:               "Unauthorized",
 	StatusNotFound:                   "Not found",
@@ -127,9 +153,9 @@ func DetectError(err error, rollbackStatus Status) (Status, []byte) {
 
 const AcceptContentType = "Accept"
 const AcceptEncoding = "Accept-Encoding"
-const AcceptPacketFormat = "Accept-Packet-Format"
+const AcceptPacketFormat = "Accept-packet-Format"
 
 const DetermineContentType = "Content-Type"
 const DetermineEncoding = "Content-Encoding"
-const DeterminePacketFormat = "Packet-Format"
+const DeterminePacketFormat = "packet-Format"
 const DetermineStmpVersion = "Stmp-Version"

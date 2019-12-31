@@ -9,6 +9,7 @@ import "google/protobuf/empty.proto";
 // import "github.com/acrazing/stmp-go/stmp/stmp.proto";
 // for any other repo, please use upon import statement, instead of the following one
 import "stmp/stmp.proto";
+import "google/api/annotations.proto";
 
 message UserModel {
     int64 id = 1;
@@ -49,15 +50,31 @@ service RoomService {
     option (stmp.service) = 0x10;
     rpc CreateRoom (CreateRoomInput) returns (RoomModel) {
         option (stmp.method) = 0x01;
+        option (google.api.http) = {
+            post: "/api/room/create",
+            body: "*",
+        };
     }
     rpc ListRoom (ListRoomInput) returns (ListRoomOutput) {
         option (stmp.method) = 0x02;
+        option (google.api.http) = {
+            post: "/api/room/list",
+            body: "*",
+        };
     }
     rpc JoinRoom (JoinRoomInput) returns (RoomModel) {
         option (stmp.method) = 0x03;
+        option (google.api.http) = {
+            post: "/api/room/join",
+            body: "*",
+        };
     }
     rpc ExitRoom (ExitRoomInput) returns (google.protobuf.Empty) {
         option (stmp.method) = 0x04;
+        option (google.api.http) = {
+            post: "/api/room/exit",
+            body: "*",
+        };
     }
 }
 

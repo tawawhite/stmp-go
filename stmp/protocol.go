@@ -6,7 +6,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"io"
-	"math/bits"
 	"strings"
 )
 
@@ -39,10 +38,6 @@ func unescapeHeadValue(value string) string {
 	return strings.TrimSpace(strings.ReplaceAll(strings.ReplaceAll(value, "%0A", "\n"), "%25", "%"))
 }
 
-func varintLen(x uint64) (n int) {
-	return (bits.Len64(x|1) + 6) / 7
-}
-
 func readUvarint(r io.Reader, b1 []byte) (uint64, error) {
 	var x uint64
 	var s uint
@@ -70,4 +65,75 @@ func readUint16(r io.Reader, b2 []byte) (v uint16, err error) {
 	}
 	v = binary.LittleEndian.Uint16(b2)
 	return
+}
+
+var digits = [36]byte{}
+var chunks = [256]byte{}
+var hexOffsets = [16]byte{0, 4, 8, 12, 16, 1}
+
+func init() {
+	for i := 0; i < 256; i++ {
+		chunks[i] = 255
+	}
+	var i byte
+	for i = '0'; i <= '9'; i++ {
+		digits[i-'0'] = i
+		chunks[i] = i - '0'
+	}
+	for i = 'A'; i <= 'Z'; i++ {
+		digits[i-'A'+10] = i
+		chunks[i] = i - 'A' + 10
+	}
+	for i = 'a'; i < 'z'; i++ {
+		chunks[i] = i - 'a' + 10
+	}
+	for i = 0; i < 16; i++ {
+		hexOffsets[i] = i * 4
+	}
+}
+
+func appendHex(u uint64, buf []byte) int {
+	i := len(buf)
+	for u > 15 {
+		i--
+		buf[i] = digits[u&0xF]
+		u >>= 4
+	}
+	// u < base
+	i--
+	buf[i] = digits[u]
+	copy(buf, buf[i:])
+	return len(buf) - i
+}
+
+func parseHexUint16(buf []byte) (n uint16, err error) {
+	m := len(buf)
+	if m > 4 || m == 0 {
+		err = errors.New("out of range")
+		return
+	}
+	for i, c := range buf {
+		if chunks[c] > 15 {
+			err = errors.New("invalid bit: " + string(c))
+			return
+		}
+		n |= uint16(chunks[c]) << hexOffsets[m-i-1]
+	}
+	return n, nil
+}
+
+func parseHexUint64(buf []byte) (n uint64, err error) {
+	m := len(buf)
+	if m == 0 || m > 16 {
+		err = errors.New("out of range")
+		return
+	}
+	for i, c := range buf {
+		if chunks[c] > 15 {
+			err = errors.New("invalid bit: " + string(c))
+			return
+		}
+		n |= uint64(chunks[c]) << hexOffsets[m-i-1]
+	}
+	return n, nil
 }

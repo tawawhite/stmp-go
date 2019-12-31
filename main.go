@@ -52,6 +52,12 @@ var cmds = map[string]func(flag *flagSet){
 		//v1 = &mapVar[0] cannot take the address, so map could not use struct directly
 		printJson("map", mapVar)
 	},
+	"debugRange": func(flag *flagSet) {
+		v1 := make([]byte, 2)
+		_ = v1[2:]
+		// should panic
+		_ = v1[:3]
+	},
 }
 
 func usage() {
