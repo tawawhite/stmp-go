@@ -21,6 +21,12 @@ extend google.protobuf.MethodOptions {
     // which means a service only could contains 256 methods at most
     // this is required
     //
-    // the final id for a rpc is (service << 8) | (method & 0xff)
+    // if both service and method is set, the final action id will be (service << 8) | method
+    //
+    // if neither service nor method is set, the final action id will be
+    // murmur64(package + "." + service + "." + method) | (1 << 63), use MSB for avoid conflict
+    // with custom action
+    //
+    // if either service or method is set, the compiler will emit an error
     uint64 method = 0x554502;
 }
