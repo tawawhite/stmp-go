@@ -22,23 +22,23 @@ func ReadNegotiate(input string) (v string, n int) {
 	return
 }
 
-func escapeHeadKey(key string) string {
+func EscapeHeadKey(key string) string {
 	return strings.ReplaceAll(strings.ReplaceAll(key, "%", "%25"), ":", "%3A")
 }
 
-func escapeHeadValue(value string) string {
+func EscapeHeadValue(value string) string {
 	return strings.ReplaceAll(strings.ReplaceAll(value, "%", "%25"), "\n", "%0A")
 }
 
-func unescapeHeadKey(key string) string {
+func UnescapeHeadKey(key string) string {
 	return strings.TrimSpace(strings.ReplaceAll(strings.ReplaceAll(key, "%3A", ":"), "%25", "%"))
 }
 
-func unescapeHeadValue(value string) string {
+func UnescapeHeadValue(value string) string {
 	return strings.TrimSpace(strings.ReplaceAll(strings.ReplaceAll(value, "%0A", "\n"), "%25", "%"))
 }
 
-func readUvarint(r io.Reader, b1 []byte) (uint64, error) {
+func ReadUvarint(r io.Reader, b1 []byte) (uint64, error) {
 	var x uint64
 	var s uint
 	for i := 0; ; i++ {
@@ -58,7 +58,7 @@ func readUvarint(r io.Reader, b1 []byte) (uint64, error) {
 	}
 }
 
-func readUint16(r io.Reader, b2 []byte) (v uint16, err error) {
+func ReadUint16(r io.Reader, b2 []byte) (v uint16, err error) {
 	_, err = r.Read(b2)
 	if err != nil {
 		return
@@ -92,7 +92,7 @@ func init() {
 	}
 }
 
-func appendHex(u uint64, buf []byte) int {
+func AppendHex(u uint64, buf []byte) int {
 	i := len(buf)
 	for u > 15 {
 		i--
@@ -106,7 +106,7 @@ func appendHex(u uint64, buf []byte) int {
 	return len(buf) - i
 }
 
-func parseHexUint16(buf []byte) (n uint16, err error) {
+func ParseHexUint16(buf []byte) (n uint16, err error) {
 	m := len(buf)
 	if m > 4 || m == 0 {
 		err = errors.New("out of range")
@@ -122,7 +122,7 @@ func parseHexUint16(buf []byte) (n uint16, err error) {
 	return n, nil
 }
 
-func parseHexUint64(buf []byte) (n uint64, err error) {
+func ParseHexUint64(buf []byte) (n uint64, err error) {
 	m := len(buf)
 	if m == 0 || m > 16 {
 		err = errors.New("out of range")

@@ -4,15 +4,22 @@ package stmp
 
 import "context"
 
-type ctxType int
+type ctxConnKey struct{}
 
-const ctxConn ctxType = 0
-
-func NewContext(conn *Conn) context.Context {
-	ctx := context.Background()
-	return context.WithValue(ctx, ctxConn, conn)
+func WithConn(ctx context.Context, conn *Conn) context.Context {
+	return context.WithValue(ctx, ctxConnKey{}, conn)
 }
 
 func SelectConn(ctx context.Context) *Conn {
-	return ctx.Value(ctxConn).(*Conn)
+	return ctx.Value(ctxConnKey{}).(*Conn)
+}
+
+type ctxServerKey struct{}
+
+func WithServer(ctx context.Context, srv *Server) context.Context {
+	return context.WithValue(ctx, ctxServerKey{}, srv)
+}
+
+func SelectServer(ctx context.Context) *Server {
+	return ctx.Value(ctxServerKey{}).(*Server)
 }

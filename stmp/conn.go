@@ -3,6 +3,7 @@
 package stmp
 
 import (
+	"context"
 	"errors"
 	"github.com/gorilla/websocket"
 	"io"
@@ -18,6 +19,7 @@ type writeEvent struct {
 }
 
 type Conn struct {
+	net.Conn
 	// router to dispatch actions
 	*Router
 	mu *sync.Mutex
@@ -34,7 +36,6 @@ type Conn struct {
 	// server writeHandshakeResponse response message
 	ServerMessage string
 	// network conn
-	nc net.Conn
 	// content-type codec
 	media MediaCodec
 	// write signal
@@ -45,6 +46,12 @@ type Conn struct {
 	requests map[uint16]chan *packet
 
 	mid uint32
+
+	onClosed CloseHandlerFunc
+}
+
+func (c *Conn) SetCloseHandler(h CloseHandlerFunc) {
+	c.onClosed = h
 }
 
 func (c *Conn) Request(options SendContext) (out []byte, err error) {
@@ -118,7 +125,7 @@ func newConn(nc net.Conn) *Conn {
 		Major:     1,
 		Minor:     0,
 		mu:        &sync.Mutex{},
-		nc:        nc,
+		Conn:      nc,
 		writeChan: make(chan *writeEvent),
 		closeChan: make(chan struct{}),
 		requests:  map[uint16]chan *packet{},
@@ -145,9 +152,9 @@ func (c *Conn) dispatchPacket(p *packet) {
 	case MessageKindPong:
 		c.handlePong()
 	case MessageKindRequest:
-		c.handleRequest(p.mid, p.action, p.payload)
+		go c.handleRequest(p.mid, p.action, p.payload)
 	case MessageKindNotify:
-		c.handleNotify(p.action, p.payload)
+		go c.handleNotify(p.action, p.payload)
 	case MessageKindResponse:
 		c.handleResponse(p.mid, p.status, p.payload)
 	case MessageKindClose:
@@ -160,7 +167,7 @@ func (c *Conn) binaryReadChannel(r io.ReadCloser, timeout time.Duration) {
 	buf := make([]byte, maxStreamHeadSize, maxStreamHeadSize)
 	var err error
 	for {
-		c.nc.SetReadDeadline(time.Now().Add(timeout))
+		c.Conn.SetReadDeadline(time.Now().Add(timeout))
 		err = p.read(r, buf)
 		if err != nil {
 			// TODO
@@ -181,7 +188,7 @@ func (c *Conn) binaryWriteChannel(w EncodingWriter, timeout time.Duration) {
 			// TODO
 			return
 		}
-		c.nc.SetWriteDeadline(time.Now().Add(timeout))
+		c.Conn.SetWriteDeadline(time.Now().Add(timeout))
 		err = e.p.write(w, buf)
 		if e.r != nil {
 			e.r <- err
@@ -293,16 +300,15 @@ func (c *Conn) handlePong() {
 
 func (c *Conn) handleClose(status Status, message string) {
 	// TODO close connection
-	c.closeHandler(status, message)
 }
 
 func (c *Conn) handleNotify(action uint64, payload []byte) {
-	ctx := NewContext(c)
+	ctx := WithConn(context.Background(), c)
 	c.Dispatch(ctx, action, payload, c.media)
 }
 
 func (c *Conn) handleRequest(mid uint16, action uint64, payload []byte) {
-	ctx := NewContext(c)
+	ctx := WithConn(context.Background(), c)
 	status, payload := c.Dispatch(ctx, action, payload, c.media)
 	we := &writeEvent{p: &packet{
 		fin:     true,
@@ -364,16 +370,16 @@ func (c *Conn) initEncoding(compressLevel int) (r io.ReadCloser, w EncodingWrite
 	}
 	ec := GetEncodingCodec(c.ServerHeader.Get(DetermineEncoding))
 	if ec == nil {
-		rw := plainEncoding{Conn: c.nc}
+		rw := plainEncoding{Conn: c.Conn}
 		r = rw
 		w = rw
 		return
 	} else {
-		r, err = ec.Reader(c.nc)
+		r, err = ec.Reader(c.Conn)
 		if err != nil {
 			return
 		}
-		w, err = ec.Writer(c.nc, compressLevel)
+		w, err = ec.Writer(c.Conn, compressLevel)
 		if err != nil {
 			r.Close()
 			r = nil

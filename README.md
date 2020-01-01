@@ -5,10 +5,10 @@ A lightweight real-time bidirectional framework for Golang.
 **Features**
 
 - Fast
-    - Supports connection level compression
-    - Supports `KCP`
     - Supports `Protocol Buffers`, `MsgPack`
     - Extremely tidy packet format
+    - Supports `KCP`
+    - Supports connection level `gzip` compression
 - Easy to use
     - Supports `WebSockets` and highly optimized for it
     - Supports `text` format packet for `WebSockets`
@@ -24,12 +24,6 @@ A lightweight real-time bidirectional framework for Golang.
 - `KCP`
 - `TCP`
 - `WebSockets`
-
-*Supported compression algorithms*
-
-- `gzip`
-- `deflate`
-- `br`
 
 ## Install
 

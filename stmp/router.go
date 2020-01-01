@@ -51,10 +51,6 @@ type Router struct {
 	middlewares  []MiddlewareFunc
 	interceptors []InterceptFunc
 	handlers     map[uint64]*HandlerOptions
-	closeHandler CloseHandlerFunc
-}
-
-var noopCloseHandler CloseHandlerFunc = func(status Status, message string) {
 }
 
 func NewRouter() *Router {
@@ -62,7 +58,6 @@ func NewRouter() *Router {
 		middlewares:  []MiddlewareFunc{},
 		interceptors: []InterceptFunc{},
 		handlers:     map[uint64]*HandlerOptions{},
-		closeHandler: noopCloseHandler,
 	}
 }
 
@@ -89,10 +84,6 @@ func (r *Router) Register(method string, factory ModelFactory, handlers ...Handl
 	} else {
 		r.handlers[action].handlers = append(r.handlers[action].handlers, handlers...)
 	}
-}
-
-func (r *Router) SetCloseHandler(h CloseHandlerFunc) {
-	r.closeHandler = h
 }
 
 // dispatch a request to handlers

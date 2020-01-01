@@ -1,5 +1,6 @@
 // Copyright 2019 acrazing <joking.young@gmail.com>. All rights reserved.
 // Since 2019-12-27 13:27:58
+
 syntax = "proto3";
 package stmp.examples.room;
 
@@ -9,12 +10,54 @@ import "google/protobuf/empty.proto";
 // import "github.com/acrazing/stmp-go/stmp/stmp.proto";
 // for any other repo, please use upon import statement, instead of the following one
 import "stmp/stmp.proto";
-import "google/api/annotations.proto";
+// used for test google http api annotations
+// import "google/api/annotations.proto";
 
+// the user model for the online server, does not represent the real user model
 message UserModel {
-    int64 id = 1;
-    string nickname = 2;
+    enum Status {
+        Reserved = 0;
+        Online = 1;
+        Chatting = 2;
+        ChattingOffline = 3;
+    }
+    string id = 1;
+    string name = 2;
     string avatar = 3;
+    int64 roomId = 4;
+    Status status = 5;
+}
+
+message ListUserInput {
+    int64 limit = 1;
+    int64 offset = 2;
+}
+
+message ListUserOutput {
+    int64 total = 1;
+    repeated UserModel users = 2;
+}
+
+service UserService {
+    option (stmp.service) = 0x10;
+    rpc ListUser(ListUserInput) returns (ListUserOutput) {
+        option (stmp.method) = 0x01;
+    }
+}
+
+service UserEvents {
+    option (stmp.service) = 0x11;
+    rpc StatusUpdated(UserModel) returns (google.protobuf.Empty) {
+        option(stmp.method) = 0x01;
+    }
+}
+
+message ChatMessageModel {
+    int64 id = 1;
+    int64 cid = 2;
+    int64 userId = 3;
+    string content = 4;
+    int64 createdAt = 5;
 }
 
 // a simple room, no seat, no stand by, anyone could join it
@@ -22,6 +65,7 @@ message RoomModel {
     int64 id = 1;
     string name = 2;
     map<int64, UserModel> users = 3;
+    repeated ChatMessageModel messages = 4;
 }
 
 message CreateRoomInput {
@@ -46,35 +90,28 @@ message ExitRoomInput {
     int64 id = 1;
 }
 
+message SendMessageInput {
+    int64 roomId = 1;
+    int64 cid = 2;
+    string content = 3;
+}
+
 service RoomService {
-    option (stmp.service) = 0x10;
+    option (stmp.service) = 0x12;
     rpc CreateRoom (CreateRoomInput) returns (RoomModel) {
         option (stmp.method) = 0x01;
-        option (google.api.http) = {
-            post: "/api/room/create",
-            body: "*",
-        };
     }
     rpc ListRoom (ListRoomInput) returns (ListRoomOutput) {
         option (stmp.method) = 0x02;
-        option (google.api.http) = {
-            post: "/api/room/list",
-            body: "*",
-        };
     }
     rpc JoinRoom (JoinRoomInput) returns (RoomModel) {
         option (stmp.method) = 0x03;
-        option (google.api.http) = {
-            post: "/api/room/join",
-            body: "*",
-        };
     }
     rpc ExitRoom (ExitRoomInput) returns (google.protobuf.Empty) {
         option (stmp.method) = 0x04;
-        option (google.api.http) = {
-            post: "/api/room/exit",
-            body: "*",
-        };
+    }
+    rpc SendMessage (SendMessageInput) returns (google.protobuf.Empty) {
+        option (stmp.method) = 0x05;
     }
 }
 
@@ -88,12 +125,21 @@ message UserExitEvent {
     int64 userId = 2;
 }
 
+message NewMessageEvent {
+    int64 roomId = 1;
+    int64 userId = 2;
+    string content = 3;
+}
+
 service RoomEvents {
-    option (stmp.service) = 0x11;
+    option (stmp.service) = 0x13;
     rpc UserEnter (UserEnterEvent) returns (google.protobuf.Empty) {
         option (stmp.method) = 0x01;
     }
     rpc UserExit (UserExitEvent) returns (google.protobuf.Empty) {
         option (stmp.method) = 0x02;
+    }
+    rpc NewMessage (NewMessageEvent) returns (google.protobuf.Empty) {
+        option (stmp.method) = 0x03;
     }
 }

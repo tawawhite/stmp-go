@@ -116,12 +116,12 @@ func (p *packet) read(r io.ReadCloser, buf []byte) (err error) {
 		return
 	}
 	if isMid(p.kind) {
-		if p.mid, err = readUint16(r, buf[:2]); err != nil {
+		if p.mid, err = ReadUint16(r, buf[:2]); err != nil {
 			return
 		}
 	}
 	if isAction(p.kind) {
-		if p.action, err = readUvarint(r, buf[:1]); err != nil {
+		if p.action, err = ReadUvarint(r, buf[:1]); err != nil {
 			return
 		}
 	}
@@ -133,7 +133,7 @@ func (p *packet) read(r io.ReadCloser, buf []byte) (err error) {
 	}
 	if p.payload != nil {
 		var ps uint64
-		if ps, err = readUvarint(r, buf[:1]); err != nil {
+		if ps, err = ReadUvarint(r, buf[:1]); err != nil {
 			return
 		}
 		p.payload = make([]byte, ps)
@@ -202,15 +202,15 @@ func (p *packet) marshalText(buf []byte) []byte {
 	buf[n] = MapKindText[p.kind]
 	n += 1
 	if isMid(p.kind) {
-		n += appendHex(uint64(p.mid), buf[n:])
+		n += AppendHex(uint64(p.mid), buf[n:])
 		buf[n] = ':'
 		n += 1
 	}
 	if isAction(p.kind) {
-		n += appendHex(p.action, buf[n:])
+		n += AppendHex(p.action, buf[n:])
 	}
 	if isStatus(p.kind) {
-		n += appendHex(uint64(p.status), buf[n:])
+		n += AppendHex(uint64(p.status), buf[n:])
 	}
 	if !isHead(p.kind) && len(p.payload) > 0 {
 		buf[n] = '\n'
@@ -244,7 +244,7 @@ func (p *packet) unmarshalText(data []byte) (err error) {
 		if i == -1 {
 			return invalidPacketMid
 		}
-		if p.mid, err = parseHexUint16(data[:i]); err != nil {
+		if p.mid, err = ParseHexUint16(data[:i]); err != nil {
 			err = errors.New(invalidPacketMid.Error() + ": " + err.Error())
 			return
 		}
@@ -255,7 +255,7 @@ func (p *packet) unmarshalText(data []byte) (err error) {
 		if i == -1 {
 			i = len(data)
 		}
-		if p.action, err = parseHexUint64(data[:i]); err != nil {
+		if p.action, err = ParseHexUint64(data[:i]); err != nil {
 			err = errors.New(invalidPacketAction.Error() + ": " + err.Error())
 			return
 		}

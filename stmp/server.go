@@ -57,6 +57,8 @@ type Server struct {
 	HandshakeTimeout time.Duration
 	WriteTimeout     time.Duration
 	ReadTimeout      time.Duration
+	OnConnected      func(c *Conn)
+	onClosed         func(c *Conn, status Status, message string)
 }
 
 var noAuth AuthenticateFunc = func(c *Conn) (err error) {
@@ -100,7 +102,7 @@ func (s *Server) HandleConn(nc net.Conn) (status *StatusError) {
 		if status != nil {
 			c.ServerMessage = status.err.Error()
 			c.writeHandshakeResponse(status.code)
-			c.nc.Close()
+			c.Conn.Close()
 		}
 	}()
 	nc.SetReadDeadline(time.Now().Add(s.HandshakeTimeout))
@@ -120,7 +122,7 @@ func (s *Server) HandleConn(nc net.Conn) (status *StatusError) {
 		status = NewStatusError(StatusUnsupportedProtocolVersion, "unsupported STMP version: "+string([]byte{c.Major + '0', '.', c.Minor + '0'}))
 	}
 	// length
-	n, err := readUvarint(nc, fixHead[:1])
+	n, err := ReadUvarint(nc, fixHead[:1])
 	if err != nil {
 		status = NewStatusError(StatusBadRequest, "read header length error: "+err.Error())
 		return
@@ -156,7 +158,7 @@ func (s *Server) HandleConn(nc net.Conn) (status *StatusError) {
 	}
 	err = c.writeHandshakeResponse(StatusOk)
 	if err != nil {
-		c.nc.Close()
+		c.Conn.Close()
 		return
 	}
 	s.mu.Lock()

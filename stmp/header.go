@@ -50,7 +50,7 @@ func (h Header) Marshal() []byte {
 	chunks := make([]string, 0, len(h))
 	for k, vs := range h {
 		for _, v := range vs {
-			chunks = append(chunks, escapeHeadKey(k)+":"+escapeHeadValue(v))
+			chunks = append(chunks, EscapeHeadKey(k)+":"+EscapeHeadValue(v))
 		}
 	}
 	return []byte(strings.Join(chunks, "\n"))
@@ -66,12 +66,12 @@ func (h Header) Unmarshal(data []byte) error {
 		if sep < 0 {
 			return errors.New("miss ':' in header")
 		}
-		key = unescapeHeadKey(string(data[:sep]))
+		key = UnescapeHeadKey(string(data[:sep]))
 		end = bytes.IndexByte(data[sep+1:], '\n')
 		if end == -1 {
-			value = unescapeHeadValue(string(data[sep+1:]))
+			value = UnescapeHeadValue(string(data[sep+1:]))
 		} else {
-			value = unescapeHeadValue(string(data[sep+1 : end]))
+			value = UnescapeHeadValue(string(data[sep+1 : end]))
 		}
 		if len(h[key]) > 0 {
 			h[key] = append(h[key], value)

@@ -31,7 +31,7 @@ type DialOptions struct {
 	// else only could be binary
 	// default is binary
 	PacketFormat string
-	// could be gzip, br, deflate
+	// could be gzip
 	// omitted for websocket
 	// default is empty
 	Encoding string
@@ -115,12 +115,11 @@ func newClientConn(nc net.Conn, opts *DialOptions) (c *Conn) {
 	c = newConn(nc)
 	c.Router = NewRouter()
 	c.ClientHeader = opts.Header
-	c.ClientHeader = opts.Header
 	c.ClientMessage = opts.Message
 	return
 }
 
-// create a client conn from nc, will writeHandshakeResponse automatically
+// create a client conn from Conn, will writeHandshakeResponse automatically
 func Client(nc net.Conn, opts *DialOptions) (c *Conn, err error) {
 	c = newClientConn(nc, opts)
 	defer func() {
@@ -141,24 +140,24 @@ func Client(nc net.Conn, opts *DialOptions) (c *Conn, err error) {
 		input = append(input, "\n\n"...)
 		input = append(input, c.ClientMessage...)
 	}
-	c.nc.SetWriteDeadline(time.Now().Add(opts.HandshakeTimeout))
-	_, err = c.nc.Write(input)
+	c.Conn.SetWriteDeadline(time.Now().Add(opts.HandshakeTimeout))
+	_, err = c.Conn.Write(input)
 	if err != nil {
 		err = NewStatusError(StatusNetworkError, err)
 		return
 	}
-	_, err = c.nc.Read(input[:5])
+	_, err = c.Conn.Read(input[:5])
 	if err != nil {
 		err = NewStatusError(StatusNetworkError, err)
 		return
 	}
-	size, err := readUvarint(nc, input[:1])
+	size, err := ReadUvarint(nc, input[:1])
 	if err != nil {
 		err = NewStatusError(StatusNetworkError, err)
 		return
 	}
 	input = make([]byte, size)
-	_, err = c.nc.Read(input)
+	_, err = c.Conn.Read(input)
 	if err != nil {
 		err = NewStatusError(StatusNetworkError, err)
 		return
