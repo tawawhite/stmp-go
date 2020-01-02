@@ -52,6 +52,12 @@ func main() {
 	userService := NewUserService(userStore)
 	room_proto.STMPRegisterUserServiceServer(srv, userService)
 
+	conn, _ := stmp.DialTCP("", nil)
+	usc := room_proto.STMPNewUserServiceClient(conn)
+	usb := room_proto.STMPNewUserServiceBroadcaster()
+	_, _ = usc.ListUser(nil, &room_proto.ListUserInput{})
+	_ = usb.BroadcastListUser(nil, &room_proto.ListUserInput{}, srv, nil)
+
 	go srv.ListenAndServeWebSocket("127.0.0.1:5002", "/ws")
 	println("room server is listening at ws://127.0.0.1:5002/ws")
 	err := srv.Wait()

@@ -88,6 +88,16 @@ var cmds = map[string]func(flag *flagSet){
 		// true
 		log.Println("struct:", debugMethodWithField{} == debugMethodWithField{})
 	},
+	"debugCast": func(flag *flagSet) {
+		msb := map[string]bool{"ok": true}
+		// panic: interface conversion: interface {} is map[string]bool, not map[string]interface {}
+		log.Println("map.<string, bool> cast:", castMapInterface(msb))
+	},
+}
+
+func castMapInterface(in interface{}) interface{} {
+	v := in.(map[string]interface{})
+	return v["ok"]
 }
 
 type debugMethod struct {

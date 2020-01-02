@@ -22,6 +22,8 @@ type CallOptions struct {
 	Response *[]byte
 }
 
+var NotifyOptions = &CallOptions{Notify: true}
+
 type CallOption func(o *CallOptions)
 
 func Notify() CallOption {

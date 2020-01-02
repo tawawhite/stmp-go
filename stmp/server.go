@@ -4,6 +4,7 @@ package stmp
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"github.com/gorilla/websocket"
 	"github.com/xtaci/kcp-go"
@@ -15,13 +16,29 @@ import (
 	"time"
 )
 
-type SendOptions struct {
-	action uint64
-	input  interface{}
+type PayloadMap struct {
+	in       interface{}
+	payloads map[string][]byte
 }
 
-func NewSendOptions(method string, input interface{}) *SendOptions {
-	return &SendOptions{action: ms.methods[method], input: input}
+func (p *PayloadMap) Marshal(conn *Conn) ([]byte, error) {
+	if p.in == nil {
+		return nil, nil
+	}
+	payload, ok := p.payloads[conn.media.Name()]
+	if !ok {
+		var err error
+		payload, err = conn.media.Marshal(p.in)
+		if err != nil {
+			return nil, err
+		}
+		p.payloads[conn.media.Name()] = payload
+	}
+	return payload, nil
+}
+
+func NewPayloadMap(in interface{}) *PayloadMap {
+	return &PayloadMap{in: in, payloads: map[string][]byte{}}
 }
 
 type AuthenticateFunc func(c *Conn) (err error)
@@ -73,6 +90,34 @@ func NewServer() *Server {
 		WriteTimeout:     time.Minute,
 		ReadTimeout:      time.Minute,
 	}
+}
+
+type ConnFilter func(conn *Conn) bool
+
+var filterAll ConnFilter = func(conn *Conn) bool {
+	return true
+}
+
+func (s *Server) Broadcast(ctx context.Context, method string, in interface{}, filter ConnFilter) error {
+	if filter == nil {
+		filter = filterAll
+	}
+	payloads := NewPayloadMap(in)
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for conn := range s.conns {
+		if filter(conn) {
+			payload, err := payloads.Marshal(conn)
+			if err != nil {
+				return err
+			}
+			_, err = conn.Call(ctx, method, payload, NotifyOptions)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func (s *Server) newClient(nc net.Conn) *Conn {

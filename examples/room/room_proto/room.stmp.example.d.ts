@@ -3,7 +3,7 @@
  * @since 2020-01-01 22:10:15
  */
 
-import {CallOptions, Connection, Context, SendOptions, Server} from 'stmp'
+import {CallOptions, Connection, ConnFilter, Context, Server} from 'stmp'
 import pb from "./room.pb";
 
 export = stmp
@@ -44,21 +44,29 @@ declare namespace stmp {
                 }
 
                 /**
-                 * create send context for server side and client side
+                 * server side broadcast utility functions
                  */
-                class UserServiceBuilder {
-                    static listUser(data: IListUserInput): SendOptions<ListUserInput>
+                class UserServiceBroadcaster {
+                    static listUser(input: IListUserInput, conn: Connection, options?: Partial<CallOptions>): Promise<ListUserOutput>
+
+                    static listUserForSet(input: IListUserInput, conns: Set<Connection>): void
+
+                    static broadcastListUser(input: IListUserInput, srv: Server, filter?: ConnFilter): void
+
+                    static listUserMethod(): string
+
+                    static listUserAction(): string
                 }
 
                 /**
                  * the client wrapper for connection
                  */
                 class UserServiceClient {
-                    readonly conn: Connection;
+                    private conn: Connection;
 
                     constructor(conn: Connection)
 
-                    listUser(data: IListUserInput, options?: CallOptions): Promise<ListUserOutput>
+                    listUser(data: IListUserInput, options?: Partial<CallOptions>): Promise<ListUserOutput>
                 }
             }
         }

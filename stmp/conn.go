@@ -55,7 +55,8 @@ func (c *Conn) SetCloseHandler(h CloseHandlerFunc) {
 }
 
 // TODO check connection Status
-func (c *Conn) call(ctx context.Context, action uint64, payload []byte, options *CallOptions) (out interface{}, err error) {
+func (c *Conn) Call(ctx context.Context, method string, payload []byte, options *CallOptions) (out interface{}, err error) {
+	action := ms.methods[method]
 	p := &Packet{Fin: true, Kind: MessageKindRequest, Action: action, Payload: payload}
 	we := &writeEvent{p: p}
 	var r chan *Packet
@@ -107,17 +108,16 @@ func (c *Conn) call(ctx context.Context, action uint64, payload []byte, options 
 	return
 }
 
-func (c *Conn) Invoke(ctx context.Context, send *SendOptions, opts ...CallOption) (interface{}, error) {
-	callOptions := NewCallOptions(opts...)
+func (c *Conn) Invoke(ctx context.Context, method string, in interface{}, opts *CallOptions) (interface{}, error) {
 	var payload []byte
-	if send.input != nil {
+	if in != nil {
 		var err error
-		payload, err = c.media.Marshal(send.input)
+		payload, err = c.media.Marshal(in)
 		if err != nil {
 			return nil, NewStatusError(StatusMarshalError, err.Error())
 		}
 	}
-	return c.call(ctx, send.action, payload, callOptions)
+	return c.Call(ctx, method, payload, opts)
 }
 
 func (c *Conn) Close(status Status, message string) error {

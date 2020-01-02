@@ -6,6 +6,11 @@
  */
 
 declare module 'stmp' {
+    export class PayloadMap<I> {
+        constructor(input: I)
+
+        get(conn: Connection): Payload
+    }
 
     export interface Context {
     }
@@ -35,25 +40,22 @@ declare module 'stmp' {
         unregister(inst: any, method: string): void
     }
 
+    export type ConnFilter = (conn: Connection) => boolean
+
     export class Server extends Router {
-        broadcast<I>(sendOptions: SendOptions<I>, filter?: (conn: Connection) => boolean): void
-
-        notify<I>(sendOptions: SendOptions<I>, ...conns: Connection[]): void
-    }
-
-    export class SendOptions<I> {
-        input: I;
-        method: string;
-
-        constructor(method: string, input: I)
+        broadcast<I>(method: string, input: I, filter?: ConnFilter): void
     }
 
     export interface CallOptions {
-        notify?: boolean;
+        notify: boolean;
     }
 
+    export const notifyOptions: CallOptions;
+
     export class Connection extends Router {
-        invoke<I, O>(send: SendOptions<I>, options?: CallOptions): Promise<O>
+        call<O>(method: string, payload: Payload, options: CallOptions): Promise<O>;
+
+        invoke<I, O>(method: string, input: I, options?: Partial<CallOptions>): Promise<O>;
     }
 
     export type Header = Record<string, string[]>

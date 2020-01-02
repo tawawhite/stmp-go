@@ -3,7 +3,7 @@
  * @since 2020-01-01 22:10:13
  */
 
-import {registerMethodAction, SendOptions} from 'stmp'
+import {PayloadMap, registerMethodAction, notifyOptions} from 'stmp'
 import * as pb from './room.pb'
 
 const root = Object.create(null);
@@ -64,13 +64,44 @@ initNamespace(root, 'stmp.examples.room', (room) => {
         }
     }
 
-    class UserServiceBuilder {
+    class UserServiceBroadcaster {
         /**
          * @param {pb.stmp.examples.room.IListUserInput} input
-         * @returns {import("stmp").SendOptions.<pb.stmp.examples.room.ListUserInput>}
+         * @param {import("stmp").Connection} conn
+         * @param {Partial.<import("stmp").CallOptions>} [options]
+         * @returns {Promise<pb.stmp.examples.room.ListUserOutput>}
          */
-        static listUser(input) {
-            return new SendOptions("stmp.examples.room.UserService.ListUser", input)
+        static listUser(input, conn, options) {
+            return conn.invoke("stmp.examples.room.UserService.ListUser", input, options)
+        }
+
+        /**
+         *
+         * @param {pb.stmp.examples.room.IListUserInput} input
+         * @param {Set.<import("stmp").Connection>} conns
+         */
+        static listUserForSet(input, conns) {
+            const pm = new PayloadMap(input);
+            for (const conn of conns) {
+                conn.call("stmp.examples.room.UserService.ListUser", pm.get(conn), notifyOptions)
+            }
+        }
+
+        /**
+         * @param {pb.stmp.examples.room.IListUserInput} input
+         * @param {import("stmp").Server} srv
+         * @param {import("stmp").ConnFilter} [filter]
+         */
+        static broadcastListUser(input, srv, filter) {
+            return srv.broadcast("stmp.examples.room.UserService.ListUser", input, filter)
+        }
+
+        static listUserMethod() {
+            return "stmp.examples.room.UserService.ListUser"
+        }
+
+        static listUserAction() {
+            return "1001"
         }
     }
 
@@ -84,11 +115,11 @@ initNamespace(root, 'stmp.examples.room', (room) => {
 
         /**
          * @param {pb.stmp.examples.room.IListUserInput} input
-         * @param {import("stmp").CallOptions} options
+         * @param {Partial.<import("stmp").CallOptions>} options
          * @returns {Promise.<pb.stmp.examples.room.ListUserOutput>}
          */
         listUser(input, options) {
-            return this.conn.invoke(UserServiceBuilder.listUser(input), options)
+            return this.conn.invoke("stmp.examples.room.UserService.ListUser", input, options)
         }
     }
 });

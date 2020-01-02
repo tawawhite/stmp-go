@@ -29,35 +29,82 @@ func STMPUnregisterUserServiceServer(r stmp.Router, s STMPUserServiceServer) {
 	r.Unregister(s, "stmp.examples.room.UserService.ListUser")
 }
 
-// builder
+// broadcaster, use for server side send request to all client
 
-type STMPUserServiceBuilder interface {
-	ListUser(in *ListUserInput) *stmp.SendOptions
+type STMPUserServiceBroadcaster interface {
+	ListUser(ctx context.Context, in *ListUserInput, conn *stmp.Conn, opts ...stmp.CallOption) (*ListUserOutput, error)
+	ListUserForList(ctx context.Context, in *ListUserInput, conns ...*stmp.Conn) error
+	ListUserForKeys(ctx context.Context, in *ListUserInput, conns map[*stmp.Conn]bool) error
+	BroadcastListUser(ctx context.Context, in *ListUserInput, srv *stmp.Server, filter stmp.ConnFilter) error
+	ListUserMethod() string
+	ListUserAction() uint64
 }
 
-type stmpUserServiceBuilder struct{}
+type stmpUserServiceBroadcaster struct{}
 
-func (s stmpUserServiceBuilder) ListUser(in *ListUserInput) *stmp.SendOptions {
-	return stmp.NewSendOptions("stmp.examples.room.UserService.ListUser", in)
+func (s stmpUserServiceBroadcaster) ListUser(ctx context.Context, in *ListUserInput, conn *stmp.Conn, opts ...stmp.CallOption) (*ListUserOutput, error) {
+	out, err := conn.Invoke(ctx, "stmp.examples.room.UserService.ListUser", in, stmp.NewCallOptions(opts...))
+	return out.(*ListUserOutput), err
 }
 
-func STMPNewUserServiceBuilder() STMPUserServiceBuilder {
-	return &stmpUserServiceBuilder{}
+func (s stmpUserServiceBroadcaster) ListUserForList(ctx context.Context, in *ListUserInput, conns ...*stmp.Conn) error {
+	payloads := stmp.NewPayloadMap(in)
+	for _, conn := range conns {
+		payload, err := payloads.Marshal(conn)
+		if err != nil {
+			return err
+		}
+		_, err = conn.Call(ctx, "stmp.examples.room.UserService.ListUser", payload, stmp.NotifyOptions)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s stmpUserServiceBroadcaster) ListUserForKeys(ctx context.Context, in *ListUserInput, conns map[*stmp.Conn]bool) error {
+	payloads := stmp.NewPayloadMap(in)
+	for conn := range conns {
+		payload, err := payloads.Marshal(conn)
+		if err != nil {
+			return err
+		}
+		_, err = conn.Call(ctx, "stmp.examples.room.UserService.ListUser", payload, stmp.NotifyOptions)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s stmpUserServiceBroadcaster) BroadcastListUser(ctx context.Context, in *ListUserInput, srv *stmp.Server, filter stmp.ConnFilter) error {
+	return srv.Broadcast(ctx, "stmp.examples.room.UserService.ListUser", in, filter)
+}
+
+func (s stmpUserServiceBroadcaster) ListUserMethod() string {
+	return "stmp.examples.room.UserService.ListUser"
+}
+
+func (s stmpUserServiceBroadcaster) ListUserAction() uint64 {
+	return 0x1001
+}
+
+func STMPNewUserServiceBroadcaster() STMPUserServiceBroadcaster {
+	return stmpUserServiceBroadcaster{}
 }
 
 // client
 
 type STMPUserServiceClient interface {
-	ListUser(ctx context.Context, in *ListUserInput, opts ...stmp.CallOption) (out *ListUserOutput, err error)
+	ListUser(ctx context.Context, in *ListUserInput, opts ...stmp.CallOption) (*ListUserOutput, error)
 }
 
 type stmpUserServiceClient struct {
-	b stmpUserServiceBuilder
 	c *stmp.Conn
 }
 
 func (s *stmpUserServiceClient) ListUser(ctx context.Context, in *ListUserInput, opts ...stmp.CallOption) (*ListUserOutput, error) {
-	out, err := s.c.Invoke(ctx, s.b.ListUser(in), opts...)
+	out, err := s.c.Invoke(ctx, "stmp.examples.room.UserService.ListUser", in, stmp.NewCallOptions(opts...))
 	return out.(*ListUserOutput), err
 }
 
