@@ -6,7 +6,9 @@
 import {registerMethodAction, SendOptions} from 'stmp'
 import * as pb from './room.pb'
 
-export const STMP = Object.create(null);
+const root = Object.create(null);
+
+export default root
 
 /**
  * @template {T}
@@ -31,7 +33,7 @@ function initNamespace(root, ns, ...factories) {
     }
 }
 
-initNamespace(STMP, 'stmp.examples.room', (room) => {
+initNamespace(root, 'stmp.examples.room', (room) => {
     // each service takes a factory
     registerMethodAction("stmp.examples.room.UserService.ListUser", "1001", pb.stmp.examples.room.ListUserInput, pb.google.protobuf.Empty);
 

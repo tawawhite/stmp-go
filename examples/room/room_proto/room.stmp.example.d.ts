@@ -3,16 +3,21 @@
  * @since 2020-01-01 22:10:15
  */
 
-import * as pb from './room.pb'
 import {CallOptions, Connection, Context, SendOptions, Server} from 'stmp'
+import pb from "./room.pb";
 
-export namespace STMP {
-    // the top level namespace always is STMP
+export = stmp
+
+declare namespace stmp {
+    // the top level namespace always is stmp
     // the child namespaces is the package in .proto file
-    // Uppercase is used to avoid conflicts with package stmp's global namespace
-    export namespace stmp {
+    namespace stmp {
         namespace examples {
             namespace room {
+                import ListUserInput = pb.stmp.examples.room.ListUserInput;
+                import ListUserOutput = pb.stmp.examples.room.ListUserOutput;
+                import IListUserInput = pb.stmp.examples.room.IListUserInput;
+
                 class UserServiceServer {
                     /**
                      * register impl to srv, the impl's methods will be bound automatically
@@ -35,14 +40,14 @@ export namespace STMP {
                      * @param input
                      * @param output
                      */
-                    listUser(ctx: Context, input: pb.stmp.examples.room.ListUserInput, output: pb.stmp.examples.room.ListUserOutput): void
+                    listUser(ctx: Context, input: ListUserInput, output: ListUserOutput): void | Promise<void>
                 }
 
                 /**
                  * create send context for server side and client side
                  */
                 class UserServiceBuilder {
-                    static listUser(data: pb.stmp.examples.room.IListUserInput): SendOptions<pb.stmp.examples.room.ListUserInput>
+                    static listUser(data: IListUserInput): SendOptions<ListUserInput>
                 }
 
                 /**
@@ -53,7 +58,7 @@ export namespace STMP {
 
                     constructor(conn: Connection)
 
-                    listUser(data: pb.stmp.examples.room.IListUserInput, options?: CallOptions): Promise<pb.stmp.examples.room.ListUserOutput>
+                    listUser(data: IListUserInput, options?: CallOptions): Promise<ListUserOutput>
                 }
             }
         }

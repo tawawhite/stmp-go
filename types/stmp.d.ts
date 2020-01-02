@@ -36,6 +36,9 @@ declare module 'stmp' {
     }
 
     export class Server extends Router {
+        broadcast<I>(sendOptions: SendOptions<I>, filter?: (conn: Connection) => boolean): void
+
+        notify<I>(sendOptions: SendOptions<I>, ...conns: Connection[]): void
     }
 
     export class SendOptions<I> {
@@ -52,4 +55,12 @@ declare module 'stmp' {
     export class Connection extends Router {
         invoke<I, O>(send: SendOptions<I>, options?: CallOptions): Promise<O>
     }
+
+    export type Header = Record<string, string[]>
+
+    export interface DialOptions {
+        header: Header
+    }
+
+    export function dialWebSocket(addr: string, options?: Partial<DialOptions>): Promise<Connection>;
 }
