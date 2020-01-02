@@ -5,7 +5,6 @@ package stmp
 import (
 	"bytes"
 	"crypto/tls"
-	"github.com/golang/protobuf/proto"
 	"github.com/gorilla/websocket"
 	"github.com/xtaci/kcp-go"
 	"go.uber.org/zap"
@@ -16,31 +15,19 @@ import (
 	"time"
 )
 
-type SendContext struct {
-	Action   uint64
-	Input    proto.Message
-	Output   proto.Message
-	Payloads map[string][]byte
+type SendOptions struct {
+	action uint64
+	input  interface{}
 }
 
-func (s *SendContext) Marshal(c MediaCodec) (payload []byte, err error) {
-	var ok bool
-	payload, ok = s.Payloads[c.Name()]
-	if !ok && s.Input != nil {
-		payload, err = c.Marshal(s.Input)
-		if err != nil {
-			err = NewStatusError(StatusMarshalError, err)
-			return
-		}
-		s.Payloads[c.Name()] = payload
-	}
-	return
+func NewSendOptions(method string, input interface{}) *SendOptions {
+	return &SendOptions{action: ms.methods[method], input: input}
 }
 
 type AuthenticateFunc func(c *Conn) (err error)
 
 type Server struct {
-	*Router
+	*router
 	mu        *sync.RWMutex
 	listeners map[io.Closer]bool
 	conns     map[*Conn]bool
@@ -71,7 +58,7 @@ func NewServer() *Server {
 		panic(err)
 	}
 	return &Server{
-		Router:           NewRouter(),
+		router:           NewRouter(),
 		mu:               &sync.RWMutex{},
 		listeners:        map[io.Closer]bool{},
 		conns:            map[*Conn]bool{},
@@ -90,7 +77,7 @@ func NewServer() *Server {
 
 func (s *Server) newClient(nc net.Conn) *Conn {
 	c := newConn(nc)
-	c.Router = s.Router
+	c.router = s.router
 	c.ClientHeader = NewHeader()
 	c.ServerHeader = NewHeader()
 	return c
@@ -109,7 +96,7 @@ func (s *Server) HandleConn(nc net.Conn) (status *StatusError) {
 	fixHead := make([]byte, 6)
 	_, err := nc.Read(fixHead)
 	if err != nil {
-		status = NewStatusError(StatusBadRequest, "read request error: "+err.Error())
+		status = NewStatusError(StatusBadRequest, "Read request error: "+err.Error())
 		return
 	}
 	if !bytes.Equal(fixHead[0:4], []byte("STMP")) {
@@ -124,13 +111,13 @@ func (s *Server) HandleConn(nc net.Conn) (status *StatusError) {
 	// length
 	n, err := ReadUvarint(nc, fixHead[:1])
 	if err != nil {
-		status = NewStatusError(StatusBadRequest, "read header length error: "+err.Error())
+		status = NewStatusError(StatusBadRequest, "Read header length error: "+err.Error())
 		return
 	}
 	rawHeader := make([]byte, n)
 	_, err = nc.Read(rawHeader)
 	if err != nil {
-		status = NewStatusError(StatusBadRequest, "read header error: "+err.Error())
+		status = NewStatusError(StatusBadRequest, "Read header error: "+err.Error())
 		return
 	}
 	err = c.ClientHeader.Unmarshal(rawHeader)

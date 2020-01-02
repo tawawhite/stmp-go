@@ -14,14 +14,14 @@ import (
 )
 
 type writeEvent struct {
-	p *packet
+	p *Packet
 	r chan error
 }
 
 type Conn struct {
 	net.Conn
 	// router to dispatch actions
-	*Router
+	*router
 	mu *sync.Mutex
 	// the stmp major version
 	Major byte
@@ -38,14 +38,14 @@ type Conn struct {
 	// network conn
 	// content-type codec
 	media MediaCodec
-	// write signal
+	// Write signal
 	writeChan chan *writeEvent
 	// close state
 	closeChan chan struct{}
 	// pending requests & responses
-	requests map[uint16]chan *packet
+	requests map[uint16]chan *Packet
 
-	mid uint32
+	mid *uint32
 
 	onClosed CloseHandlerFunc
 }
@@ -54,65 +54,70 @@ func (c *Conn) SetCloseHandler(h CloseHandlerFunc) {
 	c.onClosed = h
 }
 
-func (c *Conn) Request(options SendContext) (out []byte, err error) {
-	payload, err := options.Marshal(c.media)
-	if err != nil {
-		return nil, err
+// TODO check connection Status
+func (c *Conn) call(ctx context.Context, action uint64, payload []byte, options *CallOptions) (out interface{}, err error) {
+	p := &Packet{Fin: true, Kind: MessageKindRequest, Action: action, Payload: payload}
+	we := &writeEvent{p: p}
+	var r chan *Packet
+	if options.Notify {
+		p.Kind = MessageKindNotify
+	} else {
+		we.r = make(chan error, 1)
+		r = make(chan *Packet, 1)
+		p.Mid = uint16(atomic.AddUint32(c.mid, 1))
+		c.mu.Lock()
+		c.requests[p.Mid] = r
+		c.mu.Unlock()
 	}
-	mid := uint16(atomic.AddUint32(&c.mid, 1))
-	we := &writeEvent{
-		p: &packet{
-			fin:     true,
-			kind:    MessageKindRequest,
-			mid:     mid,
-			action:  options.Action,
-			payload: payload,
-		},
-		r: make(chan error, 1),
-	}
-	r := make(chan *packet, 1)
-	c.mu.Lock()
-	c.requests[mid] = r
-	c.mu.Unlock()
 	c.writeChan <- we
-	err = <-we.r
+	if r == nil {
+		return
+	}
+	select {
+	case err = <-we.r:
+	case <-ctx.Done():
+		err = NewStatusError(StatusCancelled, ctx.Err())
+		return
+	}
 	if err != nil {
 		c.mu.Lock()
-		delete(c.requests, mid)
+		delete(c.requests, p.Mid)
 		c.mu.Unlock()
 		err = NewStatusError(StatusNetworkError, err)
 		return
 	}
-	p := <-r
-	if p.status != StatusOk {
-		err = NewStatusError(p.status, string(p.payload))
-	}
-	out = p.payload
-	if out == nil {
-		options.Output = nil
+	select {
+	case p = <-r:
+	case <-ctx.Done():
+		err = NewStatusError(StatusCancelled, ctx.Err())
 		return
 	}
-	err = c.media.Unmarshal(out, options.Output)
+	if options.Response != nil {
+		*options.Response = p.Payload
+	}
+	if p.Status != StatusOk {
+		err = NewStatusError(p.Status, string(p.Payload))
+		return
+	}
+	if p.Payload == nil {
+		return
+	}
+	out = ms.actions[action].output()
+	err = c.media.Unmarshal(p.Payload, out)
 	return
 }
 
-func (c *Conn) Notify(options SendContext) (err error) {
-	options.Marshal(c.media)
-	payload, err := options.Marshal(c.media)
-	if err != nil {
-		return err
+func (c *Conn) Invoke(ctx context.Context, send *SendOptions, opts ...CallOption) (interface{}, error) {
+	callOptions := NewCallOptions(opts...)
+	var payload []byte
+	if send.input != nil {
+		var err error
+		payload, err = c.media.Marshal(send.input)
+		if err != nil {
+			return nil, NewStatusError(StatusMarshalError, err.Error())
+		}
 	}
-	we := &writeEvent{
-		p: &packet{
-			fin:     true,
-			kind:    MessageKindNotify,
-			action:  options.Action,
-			payload: payload,
-		},
-		r: make(chan error, 1),
-	}
-	c.writeChan <- we
-	return <-we.r
+	return c.call(ctx, send.action, payload, callOptions)
 }
 
 func (c *Conn) Close(status Status, message string) error {
@@ -128,7 +133,7 @@ func newConn(nc net.Conn) *Conn {
 		Conn:      nc,
 		writeChan: make(chan *writeEvent),
 		closeChan: make(chan struct{}),
-		requests:  map[uint16]chan *packet{},
+		requests:  map[uint16]chan *Packet{},
 	}
 }
 
@@ -145,30 +150,30 @@ func (c *Conn) websocketWriteHandshakeResponse(status Status) error {
 func (c *Conn) checkPendingVolume() {
 }
 
-func (c *Conn) dispatchPacket(p *packet) {
-	switch p.kind {
+func (c *Conn) dispatchPacket(p *Packet) {
+	switch p.Kind {
 	case MessageKindPing:
 		c.handlePing()
 	case MessageKindPong:
 		c.handlePong()
 	case MessageKindRequest:
-		go c.handleRequest(p.mid, p.action, p.payload)
+		go c.handleRequest(p.Mid, p.Action, p.Payload)
 	case MessageKindNotify:
-		go c.handleNotify(p.action, p.payload)
+		go c.handleNotify(p.Action, p.Payload)
 	case MessageKindResponse:
-		c.handleResponse(p.mid, p.status, p.payload)
+		c.handleResponse(p.Mid, p.Status, p.Payload)
 	case MessageKindClose:
-		c.handleClose(p.status, string(p.payload))
+		c.handleClose(p.Status, string(p.Payload))
 	}
 }
 
 func (c *Conn) binaryReadChannel(r io.ReadCloser, timeout time.Duration) {
-	p := new(packet)
-	buf := make([]byte, maxStreamHeadSize, maxStreamHeadSize)
+	p := new(Packet)
+	buf := make([]byte, MaxStreamHeadSize, MaxStreamHeadSize)
 	var err error
 	for {
 		c.Conn.SetReadDeadline(time.Now().Add(timeout))
-		err = p.read(r, buf)
+		err = p.Read(r, buf)
 		if err != nil {
 			// TODO
 			return
@@ -181,7 +186,7 @@ func (c *Conn) binaryWriteChannel(w EncodingWriter, timeout time.Duration) {
 	var e *writeEvent
 	var ok bool
 	var err error
-	buf := make([]byte, maxStreamHeadSize, maxStreamHeadSize)
+	buf := make([]byte, MaxStreamHeadSize, MaxStreamHeadSize)
 	for {
 		e, ok = <-c.writeChan
 		if !ok {
@@ -189,7 +194,7 @@ func (c *Conn) binaryWriteChannel(w EncodingWriter, timeout time.Duration) {
 			return
 		}
 		c.Conn.SetWriteDeadline(time.Now().Add(timeout))
-		err = e.p.write(w, buf)
+		err = e.p.Write(w, buf)
 		if e.r != nil {
 			e.r <- err
 		}
@@ -201,7 +206,7 @@ func (c *Conn) binaryWriteChannel(w EncodingWriter, timeout time.Duration) {
 }
 
 func (c *Conn) websocketBinaryReadChannel(wc *websocket.Conn, timeout time.Duration) {
-	p := new(packet)
+	p := new(Packet)
 	var err error
 	var data []byte
 	for {
@@ -211,7 +216,7 @@ func (c *Conn) websocketBinaryReadChannel(wc *websocket.Conn, timeout time.Durat
 			// TODO
 			return
 		}
-		err = p.unmarshalBinary(data)
+		err = p.UnmarshalBinary(data)
 		if err != nil {
 			// TODO
 			return
@@ -225,7 +230,7 @@ func (c *Conn) websocketBinaryWriteChannel(wc *websocket.Conn, timeout time.Dura
 	var ok bool
 	var err error
 	var data []byte
-	buf := make([]byte, maxBinaryHeadSize, maxBinaryHeadSize)
+	buf := make([]byte, MaxBinaryHeadSize, MaxBinaryHeadSize)
 	for {
 		e, ok = <-c.writeChan
 		if !ok {
@@ -233,7 +238,7 @@ func (c *Conn) websocketBinaryWriteChannel(wc *websocket.Conn, timeout time.Dura
 			return
 		}
 		wc.SetWriteDeadline(time.Now().Add(timeout))
-		data = e.p.marshalBinary(buf)
+		data = e.p.MarshalBinary(buf)
 		err = wc.WriteMessage(websocket.BinaryMessage, data)
 		if e.r != nil {
 			e.r <- err
@@ -246,7 +251,7 @@ func (c *Conn) websocketBinaryWriteChannel(wc *websocket.Conn, timeout time.Dura
 }
 
 func (c *Conn) websocketTextReadChannel(wc *websocket.Conn, timeout time.Duration) {
-	p := new(packet)
+	p := new(Packet)
 	var err error
 	var data []byte
 	for {
@@ -256,7 +261,7 @@ func (c *Conn) websocketTextReadChannel(wc *websocket.Conn, timeout time.Duratio
 			// TODO
 			return
 		}
-		err = p.unmarshalText(data)
+		err = p.UnmarshalText(data)
 		if err != nil {
 			// TODO
 			return
@@ -270,7 +275,7 @@ func (c *Conn) websocketTextWriteChannel(wc *websocket.Conn, timeout time.Durati
 	var ok bool
 	var err error
 	var data []byte
-	buf := make([]byte, maxTextHeadSize, maxTextHeadSize)
+	buf := make([]byte, MaxTextHeadSize, MaxTextHeadSize)
 	for {
 		e, ok = <-c.writeChan
 		if !ok {
@@ -278,7 +283,7 @@ func (c *Conn) websocketTextWriteChannel(wc *websocket.Conn, timeout time.Durati
 			return
 		}
 		wc.SetWriteDeadline(time.Now().Add(timeout))
-		data = e.p.marshalText(buf)
+		data = e.p.MarshalText(buf)
 		err = wc.WriteMessage(websocket.TextMessage, data)
 		if e.r != nil {
 			e.r <- err
@@ -291,7 +296,7 @@ func (c *Conn) websocketTextWriteChannel(wc *websocket.Conn, timeout time.Durati
 }
 
 func (c *Conn) handlePing() {
-	c.writeChan <- &writeEvent{p: &packet{kind: MessageKindPong}}
+	c.writeChan <- &writeEvent{p: &Packet{Kind: MessageKindPong}}
 }
 
 func (c *Conn) handlePong() {
@@ -304,19 +309,19 @@ func (c *Conn) handleClose(status Status, message string) {
 
 func (c *Conn) handleNotify(action uint64, payload []byte) {
 	ctx := WithConn(context.Background(), c)
-	c.Dispatch(ctx, action, payload, c.media)
+	c.dispatch(ctx, action, payload, c.media)
 }
 
 func (c *Conn) handleRequest(mid uint16, action uint64, payload []byte) {
 	ctx := WithConn(context.Background(), c)
-	status, payload := c.Dispatch(ctx, action, payload, c.media)
-	we := &writeEvent{p: &packet{
-		fin:     true,
-		kind:    MessageKindResponse,
-		mid:     mid,
-		action:  action,
-		status:  status,
-		payload: payload,
+	status, payload := c.dispatch(ctx, action, payload, c.media)
+	we := &writeEvent{p: &Packet{
+		Fin:     true,
+		Kind:    MessageKindResponse,
+		Mid:     mid,
+		Action:  action,
+		Status:  status,
+		Payload: payload,
 	}}
 	c.writeChan <- we
 }
@@ -327,7 +332,7 @@ func (c *Conn) handleResponse(mid uint16, status Status, payload []byte) {
 	delete(c.requests, mid)
 	c.mu.Unlock()
 	if ok {
-		q <- &packet{status: status, payload: payload}
+		q <- &Packet{Status: status, Payload: payload}
 	}
 }
 

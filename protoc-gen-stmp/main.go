@@ -25,7 +25,9 @@ func main() {
 	if len(g.request.FileToGenerate) == 0 {
 		g.fail("no files to generate")
 	}
-	g.parseOptions(g.request.GetParameter())
+	if err = g.parseOptions(g.request.GetParameter()); err != nil {
+		g.error(err, "invalid option")
+	}
 	serviceOptions := map[string]map[string]interface{}{}
 	for _, file := range g.request.ProtoFile {
 		serviceOptions[file.GetName()] = map[string]interface{}{}

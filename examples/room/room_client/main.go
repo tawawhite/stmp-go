@@ -4,34 +4,81 @@ package room_client
 
 import (
 	"context"
+	"fmt"
+	"github.com/acrazing/stmp-go/examples/room/room"
 	"github.com/acrazing/stmp-go/examples/room/room_proto"
 	"github.com/acrazing/stmp-go/stmp"
-	"github.com/golang/protobuf/ptypes/empty"
+	"log"
+	"os"
+	"os/signal"
+	"strings"
+	"syscall"
 )
 
-type RoomScene struct {
-	rc   room_proto.STMPRoomServiceClient
-	room *room_proto.RoomModel
+type LobbyScene struct {
+	us *room.UserStore
+	uc room_proto.STMPUserServiceClient
 }
 
-func NewRoomEventsListener() room_proto.STMPRoomEventsServer {
-	return &RoomScene{}
+func (ls *LobbyScene) Mount() {
+	log.Println("Entering lobby scene...")
+	out, err := ls.uc.ListUser(context.Background(), &room_proto.ListUserInput{Limit: 10})
+	if err != nil {
+		log.Println("list user error:", err)
+		return
+	}
+	ls.us.Push(out.Users)
 }
 
-func (re *RoomScene) UserEnter(ctx context.Context, in *room_proto.UserEnterEvent) (out *empty.Empty, err error) {
-	return
+func (ls *LobbyScene) Unmount() {
+	log.Println("Exiting lobby scene...")
 }
 
-func (re *RoomScene) UserExit(ctx context.Context, in *room_proto.UserExitEvent) (out *empty.Empty, err error) {
-	return
+func NewLobbyScene(uc room_proto.STMPUserServiceClient) *LobbyScene {
+	return &LobbyScene{uc: uc}
 }
 
 func main() {
-	conn, err := stmp.DialTCP("127.0.0.1:5001", nil)
+	log.Println("\x1b[1mWelcome to stmp chat room!\x1b[0m")
+	log.Println("\x1b[1mPlease enter your name: \x1b[0m")
+	var name string
+	_, err := fmt.Scanln(&name)
 	if err != nil {
-		panic(err)
+		log.Fatalln("\nERROR: ", err)
 	}
-	rc := room_proto.STMPNewRoomServiceClient(conn)
+	var addr = "ws://127.0.0.1:5001/ws"
+	log.Print("\x1b[1mPlease enter server addr [" + addr + "]: \x1b[0m")
+	_, err = fmt.Scanln(&addr)
+	if err != nil {
+		log.Fatalln("\nERROR:", err)
+	}
+	var conn *stmp.Conn
+	var dialOptions = &stmp.DialOptions{Header: stmp.NewHeader()}
+	dialOptions.Header.Set("X-User-Name", name)
+	if strings.HasPrefix(addr, "ws://") || strings.HasPrefix(addr, "wss://") {
+		log.Println("dialing", addr)
+		conn, err = stmp.DialWebSocket(addr, dialOptions)
+	} else if strings.HasPrefix(addr, "kcp://") {
+		log.Println("dialing", addr)
+		conn, err = stmp.DialKCP(addr[6:], dialOptions)
+	} else if strings.HasPrefix(addr, "tcp://") || strings.Index(addr, "://") == -1 {
+		log.Println("dialing", addr)
+		conn, err = stmp.DialTCP(strings.TrimPrefix(addr, "tcp://"), dialOptions)
+	} else {
+		log.Println("ERROR: unsupported address format:", addr)
+		os.Exit(1)
+	}
+	if err != nil {
+		log.Fatalln("ERROR:", err)
+	}
 
-	re := NewRoomEventsListener(rc)
+	uc := room_proto.STMPNewUserServiceClient(conn)
+	ls := NewLobbyScene(uc)
+
+	ls.Mount()
+
+	killSignal := make(chan os.Signal)
+	signal.Notify(killSignal, syscall.SIGINT, syscall.SIGTERM)
+	sig := <-killSignal
+	log.Printf("exiting for receiving signal: %s\n", sig.String())
 }

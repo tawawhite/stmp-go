@@ -16,28 +16,28 @@ const (
 	MessageKindClose    = 0x5
 )
 
-func isFin(kind byte) bool {
+func ShouldAlwaysFinal(kind byte) bool {
 	// always true for following is not implemented
 	return true
 }
 
-func isHead(kind byte) bool {
+func ShouldHeadOnly(kind byte) bool {
 	return kind == MessageKindPing || kind == MessageKindPong
 }
 
-func isMid(kind byte) bool {
+func HasMid(kind byte) bool {
 	return kind == MessageKindRequest || kind == MessageKindResponse
 }
 
-func isAction(kind byte) bool {
+func HasAction(kind byte) bool {
 	return kind == MessageKindRequest || kind == MessageKindNotify
 }
 
-func isStatus(kind byte) bool {
+func HasStatus(kind byte) bool {
 	return kind == MessageKindResponse || kind == MessageKindClose
 }
 
-func isKind(kind byte) bool {
+func IsValidKind(kind byte) bool {
 	switch kind {
 	case MessageKindPing, MessageKindPong, MessageKindRequest, MessageKindNotify, MessageKindResponse, MessageKindClose:
 		return true
@@ -81,6 +81,7 @@ const (
 	StatusUnknown                    Status = 0x06
 	StatusUnmarshalError             Status = 0x07
 	StatusMarshalError               Status = 0x08
+	StatusCancelled                  Status = 0x09
 	StatusBadRequest                 Status = 0x20
 	StatusUnauthorized               Status = 0x21
 	StatusNotFound                   Status = 0x22
@@ -103,6 +104,7 @@ var MapStatus = map[Status]string{
 	StatusUnknown:                    "Unknown",
 	StatusUnmarshalError:             "Unmarshal error",
 	StatusMarshalError:               "Marshal error",
+	StatusCancelled:                  "Cancelled",
 	StatusBadRequest:                 "Bad request",
 	StatusUnauthorized:               "Unauthorized",
 	StatusNotFound:                   "Not found",
@@ -153,9 +155,9 @@ func DetectError(err error, rollbackStatus Status) (Status, []byte) {
 
 const AcceptContentType = "Accept"
 const AcceptEncoding = "Accept-Encoding"
-const AcceptPacketFormat = "Accept-packet-Format"
+const AcceptPacketFormat = "Accept-Packet-Format"
 
 const DetermineContentType = "Content-Type"
 const DetermineEncoding = "Content-Encoding"
-const DeterminePacketFormat = "packet-Format"
+const DeterminePacketFormat = "Packet-Format"
 const DetermineStmpVersion = "Stmp-Version"

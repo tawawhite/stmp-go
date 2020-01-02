@@ -9,89 +9,89 @@ import (
 	"io"
 )
 
-type packet struct {
-	fin  bool
-	kind byte
+type Packet struct {
+	Fin  bool
+	Kind byte
 	// except ping, close
-	mid uint16
+	Mid uint16
 	// request
-	action uint64
+	Action uint64
 	// response, close
-	status Status
+	Status Status
 	// except ping
-	payload []byte
+	Payload []byte
 }
 
 var (
 	invalidReservedHeadBits = errors.New("invalid reserved head bits")
 	invalidHeadFlags        = errors.New("invalid head flags")
-	invalidMessageKind      = errors.New("invalid message kind")
-	invalidPacketHead       = errors.New("invalid packet head")
-	invalidPacketMid        = errors.New("invalid packet mid")
-	invalidPacketAction     = errors.New("invalid packet action")
-	invalidPacketStatus     = errors.New("invalid packet status")
-	invalidPacketPayload    = errors.New("invalid packet payload")
+	invalidMessageKind      = errors.New("invalid message Kind")
+	invalidPacketHead       = errors.New("invalid Packet head")
+	invalidPacketMid        = errors.New("invalid Packet Mid")
+	invalidPacketAction     = errors.New("invalid Packet Action")
+	invalidPacketStatus     = errors.New("invalid Packet Status")
+	invalidPacketPayload    = errors.New("invalid Packet Payload")
 )
 
 var emptyBytes = make([]byte, 0, 0)
 
-func (p *packet) unmarshalHead(h byte) error {
+func (p *Packet) UnmarshalHead(h byte) error {
 	if h&0b111 != 0 {
 		return invalidReservedHeadBits
 	}
-	p.fin = h&0x80 != 0
-	p.kind = (h >> 4) & 0b111
+	p.Fin = h&0x80 != 0
+	p.Kind = (h >> 4) & 0b111
 	head := h&0b1000 != 0
-	if !isKind(p.kind) {
+	if !IsValidKind(p.Kind) {
 		return invalidMessageKind
 	}
-	if isFin(p.kind) && !p.fin {
+	if ShouldAlwaysFinal(p.Kind) && !p.Fin {
 		return invalidHeadFlags
 	}
-	if isHead(p.kind) && !head {
+	if ShouldHeadOnly(p.Kind) && !head {
 		return invalidHeadFlags
 	}
 	if head {
-		p.payload = nil
+		p.Payload = nil
 	} else {
-		p.payload = emptyBytes
+		p.Payload = emptyBytes
 	}
 	return nil
 }
 
-func (p *packet) marshalHead(buf []byte, ps bool) []byte {
+func (p *Packet) MarshalHead(buf []byte, ps bool) []byte {
 	n := 1
-	buf[0] = p.kind << OffsetKind
-	if isFin(p.kind) || p.fin {
+	buf[0] = p.Kind << OffsetKind
+	if ShouldAlwaysFinal(p.Kind) || p.Fin {
 		buf[0] |= MaskFin
 	}
-	if isHead(p.kind) || len(p.payload) == 0 {
+	if ShouldHeadOnly(p.Kind) || len(p.Payload) == 0 {
 		buf[0] |= MaskHead
 	}
-	if isMid(p.kind) {
-		binary.LittleEndian.PutUint16(buf[n:], p.mid)
+	if HasMid(p.Kind) {
+		binary.LittleEndian.PutUint16(buf[n:], p.Mid)
 		n += 2
 	}
-	if isAction(p.kind) {
-		n += binary.PutUvarint(buf[n:], p.action)
+	if HasAction(p.Kind) {
+		n += binary.PutUvarint(buf[n:], p.Action)
 	}
-	if isStatus(p.kind) {
-		buf[n] = byte(p.status)
+	if HasStatus(p.Kind) {
+		buf[n] = byte(p.Status)
 		n += 1
 	}
-	if ps && !isHead(p.kind) && len(p.payload) > 0 {
-		n += binary.PutUvarint(buf[n:], uint64(len(p.payload)))
+	if ps && !ShouldHeadOnly(p.Kind) && len(p.Payload) > 0 {
+		n += binary.PutUvarint(buf[n:], uint64(len(p.Payload)))
 	}
 	return buf[:n]
 }
 
-func (p *packet) write(w EncodingWriter, buf []byte) (err error) {
-	buf = p.marshalHead(buf, true)
+func (p *Packet) Write(w EncodingWriter, buf []byte) (err error) {
+	buf = p.MarshalHead(buf, true)
 	if _, err = w.Write(buf); err != nil {
 		return
 	}
-	if !isHead(p.kind) && len(p.payload) > 0 {
-		if _, err = w.Write(p.payload); err != nil {
+	if !ShouldHeadOnly(p.Kind) && len(p.Payload) > 0 {
+		if _, err = w.Write(p.Payload); err != nil {
 			return
 		}
 	}
@@ -104,90 +104,90 @@ func (p *packet) write(w EncodingWriter, buf []byte) (err error) {
 // RESPONSE: <HEAD><MID><STATUS><PS><P> 	-> 22
 // CLOSE: <HEAD><STATUS><PS><P>				-> 12
 
-const maxStreamHeadSize = 23
-const maxBinaryHeadSize = 13
-const maxTextHeadSize = 21
+const MaxStreamHeadSize = 23
+const MaxBinaryHeadSize = 13
+const MaxTextHeadSize = 21
 
-func (p *packet) read(r io.ReadCloser, buf []byte) (err error) {
+func (p *Packet) Read(r io.ReadCloser, buf []byte) (err error) {
 	if _, err = r.Read(buf[:1]); err != nil {
 		return
 	}
-	if err = p.unmarshalHead(buf[0]); err != nil {
+	if err = p.UnmarshalHead(buf[0]); err != nil {
 		return
 	}
-	if isMid(p.kind) {
-		if p.mid, err = ReadUint16(r, buf[:2]); err != nil {
+	if HasMid(p.Kind) {
+		if p.Mid, err = ReadUint16(r, buf[:2]); err != nil {
 			return
 		}
 	}
-	if isAction(p.kind) {
-		if p.action, err = ReadUvarint(r, buf[:1]); err != nil {
+	if HasAction(p.Kind) {
+		if p.Action, err = ReadUvarint(r, buf[:1]); err != nil {
 			return
 		}
 	}
-	if isStatus(p.kind) {
+	if HasStatus(p.Kind) {
 		if _, err = r.Read(buf[:1]); err != nil {
 			return
 		}
-		p.status = Status(buf[0])
+		p.Status = Status(buf[0])
 	}
-	if p.payload != nil {
+	if p.Payload != nil {
 		var ps uint64
 		if ps, err = ReadUvarint(r, buf[:1]); err != nil {
 			return
 		}
-		p.payload = make([]byte, ps)
-		_, err = r.Read(p.payload)
+		p.Payload = make([]byte, ps)
+		_, err = r.Read(p.Payload)
 	}
 	return
 }
 
-func (p *packet) marshalBinary(buf []byte) []byte {
-	buf = p.marshalHead(buf, false)
-	data := make([]byte, len(buf)+len(p.payload), len(buf)+len(p.payload))
+func (p *Packet) MarshalBinary(buf []byte) []byte {
+	buf = p.MarshalHead(buf, false)
+	data := make([]byte, len(buf)+len(p.Payload), len(buf)+len(p.Payload))
 	copy(data, buf)
-	copy(data[len(buf):], p.payload)
+	copy(data[len(buf):], p.Payload)
 	return data
 }
 
-func (p *packet) unmarshalBinary(data []byte) (err error) {
+func (p *Packet) UnmarshalBinary(data []byte) (err error) {
 	if len(data) < 1 {
 		return invalidPacketHead
 	}
-	if err = p.unmarshalHead(data[0]); err != nil {
+	if err = p.UnmarshalHead(data[0]); err != nil {
 		return
 	}
 	var n int
 	data = data[1:]
-	// mid
-	if isMid(p.kind) {
+	// Mid
+	if HasMid(p.Kind) {
 		if len(data) < 2 {
 			return invalidPacketMid
 		}
-		p.mid = binary.LittleEndian.Uint16(data)
+		p.Mid = binary.LittleEndian.Uint16(data)
 		data = data[3:]
 	}
-	if isAction(p.kind) {
+	if HasAction(p.Kind) {
 		if len(data) < 1 {
 			return invalidPacketAction
 		}
-		p.action, n = binary.Uvarint(data)
+		p.Action, n = binary.Uvarint(data)
 		if n <= 0 {
 			return invalidPacketAction
 		}
 		data = data[n:]
 	}
-	if isStatus(p.kind) {
+	if HasStatus(p.Kind) {
 		if len(data) < 1 {
 			return invalidPacketStatus
 		}
-		p.status = Status(data[0])
+		p.Status = Status(data[0])
 		data = data[1:]
 	}
-	if isHead(p.kind) || p.payload == nil && len(data) > 0 {
+	if ShouldHeadOnly(p.Kind) || p.Payload == nil && len(data) > 0 {
 		return invalidPacketPayload
 	}
-	p.payload = data
+	p.Payload = data
 	return nil
 }
 
@@ -197,28 +197,28 @@ func (p *packet) unmarshalBinary(data []byte) (err error) {
 // NOTIFY: 		N<ACTION>[\nP]			-> 18
 // RESPONSE: 	S<MID>:<STATUS>[\nP]	-> 9
 // CLOSE:		C<STATUS>[\nP]			-> 4
-func (p *packet) marshalText(buf []byte) []byte {
+func (p *Packet) MarshalText(buf []byte) []byte {
 	n := 0
-	buf[n] = MapKindText[p.kind]
+	buf[n] = MapKindText[p.Kind]
 	n += 1
-	if isMid(p.kind) {
-		n += AppendHex(uint64(p.mid), buf[n:])
+	if HasMid(p.Kind) {
+		n += AppendHex(uint64(p.Mid), buf[n:])
 		buf[n] = ':'
 		n += 1
 	}
-	if isAction(p.kind) {
-		n += AppendHex(p.action, buf[n:])
+	if HasAction(p.Kind) {
+		n += AppendHex(p.Action, buf[n:])
 	}
-	if isStatus(p.kind) {
-		n += AppendHex(uint64(p.status), buf[n:])
+	if HasStatus(p.Kind) {
+		n += AppendHex(uint64(p.Status), buf[n:])
 	}
-	if !isHead(p.kind) && len(p.payload) > 0 {
+	if !ShouldHeadOnly(p.Kind) && len(p.Payload) > 0 {
 		buf[n] = '\n'
 		n += 1
 	}
-	data := make([]byte, n+len(p.payload), n+len(p.payload))
+	data := make([]byte, n+len(p.Payload), n+len(p.Payload))
 	copy(data, buf[:n])
-	copy(data, p.payload)
+	copy(data, p.Payload)
 	return data
 }
 
@@ -229,48 +229,48 @@ func min(x, y int) int {
 	return y
 }
 
-func (p *packet) unmarshalText(data []byte) (err error) {
+func (p *Packet) UnmarshalText(data []byte) (err error) {
 	if len(data) == 0 {
 		return invalidPacketHead
 	}
 	var ok bool
-	if p.kind, ok = MapTextKind[data[0]]; !ok {
+	if p.Kind, ok = MapTextKind[data[0]]; !ok {
 		return invalidMessageKind
 	}
 	data = data[1:]
 	var i int
-	if isMid(p.kind) {
+	if HasMid(p.Kind) {
 		i = bytes.IndexByte(data[:min(17, len(data))], ':')
 		if i == -1 {
 			return invalidPacketMid
 		}
-		if p.mid, err = ParseHexUint16(data[:i]); err != nil {
+		if p.Mid, err = ParseHexUint16(data[:i]); err != nil {
 			err = errors.New(invalidPacketMid.Error() + ": " + err.Error())
 			return
 		}
 		data = data[i+1:]
 	}
-	if isAction(p.kind) {
+	if HasAction(p.Kind) {
 		i = bytes.IndexByte(data[:min(17, len(data))], '\n')
 		if i == -1 {
 			i = len(data)
 		}
-		if p.action, err = ParseHexUint64(data[:i]); err != nil {
+		if p.Action, err = ParseHexUint64(data[:i]); err != nil {
 			err = errors.New(invalidPacketAction.Error() + ": " + err.Error())
 			return
 		}
 		data = data[i:]
 	}
-	if isStatus(p.kind) {
+	if HasStatus(p.Kind) {
 		if len(data) < 1 {
 			return invalidPacketStatus
 		}
-		p.status = Status(data[0])
+		p.Status = Status(data[0])
 		data = data[1:]
 	}
-	if isHead(p.kind) && len(data) > 0 {
+	if ShouldHeadOnly(p.Kind) && len(data) > 0 {
 		return invalidPacketPayload
 	}
-	p.payload = data[1:]
+	p.Payload = data[1:]
 	return
 }

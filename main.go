@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 	"time"
+	"unsafe"
 )
 
 type flagSet flag.FlagSet
@@ -58,6 +59,45 @@ var cmds = map[string]func(flag *flagSet){
 		// should panic
 		_ = v1[:3]
 	},
+	"debugSizeof": func(flag *flagSet) {
+		type empty struct{}
+		type emptyField struct {
+			empty empty
+		}
+		type emptyFieldMore struct {
+			empty  empty
+			size   int
+			empty2 empty
+			empty3 empty
+			size2  int
+		}
+		// 0, 0, 16, empty fields cost 0 space
+		log.Printf("empty size: %d, emptyField size: %d, emptyFieldMore size: %d.", unsafe.Sizeof(empty{}), unsafe.Sizeof(emptyField{}), unsafe.Sizeof(emptyFieldMore{}))
+	},
+	"debugMethod": func(flag *flagSet) {
+		d1 := &debugMethod{}
+		d2 := &debugMethod{}
+		// will panic
+		//log.Println("d1.echo == d2.echo:", compare(d1.echo, d2.echo))
+		// false
+		log.Println("empty struct pointer:", d1 == d2)
+		// true
+		log.Println("empty struct:", debugMethod{} == debugMethod{})
+		// false
+		log.Println("struct pointer:", &debugMethodWithField{} == &debugMethodWithField{})
+		// true
+		log.Println("struct:", debugMethodWithField{} == debugMethodWithField{})
+	},
+}
+
+type debugMethod struct {
+}
+
+type debugMethodWithField struct {
+	v int
+}
+
+func (*debugMethod) echo() {
 }
 
 func usage() {

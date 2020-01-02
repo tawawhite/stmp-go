@@ -17,15 +17,42 @@ import (
 	"time"
 )
 
+type CallOptions struct {
+	Notify   bool
+	Response *[]byte
+}
+
+type CallOption func(o *CallOptions)
+
+func Notify() CallOption {
+	return func(o *CallOptions) {
+		o.Notify = true
+	}
+}
+
+func KeepResponse(slot *[]byte) CallOption {
+	return func(o *CallOptions) {
+		o.Response = slot
+	}
+}
+
+func NewCallOptions(opts ...CallOption) *CallOptions {
+	o := &CallOptions{}
+	for _, opt := range opts {
+		opt(o)
+	}
+	return o
+}
+
 type DialOptions struct {
 	// the headers for writeHandshakeResponse
 	Header Header
 	// writeHandshakeResponse timeout, each writeHandshakeResponse p timeout
-	// which means the fin timeout is double
+	// which means the Fin timeout is double
 	HandshakeTimeout time.Duration
-	// write timeout
+	// Write timeout
 	WriteTimeout time.Duration
-	// read timeout
+	// Read timeout
 	ReadTimeout time.Duration
 	// could be text or binary for websocket
 	// else only could be binary
@@ -113,7 +140,7 @@ func loadTLSClientConfig(certFile string, opts *DialOptions) (*tls.Config, error
 
 func newClientConn(nc net.Conn, opts *DialOptions) (c *Conn) {
 	c = newConn(nc)
-	c.Router = NewRouter()
+	c.router = NewRouter()
 	c.ClientHeader = opts.Header
 	c.ClientMessage = opts.Message
 	return
@@ -190,7 +217,7 @@ func WebSocketClient(wc *websocket.Conn, opts *DialOptions) (c *Conn, err error)
 		}
 	}()
 	kind, data, err := wc.ReadMessage()
-	// read header
+	// Read header
 	if err != nil {
 		err = NewStatusError(StatusNetworkError, err)
 		return
@@ -211,19 +238,19 @@ func WebSocketClient(wc *websocket.Conn, opts *DialOptions) (c *Conn, err error)
 		}
 		status, err = strconv.ParseUint(string(data[4:sep]), 16, 8)
 		if err != nil {
-			// invalid status
+			// invalid Status
 			err = NewStatusError(StatusProtocolError, err)
 			return
 		}
 		if status != 0 {
-			// bad status
+			// bad Status
 			err = Status(status)
 			return
 		}
 		data = data[sep+1:]
 	} else {
 		if data[4] != 0 {
-			// bad status
+			// bad Status
 			err = Status(data[4])
 			return
 		}

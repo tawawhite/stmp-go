@@ -16,16 +16,14 @@ import "stmp/stmp.proto";
 // the user model for the online server, does not represent the real user model
 message UserModel {
     enum Status {
-        Reserved = 0;
+        Offline = 0;
         Online = 1;
         Chatting = 2;
         ChattingOffline = 3;
     }
-    string id = 1;
-    string name = 2;
-    string avatar = 3;
-    int64 roomId = 4;
-    Status status = 5;
+    string name = 1;
+    string room = 2;
+    Status status = 3;
 }
 
 message ListUserInput {
@@ -40,31 +38,29 @@ message ListUserOutput {
 
 service UserService {
     option (stmp.service) = 0x10;
-    rpc ListUser(ListUserInput) returns (ListUserOutput) {
+    rpc ListUser (ListUserInput) returns (ListUserOutput) {
         option (stmp.method) = 0x01;
     }
 }
 
 service UserEvents {
     option (stmp.service) = 0x11;
-    rpc StatusUpdated(UserModel) returns (google.protobuf.Empty) {
-        option(stmp.method) = 0x01;
+    rpc StatusUpdated (UserModel) returns (google.protobuf.Empty) {
+        option (stmp.method) = 0x01;
     }
 }
 
 message ChatMessageModel {
-    int64 id = 1;
-    int64 cid = 2;
-    int64 userId = 3;
-    string content = 4;
-    int64 createdAt = 5;
+    string room = 1;
+    string user = 2;
+    string content = 3;
+    int64 createdAt = 4;
 }
 
 // a simple room, no seat, no stand by, anyone could join it
 message RoomModel {
-    int64 id = 1;
     string name = 2;
-    map<int64, UserModel> users = 3;
+    map<string, UserModel> users = 3;
     repeated ChatMessageModel messages = 4;
 }
 
@@ -83,17 +79,16 @@ message ListRoomOutput {
 }
 
 message JoinRoomInput {
-    int64 id = 1;
+    string room = 1;
 }
 
 message ExitRoomInput {
-    int64 id = 1;
+    string room = 1;
 }
 
 message SendMessageInput {
-    int64 roomId = 1;
-    int64 cid = 2;
-    string content = 3;
+    string room = 1;
+    string content = 2;
 }
 
 service RoomService {
@@ -116,19 +111,12 @@ service RoomService {
 }
 
 message UserEnterEvent {
-    int64 roomId = 1;
+    string room = 1;
     UserModel user = 2;
 }
 
 message UserExitEvent {
-    int64 roomId = 1;
-    int64 userId = 2;
-}
-
-message NewMessageEvent {
-    int64 roomId = 1;
-    int64 userId = 2;
-    string content = 3;
+    string room = 1;
 }
 
 service RoomEvents {
@@ -139,7 +127,7 @@ service RoomEvents {
     rpc UserExit (UserExitEvent) returns (google.protobuf.Empty) {
         option (stmp.method) = 0x02;
     }
-    rpc NewMessage (NewMessageEvent) returns (google.protobuf.Empty) {
+    rpc NewMessage (ChatMessageModel) returns (google.protobuf.Empty) {
         option (stmp.method) = 0x03;
     }
 }

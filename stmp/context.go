@@ -23,3 +23,13 @@ func WithServer(ctx context.Context, srv *Server) context.Context {
 func SelectServer(ctx context.Context) *Server {
 	return ctx.Value(ctxServerKey{}).(*Server)
 }
+
+type ctxActionKey struct{}
+
+func WithAction(ctx context.Context, action uint64) context.Context {
+	return context.WithValue(ctx, ctxActionKey{}, action)
+}
+
+func SelectAction(ctx context.Context) uint64 {
+	return ctx.Value(ctxActionKey{}).(uint64)
+}
