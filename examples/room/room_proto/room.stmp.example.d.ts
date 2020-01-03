@@ -6,7 +6,7 @@
 import {CallOptions, Connection, ConnFilter, Context, Server} from 'stmp'
 import pb from "./room.pb";
 
-export = stmp
+export default stmp
 
 declare namespace stmp {
     // the top level namespace always is stmp

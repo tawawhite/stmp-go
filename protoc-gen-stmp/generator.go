@@ -5,6 +5,7 @@ package main
 
 import (
 	"errors"
+	"github.com/golang/protobuf/protoc-gen-go/descriptor"
 	"github.com/golang/protobuf/protoc-gen-go/plugin"
 	"log"
 	"os"
@@ -21,10 +22,10 @@ type generatorOptions struct {
 	// then you can set this option as ./foo.pb.js
 	// the path is relative to current directory
 	jspb string
-	// js output file name, all the input files will be composed to one single file(same to pbjs)
-	// the path is relative to current directory, that means you must ensure it under protoc output path
+	// js Output file name, all the Input files will be composed to one single file(same to pbjs)
+	// the path is relative to current directory, that means you must ensure it under protoc Output path
 	jsout string
-	// generate .d.ts for js out, if output lang include js, the is true in default,
+	// generate .d.ts for js out, if Output lang include js, the is true in default,
 	// you can set as empty string or "0" to disable it, this is dependent on pbts generated .d.ts file
 	// the file name is same to jspb(replace .js to .d.ts)
 	jsdts bool
@@ -33,9 +34,10 @@ type generatorOptions struct {
 }
 
 type generator struct {
-	request  *plugin_go.CodeGeneratorRequest  // The input.
-	response *plugin_go.CodeGeneratorResponse // The output.
-	options  *generatorOptions
+	request    *plugin_go.CodeGeneratorRequest  // The Input.
+	response   *plugin_go.CodeGeneratorResponse // The Output.
+	options    *generatorOptions
+	typesCache map[string][2]interface{}
 }
 
 func newGenerator() *generator {
@@ -47,6 +49,7 @@ func newGenerator() *generator {
 			jsmodule: "cjs",
 			jsdts:    true,
 		},
+		typesCache: map[string][2]interface{}{},
 	}
 }
 
@@ -99,8 +102,8 @@ func (g *generator) parseOptions(argv string) error {
 
 // error reports a problem, including an error, and exits the program.
 func (g *generator) error(err error, msgs ...string) {
-	s := strings.Join(msgs, " ") + ":" + err.Error()
-	log.Print("protoc-gen-stmp: error:", s)
+	s := strings.Join(msgs, " ") + ": " + err.Error()
+	log.Print("protoc-gen-stmp: error: ", s)
 	os.Exit(1)
 }
 
@@ -109,4 +112,87 @@ func (g *generator) fail(msgs ...string) {
 	s := strings.Join(msgs, " ")
 	log.Print("protoc-gen-stmp: error:", s)
 	os.Exit(1)
+}
+
+func (g *generator) lookupFile(filename string) *descriptor.FileDescriptorProto {
+	for _, f := range g.request.ProtoFile {
+		if f.GetName() == filename {
+			return f
+		}
+	}
+	return nil
+}
+
+func enumIs(pkg string, name string, enumTypes []*descriptor.EnumDescriptorProto) (bool, interface{}) {
+	if len(enumTypes) == 0 {
+		return false, nil
+	}
+	for _, e := range enumTypes {
+		if pkg+"."+e.GetName() == name {
+			return true, e
+		}
+	}
+	return false, nil
+}
+
+func messageIs(pkg string, name string, messageTypes []*descriptor.DescriptorProto) (bool, interface{}) {
+	if len(messageTypes) == 0 {
+		return false, nil
+	}
+	for _, m := range messageTypes {
+		subPkg := pkg + "." + m.GetName()
+		if subPkg == name {
+			return true, m
+		}
+		if !strings.HasPrefix(name, subPkg) {
+			continue
+		}
+		if ok, v := messageIs(subPkg, name, m.GetNestedType()); ok {
+			return ok, v
+		}
+		if ok, v := enumIs(subPkg, name, m.GetEnumType()); ok {
+			return ok, v
+		}
+	}
+	return false, nil
+}
+
+func (g *generator) lookupType(name string) (*descriptor.FileDescriptorProto, interface{}) {
+	_, ok := g.typesCache[name]
+	if !ok {
+		for _, file := range g.request.ProtoFile {
+			pkg := file.GetPackage()
+			if !strings.HasPrefix(name, pkg) {
+				continue
+			}
+			if ok, v := messageIs(pkg, name, file.GetMessageType()); ok {
+				g.typesCache[name] = [2]interface{}{file, v}
+				break
+			}
+			if ok, v := enumIs(pkg, name, file.GetEnumType()); ok {
+				g.typesCache[name] = [2]interface{}{file, v}
+				break
+			}
+		}
+		_, ok := g.typesCache[name]
+		if !ok {
+			g.typesCache[name] = [2]interface{}{nil, nil}
+		}
+	}
+	if g.typesCache[name][0] == nil {
+		return nil, nil
+	} else {
+		return g.typesCache[name][0].(*descriptor.FileDescriptorProto), g.typesCache[name][1]
+	}
+}
+
+func upFirst(str string) string {
+	if len(str) == 0 {
+		return str
+	}
+	c0 := str[0]
+	if c0 >= 'a' && c0 <= 'z' {
+		return string(c0-('a'-'A')) + str[1:]
+	}
+	return str
 }

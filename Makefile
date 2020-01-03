@@ -27,7 +27,7 @@ build-example-proto: build-gen-stmp
 		--proto_path=googleapis \
 		--plugin=protoc-gen-stmp=$$PWD/out/protoc-gen-stmp \
 		--gogofast_out=$$GOPATH/src \
-		--stmp_out=lang=go+esm+dts:$$GOPATH/src \
+		--stmp_out=lang=go+js,js.pb=./examples/room/room_proto/room.pb.js,js.out=./examples/room/room_proto/room.stmp.js:$$GOPATH/src \
 		./examples/room/room_proto/*.proto
 
 build-example-proto-esm:

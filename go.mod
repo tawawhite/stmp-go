@@ -14,6 +14,7 @@ require (
 	github.com/templexxx/xor v0.0.0-20191217153810-f85b25db303b // indirect
 	github.com/tinylib/msgp v1.1.1
 	github.com/tjfoc/gmsm v1.2.0 // indirect
+	github.com/twmb/murmur3 v1.0.0
 	github.com/vmihailenco/msgpack v4.0.4+incompatible
 	github.com/xtaci/kcp-go v5.4.20+incompatible
 	go.uber.org/zap v1.13.0
