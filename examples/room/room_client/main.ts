@@ -6,15 +6,15 @@
 
 import {Context, dialWebSocket, Server} from "stmp";
 import pb from "../room_proto/room.pb";
-import stmp from "../room_proto/room.stmp.example";
 import ListUserInput = pb.stmp.examples.room.ListUserInput;
 import ListUserOutput = pb.stmp.examples.room.ListUserOutput;
+import stmp from "../room_proto/room.stmp";
 import UserServiceServer = stmp.stmp.examples.room.UserServiceServer;
 import UserServiceClient = stmp.stmp.examples.room.UserServiceClient;
 import UserServiceBroadcaster = stmp.stmp.examples.room.UserServiceBroadcaster;
 
 class UserService implements UserServiceServer {
-    async listUser(ctx: Context, input: ListUserInput, output: ListUserOutput) {
+    async ListUser(ctx: Context, input: ListUserInput, output: ListUserOutput) {
     }
 }
 
@@ -24,8 +24,8 @@ export async function main() {
     UserServiceServer.register(srv, userService);
     const conn = await dialWebSocket("ws://127.0.0.1:5001/ws");
     const nc = new UserServiceClient(conn);
-    const users = await nc.listUser({limit: 20});
+    const users = await nc.ListUser({limit: 20});
     UserServiceBroadcaster.broadcastListUser({limit: 20}, srv);
-    const users2 = await UserServiceBroadcaster.listUser({limit: 20}, conn);
+    const users2 = await UserServiceBroadcaster.ListUser({limit: 20}, conn);
     console.log(users.total == users2.total);
 }

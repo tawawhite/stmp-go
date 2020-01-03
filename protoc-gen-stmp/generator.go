@@ -9,14 +9,13 @@ import (
 	"github.com/golang/protobuf/protoc-gen-go/plugin"
 	"log"
 	"os"
+	"path"
+	"path/filepath"
 	"strings"
 )
 
 type generatorOptions struct {
-	lang   []string
-	js     bool
-	golang bool
-
+	lang string
 	// the js pb file to import
 	// for example, if you use protobufjs to generate pb with command `pbjs -o ./foo.pb.js ./*.proto`
 	// then you can set this option as ./foo.pb.js
@@ -31,6 +30,8 @@ type generatorOptions struct {
 	jsdts bool
 	// js module mode, could be "cjs" or "esm"
 	jsmodule string
+	// the root namespace name, useful for .d.ts auto import, default is stmp
+	jsroot string
 }
 
 type generator struct {
@@ -45,8 +46,8 @@ func newGenerator() *generator {
 		request:  new(plugin_go.CodeGeneratorRequest),
 		response: new(plugin_go.CodeGeneratorResponse),
 		options: &generatorOptions{
-			lang:     []string{},
-			jsmodule: "cjs",
+			lang:     "",
+			jsmodule: "esm",
 			jsdts:    true,
 		},
 		typesCache: map[string][2]interface{}{},
@@ -63,16 +64,11 @@ func (g *generator) parseOptions(argv string) error {
 		value := strings.TrimSpace(item[sep+1:])
 		switch key {
 		case "lang":
-			g.options.lang = strings.Split(value, "+")
-			for _, l := range g.options.lang {
-				switch l {
-				case "js", "javascript":
-					g.options.js = true
-				case "go", "golang":
-					g.options.golang = true
-				default:
-					return errors.New("unsupported language: " + l)
-				}
+			switch value {
+			case "js", "javascript":
+				g.options.lang = "js"
+			case "go", "golang":
+				g.options.lang = "golang"
 			}
 		case "jspb", "js.pb":
 			g.options.jspb = value
@@ -82,11 +78,13 @@ func (g *generator) parseOptions(argv string) error {
 			g.options.jsdts = value != "" && value != "0"
 		case "jsmodule", "js.module":
 			g.options.jsmodule = value
+		case "jsroot", "js.root":
+			g.options.jsroot = value
 		default:
 			return errors.New("unknown option: " + key)
 		}
 	}
-	if g.options.js {
+	if g.options.lang == "js" {
 		if g.options.jspb == "" {
 			return errors.New("js.pb is required for js language")
 		}
@@ -95,6 +93,22 @@ func (g *generator) parseOptions(argv string) error {
 		}
 		if g.options.jsmodule != "esm" && g.options.jsmodule != "cjs" {
 			return errors.New("unsupported js module: " + g.options.jsmodule)
+		}
+		if g.options.jsroot == "" {
+			g.options.jsroot = "stmp"
+		}
+		g.options.jsout = strings.TrimSuffix(g.options.jsout, ".js") + ".js"
+		g.options.jsout = strings.TrimPrefix(g.options.jsout, "./")
+		if strings.HasPrefix(g.options.jspb, ".") {
+			var err error
+			g.options.jspb, err = filepath.Rel(path.Dir(g.options.jsout), g.options.jspb)
+			if err != nil {
+				return err
+			}
+			g.options.jspb = strings.TrimSuffix(g.options.jspb, ".js")
+			if !strings.HasPrefix(g.options.jspb, "./") && !strings.HasPrefix(g.options.jspb, "../") {
+				g.options.jspb = "./" + g.options.jspb
+			}
 		}
 	}
 	return nil
@@ -195,4 +209,18 @@ func upFirst(str string) string {
 		return string(c0-('a'-'A')) + str[1:]
 	}
 	return str
+}
+
+type RenderMethod struct {
+	MethodName string
+	FullMethod string
+	ActionHex  string
+	IInput     string
+	Input      string
+	Output     string
+}
+
+type RenderService struct {
+	ServiceName string
+	Methods     []*RenderMethod
 }

@@ -4,24 +4,11 @@ package main
 
 import "text/template"
 
-type GolangMethod struct {
-	MethodName string
-	FullMethod string
-	ActionHex  string
-	Input      string
-	Output     string
-}
-
-type GolangService struct {
-	ServiceName string
-	Methods     []*GolangMethod
-}
-
 type GolangRenderData struct {
 	Filename string
 	Package  string
 	Deps     map[string]string
-	Services []*GolangService
+	Services []*RenderService
 }
 
 var templateGolang *template.Template

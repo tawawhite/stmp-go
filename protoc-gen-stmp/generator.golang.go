@@ -56,7 +56,7 @@ func (g *generator) golangFile(filename string) (res *plugin_go.CodeGeneratorRes
 	var stmpService uint64
 	var stmpMethod uint64
 	for _, s := range req.GetService() {
-		service := new(GolangService)
+		service := new(RenderService)
 		data.Services = append(data.Services, service)
 		service.ServiceName = upFirst(s.GetName())
 		serviceOption, err := proto.GetExtension(s.GetOptions(), stmp.E_Service)
@@ -64,7 +64,7 @@ func (g *generator) golangFile(filename string) (res *plugin_go.CodeGeneratorRes
 			stmpService = *(serviceOption.(*uint64))
 		}
 		for _, m := range s.GetMethod() {
-			method := new(GolangMethod)
+			method := new(RenderMethod)
 			service.Methods = append(service.Methods, method)
 			method.MethodName = upFirst(m.GetName())
 			method.FullMethod = req.GetPackage() + "." + service.ServiceName + "." + method.MethodName

@@ -27,14 +27,17 @@ build-example-proto: build-gen-stmp
 		--proto_path=googleapis \
 		--plugin=protoc-gen-stmp=$$PWD/out/protoc-gen-stmp \
 		--gogofast_out=$$GOPATH/src \
-		--stmp_out=lang=go+js,js.pb=./examples/room/room_proto/room.pb.js,js.out=./examples/room/room_proto/room.stmp.js:$$GOPATH/src \
+		--stmp_out=lang=go:$$GOPATH/src \
 		./examples/room/room_proto/*.proto
-
-build-example-proto-esm:
 	pbjs -t static-module -w es6 -p ./vendor -p ./googleapis \
-		-o ./examples/room/room_proto/room.pb.js ./examples/room/room_proto/room.proto
+		-o ./examples/room/room_proto/room.pb.js ./examples/room/room_proto/*.proto
 	pbts -n pb \
 		-o ./examples/room/room_proto/room.pb.d.ts ./examples/room/room_proto/room.pb.js
+	protoc --proto_path=vendor --proto_path=. \
+		--proto_path=googleapis \
+		--plugin=protoc-gen-stmp=$$PWD/out/protoc-gen-stmp \
+		--stmp_out=lang=js,js.pb=./examples/room/room_proto/room.pb.js,js.out=./examples/room/room_proto/room.stmp.js:. \
+		./examples/room/room_proto/*.proto
 
 all: init build build-example-proto
 

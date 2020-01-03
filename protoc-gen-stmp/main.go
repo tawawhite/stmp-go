@@ -26,10 +26,10 @@ func main() {
 	if err = g.parseOptions(g.request.GetParameter()); err != nil {
 		g.error(err, "invalid option")
 	}
-	if g.options.js {
+	switch g.options.lang {
+	case "js":
 		g.response.File = append(g.response.File, g.js()...)
-	}
-	if g.options.golang {
+	case "golang":
 		g.response.File = append(g.response.File, g.golang()...)
 	}
 	buf, err := proto.Marshal(g.response)
