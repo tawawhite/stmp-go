@@ -16,79 +16,61 @@ import (
 	"time"
 )
 
-type PayloadMap struct {
-	in       interface{}
-	payloads map[string][]byte
-}
-
-func (p *PayloadMap) Marshal(conn *Conn) ([]byte, error) {
-	if p.in == nil {
-		return nil, nil
-	}
-	payload, ok := p.payloads[conn.media.Name()]
-	if !ok {
-		var err error
-		payload, err = conn.media.Marshal(p.in)
-		if err != nil {
-			return nil, err
-		}
-		p.payloads[conn.media.Name()] = payload
-	}
-	return payload, nil
-}
-
-func NewPayloadMap(in interface{}) *PayloadMap {
-	return &PayloadMap{in: in, payloads: map[string][]byte{}}
-}
-
-type AuthenticateFunc func(c *Conn) (err error)
-
-type Server struct {
-	*router
-	mu        *sync.RWMutex
-	listeners map[io.Closer]bool
-	conns     map[*Conn]bool
-	done      chan error
-	Id        string
-	Log       *zap.Logger
-	// default is host, user-agent
-	// if set as nil, will not log access
-	LogAccessFields []string
-	// [1, 9], default is 6
+type ServerConfig struct {
+	Logger           *zap.Logger
+	LogAccess        []string
 	CompressLevel    int
-	Authenticate     AuthenticateFunc
+	Authenticate     func(c *Conn) error
 	MaxPacketSize    uint64
 	HandshakeTimeout time.Duration
 	WriteTimeout     time.Duration
 	ReadTimeout      time.Duration
-	OnConnected      func(c *Conn)
-	onClosed         func(c *Conn, status Status, message string)
 }
 
-var noAuth AuthenticateFunc = func(c *Conn) (err error) {
-	return nil
-}
-
-func NewServer() *Server {
-	log, err := zap.NewProduction()
-	if err != nil {
-		panic(err)
+func (config *ServerConfig) ApplyDefault() *ServerConfig {
+	out := config
+	if out == nil {
+		out = NewServerConfig()
 	}
-	return &Server{
-		router:           NewRouter(),
-		mu:               &sync.RWMutex{},
-		listeners:        map[io.Closer]bool{},
-		conns:            map[*Conn]bool{},
-		done:             make(chan error),
-		Id:               "",
-		Log:              log.With(zap.String("source", "stmp")),
-		LogAccessFields:  []string{"user-agent", "host"},
+	if out.Logger == nil {
+		var err error
+		out.Logger, err = zap.NewProduction()
+		if err != nil {
+			panic(err)
+		}
+	}
+	return out
+}
+
+func NewServerConfig() *ServerConfig {
+	return &ServerConfig{
+		LogAccess:        []string{"host", "user-agent", "referer"},
 		CompressLevel:    6,
-		Authenticate:     noAuth,
-		MaxPacketSize:    1 << 24, // 16Mb
+		Authenticate:     func(c *Conn) error { return nil },
+		MaxPacketSize:    1 << 24,
 		HandshakeTimeout: time.Minute,
 		WriteTimeout:     time.Minute,
 		ReadTimeout:      time.Minute,
+	}
+}
+
+type Server struct {
+	*router
+	config    *ServerConfig
+	mu        sync.RWMutex
+	listeners map[io.Closer]struct{}
+	conns     ConnSet
+	done      chan error
+}
+
+func NewServer(config *ServerConfig) *Server {
+	config = config.ApplyDefault()
+	return &Server{
+		router:    NewRouter(),
+		config:    config,
+		listeners: map[io.Closer]struct{}{},
+		conns:     NewConnSet(),
+		done:      make(chan error),
 	}
 }
 
@@ -137,7 +119,7 @@ func (s *Server) HandleConn(nc net.Conn) (status *StatusError) {
 			c.Conn.Close()
 		}
 	}()
-	nc.SetReadDeadline(time.Now().Add(s.HandshakeTimeout))
+	nc.SetReadDeadline(time.Now().Add(s.config.HandshakeTimeout))
 	fixHead := make([]byte, 6)
 	_, err := nc.Read(fixHead)
 	if err != nil {
@@ -174,7 +156,7 @@ func (s *Server) HandleConn(nc net.Conn) (status *StatusError) {
 	if status != nil {
 		return
 	}
-	err = s.Authenticate(c)
+	err = s.config.Authenticate(c)
 	if err != nil {
 		if se, ok := err.(*StatusError); ok {
 			status = se
@@ -183,7 +165,7 @@ func (s *Server) HandleConn(nc net.Conn) (status *StatusError) {
 		}
 		return
 	}
-	r, w, err := c.initEncoding(s.CompressLevel)
+	r, w, err := c.initEncoding(s.config.CompressLevel)
 	if err != nil {
 		status = NewStatusError(StatusProtocolError, "init encoding error: "+err.Error())
 		return
@@ -194,10 +176,10 @@ func (s *Server) HandleConn(nc net.Conn) (status *StatusError) {
 		return
 	}
 	s.mu.Lock()
-	s.conns[c] = true
+	s.conns.Add(c)
 	s.mu.Unlock()
-	go c.binaryReadChannel(r, s.ReadTimeout)
-	go c.binaryWriteChannel(w, s.WriteTimeout)
+	go c.binaryReadChannel(r, s.config.ReadTimeout)
+	go c.binaryWriteChannel(w, s.config.WriteTimeout)
 	return
 }
 
@@ -231,7 +213,7 @@ func (s *Server) HandleWebsocketConn(wc *websocket.Conn, req *http.Request) (sta
 	if status != nil {
 		return
 	}
-	err := s.Authenticate(c)
+	err := s.config.Authenticate(c)
 	if err != nil {
 		if se, ok := err.(*StatusError); ok {
 			status = se
@@ -246,14 +228,14 @@ func (s *Server) HandleWebsocketConn(wc *websocket.Conn, req *http.Request) (sta
 		return
 	}
 	s.mu.Lock()
-	s.conns[c] = true
+	s.conns.Add(c)
 	s.mu.Unlock()
 	if c.ServerHeader.Get(DeterminePacketFormat) == "text" {
-		go c.websocketTextReadChannel(wc, s.ReadTimeout)
-		go c.websocketTextWriteChannel(wc, s.WriteTimeout)
+		go c.websocketTextReadChannel(wc, s.config.ReadTimeout)
+		go c.websocketTextWriteChannel(wc, s.config.WriteTimeout)
 	} else {
-		go c.websocketBinaryReadChannel(wc, s.ReadTimeout)
-		go c.websocketBinaryWriteChannel(wc, s.WriteTimeout)
+		go c.websocketBinaryReadChannel(wc, s.config.ReadTimeout)
+		go c.websocketBinaryWriteChannel(wc, s.config.WriteTimeout)
 	}
 	return
 }
@@ -285,7 +267,7 @@ func (s *Server) Serve(lis net.Listener) {
 		panic("the listener " + lis.Addr().Network() + ":" + lis.Addr().String() + " is listening already")
 	}
 	s.mu.Lock()
-	s.listeners[lis] = true
+	s.listeners[lis] = struct{}{}
 	s.mu.Unlock()
 	for {
 		conn, err := lis.Accept()
@@ -367,7 +349,7 @@ func (s *Server) newWsServer(addr, path string) *http.Server {
 	}
 	hs := &http.Server{Addr: addr, Handler: handler}
 	s.mu.Lock()
-	s.listeners[hs] = true
+	s.listeners[hs] = struct{}{}
 	s.mu.Unlock()
 	return hs
 }

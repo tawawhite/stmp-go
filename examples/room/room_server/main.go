@@ -7,65 +7,56 @@ import (
 	"github.com/acrazing/stmp-go/examples/room/room"
 	"github.com/acrazing/stmp-go/examples/room/room_proto"
 	"github.com/acrazing/stmp-go/stmp"
+	"go.uber.org/zap"
 	"os"
-	"time"
+	"os/signal"
+	"syscall"
 )
 
 type UserService struct {
-	us *room.UserStore
+	ut *room.UserTable
 }
 
 func (u *UserService) ListUser(ctx context.Context, in *room_proto.ListUserInput) (out *room_proto.ListUserOutput, err error) {
-	u.us.Mu.RLock()
-	defer u.us.Mu.RUnlock()
-	out = &room_proto.ListUserOutput{
-		Total: int64(len(u.us.Users)),
-		Users: make([]*room_proto.UserModel, 0, in.Limit),
-	}
-	i := int64(0)
-	max := in.Offset + in.Limit
-	for _, u := range u.us.Users {
-		if i < in.Offset {
-			continue
-		}
-		i += 1
-		out.Users = append(out.Users, u)
-		if i > max {
-			break
-		}
-	}
+	out = new(room_proto.ListUserOutput)
+	out.Total, out.Users = u.ut.List(in.Limit, in.Offset)
 	return
 }
 
-func NewUserService(us *room.UserStore) room_proto.STMPUserServiceServer {
-	return &UserService{us: us}
+func NewUserService(ut *room.UserTable) room_proto.STMPUserServiceServer {
+	return &UserService{ut: ut}
 }
 
 func main() {
-	stmp.RegisterMediaCodec(stmp.NewJsonCodec(), stmp.NewProtobufCodec())
-	srv := stmp.NewServer()
-	srv.WriteTimeout = time.Minute
-	srv.ReadTimeout = time.Minute
-	srv.HandshakeTimeout = time.Minute
-
-	userStore := room.NewUserStore()
-	userService := NewUserService(userStore)
-	room_proto.STMPRegisterUserServiceServer(srv, userService)
-
-	conn, _ := stmp.DialTCP("", nil)
-	usc := room_proto.STMPNewUserServiceClient(conn)
-	usb := room_proto.STMPNewUserServiceBroadcaster()
-	reb := room_proto.STMPNewRoomEventsBroadcaster()
-	_ = reb.NewMessageToAll(nil, nil, nil, nil)
-	_ = reb.UserEnterToSet(nil, nil, nil)
-	_, _ = usc.ListUser(nil, &room_proto.ListUserInput{})
-	_ = usb.ListUserToAll(nil, &room_proto.ListUserInput{}, srv, nil)
-
-	go srv.ListenAndServeWebSocket("127.0.0.1:5002", "/ws")
-	println("room server is listening at ws://127.0.0.1:5002/ws")
-	err := srv.Wait()
+	log, err := zap.NewDevelopment()
 	if err != nil {
-		println("listen error", err.Error())
+		panic(err)
+	}
+	srvConfig := stmp.NewServerConfig()
+	srvConfig.Logger = log
+	stmp.RegisterMediaCodec(stmp.NewJsonCodec(), stmp.NewProtobufCodec())
+	srv := stmp.NewServer(srvConfig)
+
+	ut := room.NewUserTable()
+	us := NewUserService(ut)
+	room_proto.STMPRegisterUserServiceServer(srv, us)
+
+	go srv.ListenAndServeTCP("127.0.0.1:5001")
+	log.Info("room server is listening at tcp://127.0.0.1:5001")
+	go srv.ListenAndServeWebSocket("127.0.0.1:5002", "/ws")
+	log.Info("room server is listening at ws://127.0.0.1:5002/ws")
+	go func() {
+		killSignal := make(chan os.Signal, 1)
+		signal.Notify(killSignal, syscall.SIGINT, syscall.SIGTERM)
+		sig := <-killSignal
+		log.Info("receiving kill signal, server will shutdown", zap.String("signal", sig.String()))
+		srv.Close()
+	}()
+	err = srv.Wait()
+	if err != nil {
+		log.Error("room server listen error", zap.Error(err))
 		os.Exit(1)
+	} else {
+		log.Info("room server shutdown")
 	}
 }

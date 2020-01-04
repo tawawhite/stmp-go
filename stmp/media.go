@@ -98,3 +98,28 @@ func (p protobufCodec) Unmarshal(data []byte, v interface{}) error {
 func NewProtobufCodec() MediaCodec {
 	return protobufCodec{}
 }
+
+type PayloadMap struct {
+	in       interface{}
+	payloads map[string][]byte
+}
+
+func (p *PayloadMap) Marshal(conn *Conn) ([]byte, error) {
+	if p.in == nil {
+		return nil, nil
+	}
+	payload, ok := p.payloads[conn.media.Name()]
+	if !ok {
+		var err error
+		payload, err = conn.media.Marshal(p.in)
+		if err != nil {
+			return nil, err
+		}
+		p.payloads[conn.media.Name()] = payload
+	}
+	return payload, nil
+}
+
+func NewPayloadMap(in interface{}) *PayloadMap {
+	return &PayloadMap{in: in, payloads: map[string][]byte{}}
+}

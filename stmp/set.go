@@ -4,7 +4,7 @@ package stmp
 
 type ConnSet map[*Conn]struct{}
 
-func NewSet() ConnSet {
+func NewConnSet() ConnSet {
 	return map[*Conn]struct{}{}
 }
 

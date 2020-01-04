@@ -16,7 +16,7 @@ import (
 )
 
 type LobbyScene struct {
-	us *room.UserStore
+	us *room.UserTable
 	uc room_proto.STMPUserServiceClient
 }
 
@@ -74,7 +74,6 @@ func main() {
 
 	usc := room_proto.STMPNewUserServiceClient(conn)
 	ls := NewLobbyScene(usc)
-
 	ls.Mount()
 
 	killSignal := make(chan os.Signal)
