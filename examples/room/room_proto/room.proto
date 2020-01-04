@@ -6,12 +6,22 @@ package stmp.examples.room;
 
 option go_package = "github.com/acrazing/stmp-go/examples/room/room_proto";
 
+import "github.com/envoyproxy/protoc-gen-validate/validate/validate.proto";
+import "github.com/gogo/protobuf/gogoproto/gogo.proto";
 import "google/protobuf/empty.proto";
 // import "github.com/acrazing/stmp-go/stmp/stmp.proto";
 // for any other repo, please use upon import statement, instead of the following one
 import "stmp/stmp.proto";
 // used for test google http api annotations
 // import "google/api/annotations.proto";
+
+option (gogoproto.description_all) = false;
+option (gogoproto.goproto_unrecognized_all) = false;
+option (gogoproto.goproto_getters_all) = false;
+option (gogoproto.goproto_extensions_map_all) = false;
+option (gogoproto.goproto_unkeyed_all) = false;
+option (gogoproto.goproto_sizecache_all) = false;
+option (gogoproto.goproto_stringer_all) = false;
 
 // the user model for the online server, does not represent the real user model
 message UserModel {
@@ -26,9 +36,13 @@ message UserModel {
     Status status = 3;
 }
 
-message ListUserInput {
-    int64 limit = 1;
-    int64 offset = 2;
+message LoginInput {
+    string name = 1 [(validate.rules).string = {min_bytes: 3, max_bytes: 31}];
+}
+
+message ListInput {
+    int64 limit = 1 [(validate.rules).int64 = {gte: 0, lte: 100}];
+    int64 offset = 2 [(validate.rules).int64 = {gte: 0}];
 }
 
 message ListUserOutput {
@@ -38,8 +52,11 @@ message ListUserOutput {
 
 service UserService {
     option (stmp.service) = 0x10;
-    rpc ListUser (ListUserInput) returns (ListUserOutput) {
+    rpc ListUser (ListInput) returns (ListUserOutput) {
         option (stmp.method) = 0x01;
+    }
+    rpc Login (LoginInput) returns (UserModel) {
+        option (stmp.method) = 0x02;
     }
 }
 
@@ -65,12 +82,7 @@ message RoomModel {
 }
 
 message CreateRoomInput {
-    string name = 1;
-}
-
-message ListRoomInput {
-    int64 limit = 1;
-    int64 offset = 2;
+    string name = 1 [(validate.rules).string = {min_bytes: 3, max_bytes: 31}];
 }
 
 message ListRoomOutput {
@@ -79,16 +91,16 @@ message ListRoomOutput {
 }
 
 message JoinRoomInput {
-    string room = 1;
+    string room = 1 [(validate.rules).string = {min_bytes: 3, max_bytes: 31}];
 }
 
 message ExitRoomInput {
-    string room = 1;
+    string room = 1 [(validate.rules).string = {min_bytes: 3, max_bytes: 31}];
 }
 
 message SendMessageInput {
-    string room = 1;
-    string content = 2;
+    string room = 1 [(validate.rules).string = {min_bytes: 3, max_bytes: 31}];
+    string content = 2 [(validate.rules).string = {min_bytes: 1, max_bytes: 140}];
 }
 
 service RoomService {
@@ -96,7 +108,7 @@ service RoomService {
     rpc CreateRoom (CreateRoomInput) returns (RoomModel) {
         option (stmp.method) = 0x01;
     }
-    rpc ListRoom (ListRoomInput) returns (ListRoomOutput) {
+    rpc ListRoom (ListInput) returns (ListRoomOutput) {
         option (stmp.method) = 0x02;
     }
     rpc JoinRoom (JoinRoomInput) returns (RoomModel) {

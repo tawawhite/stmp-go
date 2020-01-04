@@ -5,6 +5,8 @@ package main
 import (
 	"encoding/json"
 	"flag"
+	_ "github.com/envoyproxy/protoc-gen-validate/validate"
+	_ "github.com/gogo/protobuf/gogoproto"
 	"log"
 	"os"
 	"strings"

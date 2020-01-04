@@ -12,20 +12,25 @@ declare namespace stmp {
     class UserServiceServer {
       static register(srv: Server, inst: UserServiceServer): void
       static unregister(srv: Server, inst: UserServiceServer): void
-      ListUser(ctx: Context, input: pb.stmp.examples.room.ListUserInput, output: pb.stmp.examples.room.ListUserOutput): void | Promise<void>
+      ListUser(ctx: Context, input: pb.stmp.examples.room.ListInput, output: pb.stmp.examples.room.ListUserOutput): void | Promise<void>
+      Login(ctx: Context, input: pb.stmp.examples.room.LoginInput, output: pb.stmp.examples.room.UserModel): void | Promise<void>
     }
 
     class UserServiceBroadcaster {
       constructor()
-      ListUserToOne(input: pb.stmp.examples.room.IListUserInput, conn: Connection, options?: Partial<CallOptions>): Promise<pb.stmp.examples.room.ListUserOutput>
-      ListUserToSet(input: pb.stmp.examples.room.IListUserInput, conns: Set<Connection>): void
-      ListUserToAll(input: pb.stmp.examples.room.IListUserInput, srv: Server, filter?: ConnFilter): void
+      ListUserToOne(input: pb.stmp.examples.room.IListInput, conn: Connection, options?: Partial<CallOptions>): Promise<pb.stmp.examples.room.ListUserOutput>
+      ListUserToSet(input: pb.stmp.examples.room.IListInput, conns: Set<Connection>): void
+      ListUserToAll(input: pb.stmp.examples.room.IListInput, srv: Server, filter?: ConnFilter): void
+      LoginToOne(input: pb.stmp.examples.room.ILoginInput, conn: Connection, options?: Partial<CallOptions>): Promise<pb.stmp.examples.room.UserModel>
+      LoginToSet(input: pb.stmp.examples.room.ILoginInput, conns: Set<Connection>): void
+      LoginToAll(input: pb.stmp.examples.room.ILoginInput, srv: Server, filter?: ConnFilter): void
     }
 
     class UserServiceClient {
       private conn: Connection;
       constructor(conn: Connection)
-      ListUser(data: pb.stmp.examples.room.IListUserInput, options?: Partial<CallOptions>): Promise<pb.stmp.examples.room.ListUserOutput>
+      ListUser(data: pb.stmp.examples.room.IListInput, options?: Partial<CallOptions>): Promise<pb.stmp.examples.room.ListUserOutput>
+      Login(data: pb.stmp.examples.room.ILoginInput, options?: Partial<CallOptions>): Promise<pb.stmp.examples.room.UserModel>
     }
 
     class UserEventsServer {
@@ -51,7 +56,7 @@ declare namespace stmp {
       static register(srv: Server, inst: RoomServiceServer): void
       static unregister(srv: Server, inst: RoomServiceServer): void
       CreateRoom(ctx: Context, input: pb.stmp.examples.room.CreateRoomInput, output: pb.stmp.examples.room.RoomModel): void | Promise<void>
-      ListRoom(ctx: Context, input: pb.stmp.examples.room.ListRoomInput, output: pb.stmp.examples.room.ListRoomOutput): void | Promise<void>
+      ListRoom(ctx: Context, input: pb.stmp.examples.room.ListInput, output: pb.stmp.examples.room.ListRoomOutput): void | Promise<void>
       JoinRoom(ctx: Context, input: pb.stmp.examples.room.JoinRoomInput, output: pb.stmp.examples.room.RoomModel): void | Promise<void>
       ExitRoom(ctx: Context, input: pb.stmp.examples.room.ExitRoomInput, output: pb.google.protobuf.Empty): void | Promise<void>
       SendMessage(ctx: Context, input: pb.stmp.examples.room.SendMessageInput, output: pb.google.protobuf.Empty): void | Promise<void>
@@ -62,9 +67,9 @@ declare namespace stmp {
       CreateRoomToOne(input: pb.stmp.examples.room.ICreateRoomInput, conn: Connection, options?: Partial<CallOptions>): Promise<pb.stmp.examples.room.RoomModel>
       CreateRoomToSet(input: pb.stmp.examples.room.ICreateRoomInput, conns: Set<Connection>): void
       CreateRoomToAll(input: pb.stmp.examples.room.ICreateRoomInput, srv: Server, filter?: ConnFilter): void
-      ListRoomToOne(input: pb.stmp.examples.room.IListRoomInput, conn: Connection, options?: Partial<CallOptions>): Promise<pb.stmp.examples.room.ListRoomOutput>
-      ListRoomToSet(input: pb.stmp.examples.room.IListRoomInput, conns: Set<Connection>): void
-      ListRoomToAll(input: pb.stmp.examples.room.IListRoomInput, srv: Server, filter?: ConnFilter): void
+      ListRoomToOne(input: pb.stmp.examples.room.IListInput, conn: Connection, options?: Partial<CallOptions>): Promise<pb.stmp.examples.room.ListRoomOutput>
+      ListRoomToSet(input: pb.stmp.examples.room.IListInput, conns: Set<Connection>): void
+      ListRoomToAll(input: pb.stmp.examples.room.IListInput, srv: Server, filter?: ConnFilter): void
       JoinRoomToOne(input: pb.stmp.examples.room.IJoinRoomInput, conn: Connection, options?: Partial<CallOptions>): Promise<pb.stmp.examples.room.RoomModel>
       JoinRoomToSet(input: pb.stmp.examples.room.IJoinRoomInput, conns: Set<Connection>): void
       JoinRoomToAll(input: pb.stmp.examples.room.IJoinRoomInput, srv: Server, filter?: ConnFilter): void
@@ -80,7 +85,7 @@ declare namespace stmp {
       private conn: Connection;
       constructor(conn: Connection)
       CreateRoom(data: pb.stmp.examples.room.ICreateRoomInput, options?: Partial<CallOptions>): Promise<pb.stmp.examples.room.RoomModel>
-      ListRoom(data: pb.stmp.examples.room.IListRoomInput, options?: Partial<CallOptions>): Promise<pb.stmp.examples.room.ListRoomOutput>
+      ListRoom(data: pb.stmp.examples.room.IListInput, options?: Partial<CallOptions>): Promise<pb.stmp.examples.room.ListRoomOutput>
       JoinRoom(data: pb.stmp.examples.room.IJoinRoomInput, options?: Partial<CallOptions>): Promise<pb.stmp.examples.room.RoomModel>
       ExitRoom(data: pb.stmp.examples.room.IExitRoomInput, options?: Partial<CallOptions>): Promise<pb.google.protobuf.Empty>
       SendMessage(data: pb.stmp.examples.room.ISendMessageInput, options?: Partial<CallOptions>): Promise<pb.google.protobuf.Empty>

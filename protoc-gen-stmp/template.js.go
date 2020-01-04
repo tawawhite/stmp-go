@@ -23,12 +23,13 @@ func init() {
 {{end}}{{if eq .Module "esm"}}import pb from "{{.PbFile}}";
 import { PayloadMap, registerMethodAction, notifyOptions } from "stmp";
 {{else}}const pb = require("{{.PbFile}}");
-const {} = require("stmp");
+const { PayloadMap, registerMethodAction, notifyOptions } = require("stmp");
 {{end}}
 const {{.RootNamespace}} = Object.create(null);
 
 {{if eq .Module "esm"}}export default {{.RootNamespace}};
-{{else}}module.exports = exports.default = {{.RootNamespace}};
+{{else}}module.exports = {{.RootNamespace}};
+module.exports.default = module.exports;
 {{end}}
 function initNamespace(root, ns, factory) {
     for (const item of ns.split(".")) {

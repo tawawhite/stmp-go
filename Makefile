@@ -22,24 +22,27 @@ init:
 		git pull -r; \
 	fi
 
-build-example-proto: build-gen-stmp
+example-proto: build-gen-stmp
 	protoc --proto_path=vendor --proto_path=. \
 		--proto_path=googleapis \
 		--plugin=protoc-gen-stmp=$$PWD/out/protoc-gen-stmp \
 		--gogofast_out=$$GOPATH/src \
+		--validate_out=lang=gogo:$$GOPATH/src \
 		--stmp_out=lang=go:$$GOPATH/src \
 		./examples/room/room_proto/*.proto
-	pbjs -t static-module -w es6 -p ./vendor -p ./googleapis \
+	pbjs -t static-module -w commonjs -p ./vendor -p ./googleapis \
+		--no-create --no-verify \
+		--no-convert --no-delimited --keep-case --sparse \
 		-o ./examples/room/room_proto/room.pb.js ./examples/room/room_proto/*.proto
-	pbts -n pb \
+	pbts -n pb --no-comments \
 		-o ./examples/room/room_proto/room.pb.d.ts ./examples/room/room_proto/room.pb.js
 	protoc --proto_path=vendor --proto_path=. \
 		--proto_path=googleapis \
 		--plugin=protoc-gen-stmp=$$PWD/out/protoc-gen-stmp \
-		--stmp_out=lang=js,js.pb=./examples/room/room_proto/room.pb.js,js.out=./examples/room/room_proto/room.stmp.js:. \
+		--stmp_out=lang=js,js.module=cjs,js.pb=./examples/room/room_proto/room.pb.js,js.out=./examples/room/room_proto/room.stmp.js:. \
 		./examples/room/room_proto/*.proto
 
-all: init build build-example-proto
+all: init build example-proto
 
 run-example-room-server:
 	go run examples/room/room_server/main.go

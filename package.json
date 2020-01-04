@@ -6,6 +6,8 @@
   "author": "acrazing <joking.young@gmail.com>",
   "license": "MIT",
   "dependencies": {
+    "@types/long": "^4.0.0",
+    "long": "^4.0.0",
     "protobufjs": "^6.8.8"
   }
 }

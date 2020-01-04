@@ -10,36 +10,44 @@ import (
 
 
 func init() {
-	stmp.RegisterMethodAction("stmp.examples.room.UserService.ListUser", 0x1001, func() interface{} { return &ListUserInput{} }, func() interface{} { return &ListUserOutput{} })
+	stmp.RegisterMethodAction("stmp.examples.room.UserService.ListUser", 0x1001, func() interface{} { return &ListInput{} }, func() interface{} { return &ListUserOutput{} })
+	stmp.RegisterMethodAction("stmp.examples.room.UserService.Login", 0x1002, func() interface{} { return &LoginInput{} }, func() interface{} { return &UserModel{} })
 }
 
 type STMPUserServiceServer interface {
-	ListUser(ctx context.Context, in *ListUserInput) (out *ListUserOutput, err error)
+	ListUser(ctx context.Context, in *ListInput) (out *ListUserOutput, err error)
+	Login(ctx context.Context, in *LoginInput) (out *UserModel, err error)
 }
 
 func STMPRegisterUserServiceServer(r stmp.Router, s STMPUserServiceServer) {
-	r.Register(s, "stmp.examples.room.UserService.ListUser", func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMPUserServiceServer).ListUser(ctx, in.(*ListUserInput)) })
+	r.Register(s, "stmp.examples.room.UserService.ListUser", func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMPUserServiceServer).ListUser(ctx, in.(*ListInput)) })
+	r.Register(s, "stmp.examples.room.UserService.Login", func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMPUserServiceServer).Login(ctx, in.(*LoginInput)) })
 }
 
 func STMPUnregisterUserServiceServer(r stmp.Router, s STMPUserServiceServer) {
 	r.Unregister(s, "stmp.examples.room.UserService.ListUser")
+	r.Unregister(s, "stmp.examples.room.UserService.Login")
 }
 
 type STMPUserServiceBroadcaster interface {
-	ListUserToOne(ctx context.Context, in *ListUserInput, conn *stmp.Conn, opts ...stmp.CallOption) (*ListUserOutput, error)
-	ListUserToList(ctx context.Context, in *ListUserInput, conns ...*stmp.Conn) error
-	ListUserToSet(ctx context.Context, in *ListUserInput, conns stmp.ConnSet) error
-	ListUserToAll(ctx context.Context, in *ListUserInput, srv *stmp.Server, filter stmp.ConnFilter) error
+	ListUserToOne(ctx context.Context, in *ListInput, conn *stmp.Conn, opts ...stmp.CallOption) (*ListUserOutput, error)
+	ListUserToList(ctx context.Context, in *ListInput, conns ...*stmp.Conn) error
+	ListUserToSet(ctx context.Context, in *ListInput, conns stmp.ConnSet) error
+	ListUserToAll(ctx context.Context, in *ListInput, srv *stmp.Server, filter stmp.ConnFilter) error
+	LoginToOne(ctx context.Context, in *LoginInput, conn *stmp.Conn, opts ...stmp.CallOption) (*UserModel, error)
+	LoginToList(ctx context.Context, in *LoginInput, conns ...*stmp.Conn) error
+	LoginToSet(ctx context.Context, in *LoginInput, conns stmp.ConnSet) error
+	LoginToAll(ctx context.Context, in *LoginInput, srv *stmp.Server, filter stmp.ConnFilter) error
 }
 
 type stmpUserServiceBroadcaster struct{}
 
-func (s stmpUserServiceBroadcaster) ListUserToOne(ctx context.Context, in *ListUserInput, conn *stmp.Conn, opts ...stmp.CallOption) (*ListUserOutput, error) {
+func (s stmpUserServiceBroadcaster) ListUserToOne(ctx context.Context, in *ListInput, conn *stmp.Conn, opts ...stmp.CallOption) (*ListUserOutput, error) {
 	out, err := conn.Invoke(ctx, "stmp.examples.room.UserService.ListUser", in, stmp.NewCallOptions(opts...))
 	return out.(*ListUserOutput), err
 }
 
-func (s stmpUserServiceBroadcaster) ListUserToList(ctx context.Context, in *ListUserInput, conns ...*stmp.Conn) error {
+func (s stmpUserServiceBroadcaster) ListUserToList(ctx context.Context, in *ListInput, conns ...*stmp.Conn) error {
 	payloads := stmp.NewPayloadMap(in)
 	for _, conn := range conns {
 		payload, err := payloads.Marshal(conn)
@@ -54,7 +62,7 @@ func (s stmpUserServiceBroadcaster) ListUserToList(ctx context.Context, in *List
 	return nil
 }
 
-func (s stmpUserServiceBroadcaster) ListUserToSet(ctx context.Context, in *ListUserInput, conns stmp.ConnSet) error {
+func (s stmpUserServiceBroadcaster) ListUserToSet(ctx context.Context, in *ListInput, conns stmp.ConnSet) error {
 	payloads := stmp.NewPayloadMap(in)
 	for conn := range conns {
 		payload, err := payloads.Marshal(conn)
@@ -69,8 +77,47 @@ func (s stmpUserServiceBroadcaster) ListUserToSet(ctx context.Context, in *ListU
 	return nil
 }
 
-func (s stmpUserServiceBroadcaster) ListUserToAll(ctx context.Context, in *ListUserInput, srv *stmp.Server, filter stmp.ConnFilter) error {
+func (s stmpUserServiceBroadcaster) ListUserToAll(ctx context.Context, in *ListInput, srv *stmp.Server, filter stmp.ConnFilter) error {
 	return srv.Broadcast(ctx, "stmp.examples.room.UserService.ListUser", in, filter)
+}
+
+func (s stmpUserServiceBroadcaster) LoginToOne(ctx context.Context, in *LoginInput, conn *stmp.Conn, opts ...stmp.CallOption) (*UserModel, error) {
+	out, err := conn.Invoke(ctx, "stmp.examples.room.UserService.Login", in, stmp.NewCallOptions(opts...))
+	return out.(*UserModel), err
+}
+
+func (s stmpUserServiceBroadcaster) LoginToList(ctx context.Context, in *LoginInput, conns ...*stmp.Conn) error {
+	payloads := stmp.NewPayloadMap(in)
+	for _, conn := range conns {
+		payload, err := payloads.Marshal(conn)
+		if err != nil {
+			return err
+		}
+		_, err = conn.Call(ctx, "stmp.examples.room.UserService.Login", payload, stmp.NotifyOptions)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s stmpUserServiceBroadcaster) LoginToSet(ctx context.Context, in *LoginInput, conns stmp.ConnSet) error {
+	payloads := stmp.NewPayloadMap(in)
+	for conn := range conns {
+		payload, err := payloads.Marshal(conn)
+		if err != nil {
+			return err
+		}
+		_, err = conn.Call(ctx, "stmp.examples.room.UserService.Login", payload, stmp.NotifyOptions)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s stmpUserServiceBroadcaster) LoginToAll(ctx context.Context, in *LoginInput, srv *stmp.Server, filter stmp.ConnFilter) error {
+	return srv.Broadcast(ctx, "stmp.examples.room.UserService.Login", in, filter)
 }
 
 func STMPNewUserServiceBroadcaster() STMPUserServiceBroadcaster {
@@ -78,16 +125,22 @@ func STMPNewUserServiceBroadcaster() STMPUserServiceBroadcaster {
 }
 
 type STMPUserServiceClient interface {
-	ListUser(ctx context.Context, in *ListUserInput, opts ...stmp.CallOption) (*ListUserOutput, error)
+	ListUser(ctx context.Context, in *ListInput, opts ...stmp.CallOption) (*ListUserOutput, error)
+	Login(ctx context.Context, in *LoginInput, opts ...stmp.CallOption) (*UserModel, error)
 }
 
 type stmpUserServiceClient struct {
 	c *stmp.Conn
 }
 
-func (s *stmpUserServiceClient) ListUser(ctx context.Context, in *ListUserInput, opts ...stmp.CallOption) (*ListUserOutput, error) {
+func (s *stmpUserServiceClient) ListUser(ctx context.Context, in *ListInput, opts ...stmp.CallOption) (*ListUserOutput, error) {
 	out, err := s.c.Invoke(ctx, "stmp.examples.room.UserService.ListUser", in, stmp.NewCallOptions(opts...))
 	return out.(*ListUserOutput), err
+}
+
+func (s *stmpUserServiceClient) Login(ctx context.Context, in *LoginInput, opts ...stmp.CallOption) (*UserModel, error) {
+	out, err := s.c.Invoke(ctx, "stmp.examples.room.UserService.Login", in, stmp.NewCallOptions(opts...))
+	return out.(*UserModel), err
 }
 
 func STMPNewUserServiceClient(c *stmp.Conn) STMPUserServiceClient {
@@ -181,7 +234,7 @@ func STMPNewUserEventsClient(c *stmp.Conn) STMPUserEventsClient {
 
 func init() {
 	stmp.RegisterMethodAction("stmp.examples.room.RoomService.CreateRoom", 0x1201, func() interface{} { return &CreateRoomInput{} }, func() interface{} { return &RoomModel{} })
-	stmp.RegisterMethodAction("stmp.examples.room.RoomService.ListRoom", 0x1202, func() interface{} { return &ListRoomInput{} }, func() interface{} { return &ListRoomOutput{} })
+	stmp.RegisterMethodAction("stmp.examples.room.RoomService.ListRoom", 0x1202, func() interface{} { return &ListInput{} }, func() interface{} { return &ListRoomOutput{} })
 	stmp.RegisterMethodAction("stmp.examples.room.RoomService.JoinRoom", 0x1203, func() interface{} { return &JoinRoomInput{} }, func() interface{} { return &RoomModel{} })
 	stmp.RegisterMethodAction("stmp.examples.room.RoomService.ExitRoom", 0x1204, func() interface{} { return &ExitRoomInput{} }, func() interface{} { return &empty.Empty{} })
 	stmp.RegisterMethodAction("stmp.examples.room.RoomService.SendMessage", 0x1205, func() interface{} { return &SendMessageInput{} }, func() interface{} { return &empty.Empty{} })
@@ -189,7 +242,7 @@ func init() {
 
 type STMPRoomServiceServer interface {
 	CreateRoom(ctx context.Context, in *CreateRoomInput) (out *RoomModel, err error)
-	ListRoom(ctx context.Context, in *ListRoomInput) (out *ListRoomOutput, err error)
+	ListRoom(ctx context.Context, in *ListInput) (out *ListRoomOutput, err error)
 	JoinRoom(ctx context.Context, in *JoinRoomInput) (out *RoomModel, err error)
 	ExitRoom(ctx context.Context, in *ExitRoomInput) (out *empty.Empty, err error)
 	SendMessage(ctx context.Context, in *SendMessageInput) (out *empty.Empty, err error)
@@ -197,7 +250,7 @@ type STMPRoomServiceServer interface {
 
 func STMPRegisterRoomServiceServer(r stmp.Router, s STMPRoomServiceServer) {
 	r.Register(s, "stmp.examples.room.RoomService.CreateRoom", func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMPRoomServiceServer).CreateRoom(ctx, in.(*CreateRoomInput)) })
-	r.Register(s, "stmp.examples.room.RoomService.ListRoom", func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMPRoomServiceServer).ListRoom(ctx, in.(*ListRoomInput)) })
+	r.Register(s, "stmp.examples.room.RoomService.ListRoom", func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMPRoomServiceServer).ListRoom(ctx, in.(*ListInput)) })
 	r.Register(s, "stmp.examples.room.RoomService.JoinRoom", func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMPRoomServiceServer).JoinRoom(ctx, in.(*JoinRoomInput)) })
 	r.Register(s, "stmp.examples.room.RoomService.ExitRoom", func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMPRoomServiceServer).ExitRoom(ctx, in.(*ExitRoomInput)) })
 	r.Register(s, "stmp.examples.room.RoomService.SendMessage", func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMPRoomServiceServer).SendMessage(ctx, in.(*SendMessageInput)) })
@@ -216,10 +269,10 @@ type STMPRoomServiceBroadcaster interface {
 	CreateRoomToList(ctx context.Context, in *CreateRoomInput, conns ...*stmp.Conn) error
 	CreateRoomToSet(ctx context.Context, in *CreateRoomInput, conns stmp.ConnSet) error
 	CreateRoomToAll(ctx context.Context, in *CreateRoomInput, srv *stmp.Server, filter stmp.ConnFilter) error
-	ListRoomToOne(ctx context.Context, in *ListRoomInput, conn *stmp.Conn, opts ...stmp.CallOption) (*ListRoomOutput, error)
-	ListRoomToList(ctx context.Context, in *ListRoomInput, conns ...*stmp.Conn) error
-	ListRoomToSet(ctx context.Context, in *ListRoomInput, conns stmp.ConnSet) error
-	ListRoomToAll(ctx context.Context, in *ListRoomInput, srv *stmp.Server, filter stmp.ConnFilter) error
+	ListRoomToOne(ctx context.Context, in *ListInput, conn *stmp.Conn, opts ...stmp.CallOption) (*ListRoomOutput, error)
+	ListRoomToList(ctx context.Context, in *ListInput, conns ...*stmp.Conn) error
+	ListRoomToSet(ctx context.Context, in *ListInput, conns stmp.ConnSet) error
+	ListRoomToAll(ctx context.Context, in *ListInput, srv *stmp.Server, filter stmp.ConnFilter) error
 	JoinRoomToOne(ctx context.Context, in *JoinRoomInput, conn *stmp.Conn, opts ...stmp.CallOption) (*RoomModel, error)
 	JoinRoomToList(ctx context.Context, in *JoinRoomInput, conns ...*stmp.Conn) error
 	JoinRoomToSet(ctx context.Context, in *JoinRoomInput, conns stmp.ConnSet) error
@@ -275,12 +328,12 @@ func (s stmpRoomServiceBroadcaster) CreateRoomToAll(ctx context.Context, in *Cre
 	return srv.Broadcast(ctx, "stmp.examples.room.RoomService.CreateRoom", in, filter)
 }
 
-func (s stmpRoomServiceBroadcaster) ListRoomToOne(ctx context.Context, in *ListRoomInput, conn *stmp.Conn, opts ...stmp.CallOption) (*ListRoomOutput, error) {
+func (s stmpRoomServiceBroadcaster) ListRoomToOne(ctx context.Context, in *ListInput, conn *stmp.Conn, opts ...stmp.CallOption) (*ListRoomOutput, error) {
 	out, err := conn.Invoke(ctx, "stmp.examples.room.RoomService.ListRoom", in, stmp.NewCallOptions(opts...))
 	return out.(*ListRoomOutput), err
 }
 
-func (s stmpRoomServiceBroadcaster) ListRoomToList(ctx context.Context, in *ListRoomInput, conns ...*stmp.Conn) error {
+func (s stmpRoomServiceBroadcaster) ListRoomToList(ctx context.Context, in *ListInput, conns ...*stmp.Conn) error {
 	payloads := stmp.NewPayloadMap(in)
 	for _, conn := range conns {
 		payload, err := payloads.Marshal(conn)
@@ -295,7 +348,7 @@ func (s stmpRoomServiceBroadcaster) ListRoomToList(ctx context.Context, in *List
 	return nil
 }
 
-func (s stmpRoomServiceBroadcaster) ListRoomToSet(ctx context.Context, in *ListRoomInput, conns stmp.ConnSet) error {
+func (s stmpRoomServiceBroadcaster) ListRoomToSet(ctx context.Context, in *ListInput, conns stmp.ConnSet) error {
 	payloads := stmp.NewPayloadMap(in)
 	for conn := range conns {
 		payload, err := payloads.Marshal(conn)
@@ -310,7 +363,7 @@ func (s stmpRoomServiceBroadcaster) ListRoomToSet(ctx context.Context, in *ListR
 	return nil
 }
 
-func (s stmpRoomServiceBroadcaster) ListRoomToAll(ctx context.Context, in *ListRoomInput, srv *stmp.Server, filter stmp.ConnFilter) error {
+func (s stmpRoomServiceBroadcaster) ListRoomToAll(ctx context.Context, in *ListInput, srv *stmp.Server, filter stmp.ConnFilter) error {
 	return srv.Broadcast(ctx, "stmp.examples.room.RoomService.ListRoom", in, filter)
 }
 
@@ -437,7 +490,7 @@ func STMPNewRoomServiceBroadcaster() STMPRoomServiceBroadcaster {
 
 type STMPRoomServiceClient interface {
 	CreateRoom(ctx context.Context, in *CreateRoomInput, opts ...stmp.CallOption) (*RoomModel, error)
-	ListRoom(ctx context.Context, in *ListRoomInput, opts ...stmp.CallOption) (*ListRoomOutput, error)
+	ListRoom(ctx context.Context, in *ListInput, opts ...stmp.CallOption) (*ListRoomOutput, error)
 	JoinRoom(ctx context.Context, in *JoinRoomInput, opts ...stmp.CallOption) (*RoomModel, error)
 	ExitRoom(ctx context.Context, in *ExitRoomInput, opts ...stmp.CallOption) (*empty.Empty, error)
 	SendMessage(ctx context.Context, in *SendMessageInput, opts ...stmp.CallOption) (*empty.Empty, error)
@@ -452,7 +505,7 @@ func (s *stmpRoomServiceClient) CreateRoom(ctx context.Context, in *CreateRoomIn
 	return out.(*RoomModel), err
 }
 
-func (s *stmpRoomServiceClient) ListRoom(ctx context.Context, in *ListRoomInput, opts ...stmp.CallOption) (*ListRoomOutput, error) {
+func (s *stmpRoomServiceClient) ListRoom(ctx context.Context, in *ListInput, opts ...stmp.CallOption) (*ListRoomOutput, error) {
 	out, err := s.c.Invoke(ctx, "stmp.examples.room.RoomService.ListRoom", in, stmp.NewCallOptions(opts...))
 	return out.(*ListRoomOutput), err
 }
