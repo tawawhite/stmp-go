@@ -55,8 +55,11 @@ func main() {
 	conn, _ := stmp.DialTCP("", nil)
 	usc := room_proto.STMPNewUserServiceClient(conn)
 	usb := room_proto.STMPNewUserServiceBroadcaster()
+	reb := room_proto.STMPNewRoomEventsBroadcaster()
+	_ = reb.NewMessageToAll(nil, nil, nil, nil)
+	_ = reb.UserEnterToSet(nil, nil, nil)
 	_, _ = usc.ListUser(nil, &room_proto.ListUserInput{})
-	_ = usb.BroadcastListUser(nil, &room_proto.ListUserInput{}, srv, nil)
+	_ = usb.ListUserToAll(nil, &room_proto.ListUserInput{}, srv, nil)
 
 	go srv.ListenAndServeWebSocket("127.0.0.1:5002", "/ws")
 	println("room server is listening at ws://127.0.0.1:5002/ws")

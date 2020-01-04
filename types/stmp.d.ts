@@ -64,5 +64,7 @@ declare module 'stmp' {
         header: Header
     }
 
-    export function dialWebSocket(addr: string, options?: Partial<DialOptions>): Promise<Connection>;
+    export class TCPClient extends Connection {
+        constructor(addr: string, options?: Partial<DialOptions>)
+    }
 }

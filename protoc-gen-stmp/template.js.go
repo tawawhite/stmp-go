@@ -55,11 +55,9 @@ function initNamespace(root, ns, factory) {
 {{end}}  };
   
   ns.{{$service.ServiceName}}Broadcaster = class {{$service.ServiceName}}Broadcaster {
-{{range $i2, $method := $service.Methods}}    static {{$method.MethodName}}(input, conn, options) { return conn.invoke("{{$method.FullMethod}}", input, options) }
-    static {{$method.MethodName}}ForSet(input, conns) { const pm = new PayloadMap(input); for (const conn of conns) conn.call("{{$method.FullMethod}}", pm.get(conn), notifyOptions) }
-    static broadcast{{$method.MethodName}}(input, srv, filter) { return srv.broadcast("{{$method.FullMethod}}", input, filter) }
-    static {{$method.MethodName}}Method() { return "{{$method.FullMethod}}" }
-    static {{$method.MethodName}}Action() { return "{{$method.ActionHex}}" }
+{{range $i2, $method := $service.Methods}}    {{$method.MethodName}}ToOne(input, conn, options) { return conn.invoke("{{$method.FullMethod}}", input, options) }
+    {{$method.MethodName}}ToSet(input, conns) { const pm = new PayloadMap(input); for (const conn of conns) conn.call("{{$method.FullMethod}}", pm.get(conn), notifyOptions) }
+    {{$method.MethodName}}ToAll(input, srv, filter) { return srv.broadcast("{{$method.FullMethod}}", input, filter) }
 {{end}}  };
   
   ns.{{$service.ServiceName}}Client = class {{$service.ServiceName}}Client {
@@ -89,11 +87,10 @@ declare namespace {{.RootNamespace}} {
 {{end}}    }
 
     class {{$service.ServiceName}}Broadcaster {
-{{range $i1, $method := $service.Methods}}      static {{$method.MethodName}}(input: pb.{{$method.IInput}}, conn: Connection, options?: Partial<CallOptions>): Promise<pb.{{$method.Output}}>
-      static {{$method.MethodName}}ForSet(input: pb.{{$method.IInput}}, conns: Set<Connection>): void
-      static broadcast{{$method.MethodName}}(input: pb.{{$method.IInput}}, srv: Server, filter?: ConnFilter): void
-      static {{$method.MethodName}}Method(): string
-      static {{$method.MethodName}}Action(): string
+      constructor()
+{{range $i1, $method := $service.Methods}}      {{$method.MethodName}}ToOne(input: pb.{{$method.IInput}}, conn: Connection, options?: Partial<CallOptions>): Promise<pb.{{$method.Output}}>
+      {{$method.MethodName}}ToSet(input: pb.{{$method.IInput}}, conns: Set<Connection>): void
+      {{$method.MethodName}}ToAll(input: pb.{{$method.IInput}}, srv: Server, filter?: ConnFilter): void
 {{end}}    }
 
     class {{$service.ServiceName}}Client {

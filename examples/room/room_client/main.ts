@@ -4,7 +4,7 @@
  */
 
 
-import {Context, dialWebSocket, Server} from "stmp";
+import {Context, Server, TCPClient} from "stmp";
 import pb from "../room_proto/room.pb";
 import ListUserInput = pb.stmp.examples.room.ListUserInput;
 import ListUserOutput = pb.stmp.examples.room.ListUserOutput;
@@ -22,10 +22,11 @@ export async function main() {
     const srv = new Server();
     const userService = new UserService();
     UserServiceServer.register(srv, userService);
-    const conn = await dialWebSocket("ws://127.0.0.1:5001/ws");
-    const nc = new UserServiceClient(conn);
-    const users = await nc.ListUser({limit: 20});
-    UserServiceBroadcaster.broadcastListUser({limit: 20}, srv);
-    const users2 = await UserServiceBroadcaster.ListUser({limit: 20}, conn);
+    const conn = new TCPClient("ws://127.0.0.1:5001/ws");
+    const usc = new UserServiceClient(conn);
+    const usb = new UserServiceBroadcaster();
+    const users = await usc.ListUser({limit: 20});
+    usb.ListUserToAll({limit: 20}, srv);
+    const users2 = await usb.ListUserToOne({limit: 20}, conn);
     console.log(users.total == users2.total);
 }

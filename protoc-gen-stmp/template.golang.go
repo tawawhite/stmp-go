@@ -43,22 +43,20 @@ func STMPUnregister{{$service.ServiceName}}Server(r stmp.Router, s STMP{{$servic
 {{end}}}
 
 type STMP{{$service.ServiceName}}Broadcaster interface {
-{{range $index, $method := $service.Methods}}	{{$method.MethodName}}(ctx context.Context, in *{{$method.Input}}, conn *stmp.Conn, opts ...stmp.CallOption) (*{{$method.Output}}, error)
-	{{$method.MethodName}}ForList(ctx context.Context, in *{{$method.Input}}, conns ...*stmp.Conn) error
-	{{$method.MethodName}}ForKeys(ctx context.Context, in *{{$method.Input}}, conns stmp.ConnSet) error
-	Broadcast{{$method.MethodName}}(ctx context.Context, in *{{$method.Input}}, srv *stmp.Server, filter stmp.ConnFilter) error
-	{{$method.MethodName}}Method() string
-	{{$method.MethodName}}Action() uint64
+{{range $index, $method := $service.Methods}}	{{$method.MethodName}}ToOne(ctx context.Context, in *{{$method.Input}}, conn *stmp.Conn, opts ...stmp.CallOption) (*{{$method.Output}}, error)
+	{{$method.MethodName}}ToList(ctx context.Context, in *{{$method.Input}}, conns ...*stmp.Conn) error
+	{{$method.MethodName}}ToSet(ctx context.Context, in *{{$method.Input}}, conns stmp.ConnSet) error
+	{{$method.MethodName}}ToAll(ctx context.Context, in *{{$method.Input}}, srv *stmp.Server, filter stmp.ConnFilter) error
 {{end}}}
 
 type stmp{{$service.ServiceName}}Broadcaster struct{}
 {{range $index, $method := $service.Methods}}
-func (s stmp{{$service.ServiceName}}Broadcaster) {{$method.MethodName}}(ctx context.Context, in *{{$method.Input}}, conn *stmp.Conn, opts ...stmp.CallOption) (*{{$method.Output}}, error) {
+func (s stmp{{$service.ServiceName}}Broadcaster) {{$method.MethodName}}ToOne(ctx context.Context, in *{{$method.Input}}, conn *stmp.Conn, opts ...stmp.CallOption) (*{{$method.Output}}, error) {
 	out, err := conn.Invoke(ctx, "{{$method.FullMethod}}", in, stmp.NewCallOptions(opts...))
 	return out.(*{{$method.Output}}), err
 }
 
-func (s stmp{{$service.ServiceName}}Broadcaster) {{$method.MethodName}}ForList(ctx context.Context, in *{{$method.Input}}, conns ...*stmp.Conn) error {
+func (s stmp{{$service.ServiceName}}Broadcaster) {{$method.MethodName}}ToList(ctx context.Context, in *{{$method.Input}}, conns ...*stmp.Conn) error {
 	payloads := stmp.NewPayloadMap(in)
 	for _, conn := range conns {
 		payload, err := payloads.Marshal(conn)
@@ -73,7 +71,7 @@ func (s stmp{{$service.ServiceName}}Broadcaster) {{$method.MethodName}}ForList(c
 	return nil
 }
 
-func (s stmp{{$service.ServiceName}}Broadcaster) {{$method.MethodName}}ForKeys(ctx context.Context, in *{{$method.Input}}, conns stmp.ConnSet) error {
+func (s stmp{{$service.ServiceName}}Broadcaster) {{$method.MethodName}}ToSet(ctx context.Context, in *{{$method.Input}}, conns stmp.ConnSet) error {
 	payloads := stmp.NewPayloadMap(in)
 	for conn := range conns {
 		payload, err := payloads.Marshal(conn)
@@ -88,16 +86,8 @@ func (s stmp{{$service.ServiceName}}Broadcaster) {{$method.MethodName}}ForKeys(c
 	return nil
 }
 
-func (s stmp{{$service.ServiceName}}Broadcaster) Broadcast{{$method.MethodName}}(ctx context.Context, in *{{$method.Input}}, srv *stmp.Server, filter stmp.ConnFilter) error {
+func (s stmp{{$service.ServiceName}}Broadcaster) {{$method.MethodName}}ToAll(ctx context.Context, in *{{$method.Input}}, srv *stmp.Server, filter stmp.ConnFilter) error {
 	return srv.Broadcast(ctx, "{{$method.FullMethod}}", in, filter)
-}
-
-func (s stmp{{$service.ServiceName}}Broadcaster) {{$method.MethodName}}Method() string {
-	return "{{$method.FullMethod}}"
-}
-
-func (s stmp{{$service.ServiceName}}Broadcaster) {{$method.MethodName}}Action() uint64 {
-	return 0x{{$method.ActionHex}}
 }
 {{end}}
 func STMPNew{{$service.ServiceName}}Broadcaster() STMP{{$service.ServiceName}}Broadcaster {

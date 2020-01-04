@@ -26,22 +26,20 @@ func STMPUnregisterUserServiceServer(r stmp.Router, s STMPUserServiceServer) {
 }
 
 type STMPUserServiceBroadcaster interface {
-	ListUser(ctx context.Context, in *ListUserInput, conn *stmp.Conn, opts ...stmp.CallOption) (*ListUserOutput, error)
-	ListUserForList(ctx context.Context, in *ListUserInput, conns ...*stmp.Conn) error
-	ListUserForKeys(ctx context.Context, in *ListUserInput, conns stmp.ConnSet) error
-	BroadcastListUser(ctx context.Context, in *ListUserInput, srv *stmp.Server, filter stmp.ConnFilter) error
-	ListUserMethod() string
-	ListUserAction() uint64
+	ListUserToOne(ctx context.Context, in *ListUserInput, conn *stmp.Conn, opts ...stmp.CallOption) (*ListUserOutput, error)
+	ListUserToList(ctx context.Context, in *ListUserInput, conns ...*stmp.Conn) error
+	ListUserToSet(ctx context.Context, in *ListUserInput, conns stmp.ConnSet) error
+	ListUserToAll(ctx context.Context, in *ListUserInput, srv *stmp.Server, filter stmp.ConnFilter) error
 }
 
 type stmpUserServiceBroadcaster struct{}
 
-func (s stmpUserServiceBroadcaster) ListUser(ctx context.Context, in *ListUserInput, conn *stmp.Conn, opts ...stmp.CallOption) (*ListUserOutput, error) {
+func (s stmpUserServiceBroadcaster) ListUserToOne(ctx context.Context, in *ListUserInput, conn *stmp.Conn, opts ...stmp.CallOption) (*ListUserOutput, error) {
 	out, err := conn.Invoke(ctx, "stmp.examples.room.UserService.ListUser", in, stmp.NewCallOptions(opts...))
 	return out.(*ListUserOutput), err
 }
 
-func (s stmpUserServiceBroadcaster) ListUserForList(ctx context.Context, in *ListUserInput, conns ...*stmp.Conn) error {
+func (s stmpUserServiceBroadcaster) ListUserToList(ctx context.Context, in *ListUserInput, conns ...*stmp.Conn) error {
 	payloads := stmp.NewPayloadMap(in)
 	for _, conn := range conns {
 		payload, err := payloads.Marshal(conn)
@@ -56,7 +54,7 @@ func (s stmpUserServiceBroadcaster) ListUserForList(ctx context.Context, in *Lis
 	return nil
 }
 
-func (s stmpUserServiceBroadcaster) ListUserForKeys(ctx context.Context, in *ListUserInput, conns stmp.ConnSet) error {
+func (s stmpUserServiceBroadcaster) ListUserToSet(ctx context.Context, in *ListUserInput, conns stmp.ConnSet) error {
 	payloads := stmp.NewPayloadMap(in)
 	for conn := range conns {
 		payload, err := payloads.Marshal(conn)
@@ -71,16 +69,8 @@ func (s stmpUserServiceBroadcaster) ListUserForKeys(ctx context.Context, in *Lis
 	return nil
 }
 
-func (s stmpUserServiceBroadcaster) BroadcastListUser(ctx context.Context, in *ListUserInput, srv *stmp.Server, filter stmp.ConnFilter) error {
+func (s stmpUserServiceBroadcaster) ListUserToAll(ctx context.Context, in *ListUserInput, srv *stmp.Server, filter stmp.ConnFilter) error {
 	return srv.Broadcast(ctx, "stmp.examples.room.UserService.ListUser", in, filter)
-}
-
-func (s stmpUserServiceBroadcaster) ListUserMethod() string {
-	return "stmp.examples.room.UserService.ListUser"
-}
-
-func (s stmpUserServiceBroadcaster) ListUserAction() uint64 {
-	return 0x1001
 }
 
 func STMPNewUserServiceBroadcaster() STMPUserServiceBroadcaster {
@@ -121,22 +111,20 @@ func STMPUnregisterUserEventsServer(r stmp.Router, s STMPUserEventsServer) {
 }
 
 type STMPUserEventsBroadcaster interface {
-	StatusUpdated(ctx context.Context, in *UserModel, conn *stmp.Conn, opts ...stmp.CallOption) (*empty.Empty, error)
-	StatusUpdatedForList(ctx context.Context, in *UserModel, conns ...*stmp.Conn) error
-	StatusUpdatedForKeys(ctx context.Context, in *UserModel, conns stmp.ConnSet) error
-	BroadcastStatusUpdated(ctx context.Context, in *UserModel, srv *stmp.Server, filter stmp.ConnFilter) error
-	StatusUpdatedMethod() string
-	StatusUpdatedAction() uint64
+	StatusUpdatedToOne(ctx context.Context, in *UserModel, conn *stmp.Conn, opts ...stmp.CallOption) (*empty.Empty, error)
+	StatusUpdatedToList(ctx context.Context, in *UserModel, conns ...*stmp.Conn) error
+	StatusUpdatedToSet(ctx context.Context, in *UserModel, conns stmp.ConnSet) error
+	StatusUpdatedToAll(ctx context.Context, in *UserModel, srv *stmp.Server, filter stmp.ConnFilter) error
 }
 
 type stmpUserEventsBroadcaster struct{}
 
-func (s stmpUserEventsBroadcaster) StatusUpdated(ctx context.Context, in *UserModel, conn *stmp.Conn, opts ...stmp.CallOption) (*empty.Empty, error) {
+func (s stmpUserEventsBroadcaster) StatusUpdatedToOne(ctx context.Context, in *UserModel, conn *stmp.Conn, opts ...stmp.CallOption) (*empty.Empty, error) {
 	out, err := conn.Invoke(ctx, "stmp.examples.room.UserEvents.StatusUpdated", in, stmp.NewCallOptions(opts...))
 	return out.(*empty.Empty), err
 }
 
-func (s stmpUserEventsBroadcaster) StatusUpdatedForList(ctx context.Context, in *UserModel, conns ...*stmp.Conn) error {
+func (s stmpUserEventsBroadcaster) StatusUpdatedToList(ctx context.Context, in *UserModel, conns ...*stmp.Conn) error {
 	payloads := stmp.NewPayloadMap(in)
 	for _, conn := range conns {
 		payload, err := payloads.Marshal(conn)
@@ -151,7 +139,7 @@ func (s stmpUserEventsBroadcaster) StatusUpdatedForList(ctx context.Context, in 
 	return nil
 }
 
-func (s stmpUserEventsBroadcaster) StatusUpdatedForKeys(ctx context.Context, in *UserModel, conns stmp.ConnSet) error {
+func (s stmpUserEventsBroadcaster) StatusUpdatedToSet(ctx context.Context, in *UserModel, conns stmp.ConnSet) error {
 	payloads := stmp.NewPayloadMap(in)
 	for conn := range conns {
 		payload, err := payloads.Marshal(conn)
@@ -166,16 +154,8 @@ func (s stmpUserEventsBroadcaster) StatusUpdatedForKeys(ctx context.Context, in 
 	return nil
 }
 
-func (s stmpUserEventsBroadcaster) BroadcastStatusUpdated(ctx context.Context, in *UserModel, srv *stmp.Server, filter stmp.ConnFilter) error {
+func (s stmpUserEventsBroadcaster) StatusUpdatedToAll(ctx context.Context, in *UserModel, srv *stmp.Server, filter stmp.ConnFilter) error {
 	return srv.Broadcast(ctx, "stmp.examples.room.UserEvents.StatusUpdated", in, filter)
-}
-
-func (s stmpUserEventsBroadcaster) StatusUpdatedMethod() string {
-	return "stmp.examples.room.UserEvents.StatusUpdated"
-}
-
-func (s stmpUserEventsBroadcaster) StatusUpdatedAction() uint64 {
-	return 0x1101
 }
 
 func STMPNewUserEventsBroadcaster() STMPUserEventsBroadcaster {
@@ -232,46 +212,36 @@ func STMPUnregisterRoomServiceServer(r stmp.Router, s STMPRoomServiceServer) {
 }
 
 type STMPRoomServiceBroadcaster interface {
-	CreateRoom(ctx context.Context, in *CreateRoomInput, conn *stmp.Conn, opts ...stmp.CallOption) (*RoomModel, error)
-	CreateRoomForList(ctx context.Context, in *CreateRoomInput, conns ...*stmp.Conn) error
-	CreateRoomForKeys(ctx context.Context, in *CreateRoomInput, conns stmp.ConnSet) error
-	BroadcastCreateRoom(ctx context.Context, in *CreateRoomInput, srv *stmp.Server, filter stmp.ConnFilter) error
-	CreateRoomMethod() string
-	CreateRoomAction() uint64
-	ListRoom(ctx context.Context, in *ListRoomInput, conn *stmp.Conn, opts ...stmp.CallOption) (*ListRoomOutput, error)
-	ListRoomForList(ctx context.Context, in *ListRoomInput, conns ...*stmp.Conn) error
-	ListRoomForKeys(ctx context.Context, in *ListRoomInput, conns stmp.ConnSet) error
-	BroadcastListRoom(ctx context.Context, in *ListRoomInput, srv *stmp.Server, filter stmp.ConnFilter) error
-	ListRoomMethod() string
-	ListRoomAction() uint64
-	JoinRoom(ctx context.Context, in *JoinRoomInput, conn *stmp.Conn, opts ...stmp.CallOption) (*RoomModel, error)
-	JoinRoomForList(ctx context.Context, in *JoinRoomInput, conns ...*stmp.Conn) error
-	JoinRoomForKeys(ctx context.Context, in *JoinRoomInput, conns stmp.ConnSet) error
-	BroadcastJoinRoom(ctx context.Context, in *JoinRoomInput, srv *stmp.Server, filter stmp.ConnFilter) error
-	JoinRoomMethod() string
-	JoinRoomAction() uint64
-	ExitRoom(ctx context.Context, in *ExitRoomInput, conn *stmp.Conn, opts ...stmp.CallOption) (*empty.Empty, error)
-	ExitRoomForList(ctx context.Context, in *ExitRoomInput, conns ...*stmp.Conn) error
-	ExitRoomForKeys(ctx context.Context, in *ExitRoomInput, conns stmp.ConnSet) error
-	BroadcastExitRoom(ctx context.Context, in *ExitRoomInput, srv *stmp.Server, filter stmp.ConnFilter) error
-	ExitRoomMethod() string
-	ExitRoomAction() uint64
-	SendMessage(ctx context.Context, in *SendMessageInput, conn *stmp.Conn, opts ...stmp.CallOption) (*empty.Empty, error)
-	SendMessageForList(ctx context.Context, in *SendMessageInput, conns ...*stmp.Conn) error
-	SendMessageForKeys(ctx context.Context, in *SendMessageInput, conns stmp.ConnSet) error
-	BroadcastSendMessage(ctx context.Context, in *SendMessageInput, srv *stmp.Server, filter stmp.ConnFilter) error
-	SendMessageMethod() string
-	SendMessageAction() uint64
+	CreateRoomToOne(ctx context.Context, in *CreateRoomInput, conn *stmp.Conn, opts ...stmp.CallOption) (*RoomModel, error)
+	CreateRoomToList(ctx context.Context, in *CreateRoomInput, conns ...*stmp.Conn) error
+	CreateRoomToSet(ctx context.Context, in *CreateRoomInput, conns stmp.ConnSet) error
+	CreateRoomToAll(ctx context.Context, in *CreateRoomInput, srv *stmp.Server, filter stmp.ConnFilter) error
+	ListRoomToOne(ctx context.Context, in *ListRoomInput, conn *stmp.Conn, opts ...stmp.CallOption) (*ListRoomOutput, error)
+	ListRoomToList(ctx context.Context, in *ListRoomInput, conns ...*stmp.Conn) error
+	ListRoomToSet(ctx context.Context, in *ListRoomInput, conns stmp.ConnSet) error
+	ListRoomToAll(ctx context.Context, in *ListRoomInput, srv *stmp.Server, filter stmp.ConnFilter) error
+	JoinRoomToOne(ctx context.Context, in *JoinRoomInput, conn *stmp.Conn, opts ...stmp.CallOption) (*RoomModel, error)
+	JoinRoomToList(ctx context.Context, in *JoinRoomInput, conns ...*stmp.Conn) error
+	JoinRoomToSet(ctx context.Context, in *JoinRoomInput, conns stmp.ConnSet) error
+	JoinRoomToAll(ctx context.Context, in *JoinRoomInput, srv *stmp.Server, filter stmp.ConnFilter) error
+	ExitRoomToOne(ctx context.Context, in *ExitRoomInput, conn *stmp.Conn, opts ...stmp.CallOption) (*empty.Empty, error)
+	ExitRoomToList(ctx context.Context, in *ExitRoomInput, conns ...*stmp.Conn) error
+	ExitRoomToSet(ctx context.Context, in *ExitRoomInput, conns stmp.ConnSet) error
+	ExitRoomToAll(ctx context.Context, in *ExitRoomInput, srv *stmp.Server, filter stmp.ConnFilter) error
+	SendMessageToOne(ctx context.Context, in *SendMessageInput, conn *stmp.Conn, opts ...stmp.CallOption) (*empty.Empty, error)
+	SendMessageToList(ctx context.Context, in *SendMessageInput, conns ...*stmp.Conn) error
+	SendMessageToSet(ctx context.Context, in *SendMessageInput, conns stmp.ConnSet) error
+	SendMessageToAll(ctx context.Context, in *SendMessageInput, srv *stmp.Server, filter stmp.ConnFilter) error
 }
 
 type stmpRoomServiceBroadcaster struct{}
 
-func (s stmpRoomServiceBroadcaster) CreateRoom(ctx context.Context, in *CreateRoomInput, conn *stmp.Conn, opts ...stmp.CallOption) (*RoomModel, error) {
+func (s stmpRoomServiceBroadcaster) CreateRoomToOne(ctx context.Context, in *CreateRoomInput, conn *stmp.Conn, opts ...stmp.CallOption) (*RoomModel, error) {
 	out, err := conn.Invoke(ctx, "stmp.examples.room.RoomService.CreateRoom", in, stmp.NewCallOptions(opts...))
 	return out.(*RoomModel), err
 }
 
-func (s stmpRoomServiceBroadcaster) CreateRoomForList(ctx context.Context, in *CreateRoomInput, conns ...*stmp.Conn) error {
+func (s stmpRoomServiceBroadcaster) CreateRoomToList(ctx context.Context, in *CreateRoomInput, conns ...*stmp.Conn) error {
 	payloads := stmp.NewPayloadMap(in)
 	for _, conn := range conns {
 		payload, err := payloads.Marshal(conn)
@@ -286,7 +256,7 @@ func (s stmpRoomServiceBroadcaster) CreateRoomForList(ctx context.Context, in *C
 	return nil
 }
 
-func (s stmpRoomServiceBroadcaster) CreateRoomForKeys(ctx context.Context, in *CreateRoomInput, conns stmp.ConnSet) error {
+func (s stmpRoomServiceBroadcaster) CreateRoomToSet(ctx context.Context, in *CreateRoomInput, conns stmp.ConnSet) error {
 	payloads := stmp.NewPayloadMap(in)
 	for conn := range conns {
 		payload, err := payloads.Marshal(conn)
@@ -301,24 +271,16 @@ func (s stmpRoomServiceBroadcaster) CreateRoomForKeys(ctx context.Context, in *C
 	return nil
 }
 
-func (s stmpRoomServiceBroadcaster) BroadcastCreateRoom(ctx context.Context, in *CreateRoomInput, srv *stmp.Server, filter stmp.ConnFilter) error {
+func (s stmpRoomServiceBroadcaster) CreateRoomToAll(ctx context.Context, in *CreateRoomInput, srv *stmp.Server, filter stmp.ConnFilter) error {
 	return srv.Broadcast(ctx, "stmp.examples.room.RoomService.CreateRoom", in, filter)
 }
 
-func (s stmpRoomServiceBroadcaster) CreateRoomMethod() string {
-	return "stmp.examples.room.RoomService.CreateRoom"
-}
-
-func (s stmpRoomServiceBroadcaster) CreateRoomAction() uint64 {
-	return 0x1201
-}
-
-func (s stmpRoomServiceBroadcaster) ListRoom(ctx context.Context, in *ListRoomInput, conn *stmp.Conn, opts ...stmp.CallOption) (*ListRoomOutput, error) {
+func (s stmpRoomServiceBroadcaster) ListRoomToOne(ctx context.Context, in *ListRoomInput, conn *stmp.Conn, opts ...stmp.CallOption) (*ListRoomOutput, error) {
 	out, err := conn.Invoke(ctx, "stmp.examples.room.RoomService.ListRoom", in, stmp.NewCallOptions(opts...))
 	return out.(*ListRoomOutput), err
 }
 
-func (s stmpRoomServiceBroadcaster) ListRoomForList(ctx context.Context, in *ListRoomInput, conns ...*stmp.Conn) error {
+func (s stmpRoomServiceBroadcaster) ListRoomToList(ctx context.Context, in *ListRoomInput, conns ...*stmp.Conn) error {
 	payloads := stmp.NewPayloadMap(in)
 	for _, conn := range conns {
 		payload, err := payloads.Marshal(conn)
@@ -333,7 +295,7 @@ func (s stmpRoomServiceBroadcaster) ListRoomForList(ctx context.Context, in *Lis
 	return nil
 }
 
-func (s stmpRoomServiceBroadcaster) ListRoomForKeys(ctx context.Context, in *ListRoomInput, conns stmp.ConnSet) error {
+func (s stmpRoomServiceBroadcaster) ListRoomToSet(ctx context.Context, in *ListRoomInput, conns stmp.ConnSet) error {
 	payloads := stmp.NewPayloadMap(in)
 	for conn := range conns {
 		payload, err := payloads.Marshal(conn)
@@ -348,24 +310,16 @@ func (s stmpRoomServiceBroadcaster) ListRoomForKeys(ctx context.Context, in *Lis
 	return nil
 }
 
-func (s stmpRoomServiceBroadcaster) BroadcastListRoom(ctx context.Context, in *ListRoomInput, srv *stmp.Server, filter stmp.ConnFilter) error {
+func (s stmpRoomServiceBroadcaster) ListRoomToAll(ctx context.Context, in *ListRoomInput, srv *stmp.Server, filter stmp.ConnFilter) error {
 	return srv.Broadcast(ctx, "stmp.examples.room.RoomService.ListRoom", in, filter)
 }
 
-func (s stmpRoomServiceBroadcaster) ListRoomMethod() string {
-	return "stmp.examples.room.RoomService.ListRoom"
-}
-
-func (s stmpRoomServiceBroadcaster) ListRoomAction() uint64 {
-	return 0x1202
-}
-
-func (s stmpRoomServiceBroadcaster) JoinRoom(ctx context.Context, in *JoinRoomInput, conn *stmp.Conn, opts ...stmp.CallOption) (*RoomModel, error) {
+func (s stmpRoomServiceBroadcaster) JoinRoomToOne(ctx context.Context, in *JoinRoomInput, conn *stmp.Conn, opts ...stmp.CallOption) (*RoomModel, error) {
 	out, err := conn.Invoke(ctx, "stmp.examples.room.RoomService.JoinRoom", in, stmp.NewCallOptions(opts...))
 	return out.(*RoomModel), err
 }
 
-func (s stmpRoomServiceBroadcaster) JoinRoomForList(ctx context.Context, in *JoinRoomInput, conns ...*stmp.Conn) error {
+func (s stmpRoomServiceBroadcaster) JoinRoomToList(ctx context.Context, in *JoinRoomInput, conns ...*stmp.Conn) error {
 	payloads := stmp.NewPayloadMap(in)
 	for _, conn := range conns {
 		payload, err := payloads.Marshal(conn)
@@ -380,7 +334,7 @@ func (s stmpRoomServiceBroadcaster) JoinRoomForList(ctx context.Context, in *Joi
 	return nil
 }
 
-func (s stmpRoomServiceBroadcaster) JoinRoomForKeys(ctx context.Context, in *JoinRoomInput, conns stmp.ConnSet) error {
+func (s stmpRoomServiceBroadcaster) JoinRoomToSet(ctx context.Context, in *JoinRoomInput, conns stmp.ConnSet) error {
 	payloads := stmp.NewPayloadMap(in)
 	for conn := range conns {
 		payload, err := payloads.Marshal(conn)
@@ -395,24 +349,16 @@ func (s stmpRoomServiceBroadcaster) JoinRoomForKeys(ctx context.Context, in *Joi
 	return nil
 }
 
-func (s stmpRoomServiceBroadcaster) BroadcastJoinRoom(ctx context.Context, in *JoinRoomInput, srv *stmp.Server, filter stmp.ConnFilter) error {
+func (s stmpRoomServiceBroadcaster) JoinRoomToAll(ctx context.Context, in *JoinRoomInput, srv *stmp.Server, filter stmp.ConnFilter) error {
 	return srv.Broadcast(ctx, "stmp.examples.room.RoomService.JoinRoom", in, filter)
 }
 
-func (s stmpRoomServiceBroadcaster) JoinRoomMethod() string {
-	return "stmp.examples.room.RoomService.JoinRoom"
-}
-
-func (s stmpRoomServiceBroadcaster) JoinRoomAction() uint64 {
-	return 0x1203
-}
-
-func (s stmpRoomServiceBroadcaster) ExitRoom(ctx context.Context, in *ExitRoomInput, conn *stmp.Conn, opts ...stmp.CallOption) (*empty.Empty, error) {
+func (s stmpRoomServiceBroadcaster) ExitRoomToOne(ctx context.Context, in *ExitRoomInput, conn *stmp.Conn, opts ...stmp.CallOption) (*empty.Empty, error) {
 	out, err := conn.Invoke(ctx, "stmp.examples.room.RoomService.ExitRoom", in, stmp.NewCallOptions(opts...))
 	return out.(*empty.Empty), err
 }
 
-func (s stmpRoomServiceBroadcaster) ExitRoomForList(ctx context.Context, in *ExitRoomInput, conns ...*stmp.Conn) error {
+func (s stmpRoomServiceBroadcaster) ExitRoomToList(ctx context.Context, in *ExitRoomInput, conns ...*stmp.Conn) error {
 	payloads := stmp.NewPayloadMap(in)
 	for _, conn := range conns {
 		payload, err := payloads.Marshal(conn)
@@ -427,7 +373,7 @@ func (s stmpRoomServiceBroadcaster) ExitRoomForList(ctx context.Context, in *Exi
 	return nil
 }
 
-func (s stmpRoomServiceBroadcaster) ExitRoomForKeys(ctx context.Context, in *ExitRoomInput, conns stmp.ConnSet) error {
+func (s stmpRoomServiceBroadcaster) ExitRoomToSet(ctx context.Context, in *ExitRoomInput, conns stmp.ConnSet) error {
 	payloads := stmp.NewPayloadMap(in)
 	for conn := range conns {
 		payload, err := payloads.Marshal(conn)
@@ -442,24 +388,16 @@ func (s stmpRoomServiceBroadcaster) ExitRoomForKeys(ctx context.Context, in *Exi
 	return nil
 }
 
-func (s stmpRoomServiceBroadcaster) BroadcastExitRoom(ctx context.Context, in *ExitRoomInput, srv *stmp.Server, filter stmp.ConnFilter) error {
+func (s stmpRoomServiceBroadcaster) ExitRoomToAll(ctx context.Context, in *ExitRoomInput, srv *stmp.Server, filter stmp.ConnFilter) error {
 	return srv.Broadcast(ctx, "stmp.examples.room.RoomService.ExitRoom", in, filter)
 }
 
-func (s stmpRoomServiceBroadcaster) ExitRoomMethod() string {
-	return "stmp.examples.room.RoomService.ExitRoom"
-}
-
-func (s stmpRoomServiceBroadcaster) ExitRoomAction() uint64 {
-	return 0x1204
-}
-
-func (s stmpRoomServiceBroadcaster) SendMessage(ctx context.Context, in *SendMessageInput, conn *stmp.Conn, opts ...stmp.CallOption) (*empty.Empty, error) {
+func (s stmpRoomServiceBroadcaster) SendMessageToOne(ctx context.Context, in *SendMessageInput, conn *stmp.Conn, opts ...stmp.CallOption) (*empty.Empty, error) {
 	out, err := conn.Invoke(ctx, "stmp.examples.room.RoomService.SendMessage", in, stmp.NewCallOptions(opts...))
 	return out.(*empty.Empty), err
 }
 
-func (s stmpRoomServiceBroadcaster) SendMessageForList(ctx context.Context, in *SendMessageInput, conns ...*stmp.Conn) error {
+func (s stmpRoomServiceBroadcaster) SendMessageToList(ctx context.Context, in *SendMessageInput, conns ...*stmp.Conn) error {
 	payloads := stmp.NewPayloadMap(in)
 	for _, conn := range conns {
 		payload, err := payloads.Marshal(conn)
@@ -474,7 +412,7 @@ func (s stmpRoomServiceBroadcaster) SendMessageForList(ctx context.Context, in *
 	return nil
 }
 
-func (s stmpRoomServiceBroadcaster) SendMessageForKeys(ctx context.Context, in *SendMessageInput, conns stmp.ConnSet) error {
+func (s stmpRoomServiceBroadcaster) SendMessageToSet(ctx context.Context, in *SendMessageInput, conns stmp.ConnSet) error {
 	payloads := stmp.NewPayloadMap(in)
 	for conn := range conns {
 		payload, err := payloads.Marshal(conn)
@@ -489,16 +427,8 @@ func (s stmpRoomServiceBroadcaster) SendMessageForKeys(ctx context.Context, in *
 	return nil
 }
 
-func (s stmpRoomServiceBroadcaster) BroadcastSendMessage(ctx context.Context, in *SendMessageInput, srv *stmp.Server, filter stmp.ConnFilter) error {
+func (s stmpRoomServiceBroadcaster) SendMessageToAll(ctx context.Context, in *SendMessageInput, srv *stmp.Server, filter stmp.ConnFilter) error {
 	return srv.Broadcast(ctx, "stmp.examples.room.RoomService.SendMessage", in, filter)
-}
-
-func (s stmpRoomServiceBroadcaster) SendMessageMethod() string {
-	return "stmp.examples.room.RoomService.SendMessage"
-}
-
-func (s stmpRoomServiceBroadcaster) SendMessageAction() uint64 {
-	return 0x1205
 }
 
 func STMPNewRoomServiceBroadcaster() STMPRoomServiceBroadcaster {
@@ -571,34 +501,28 @@ func STMPUnregisterRoomEventsServer(r stmp.Router, s STMPRoomEventsServer) {
 }
 
 type STMPRoomEventsBroadcaster interface {
-	UserEnter(ctx context.Context, in *UserEnterEvent, conn *stmp.Conn, opts ...stmp.CallOption) (*empty.Empty, error)
-	UserEnterForList(ctx context.Context, in *UserEnterEvent, conns ...*stmp.Conn) error
-	UserEnterForKeys(ctx context.Context, in *UserEnterEvent, conns stmp.ConnSet) error
-	BroadcastUserEnter(ctx context.Context, in *UserEnterEvent, srv *stmp.Server, filter stmp.ConnFilter) error
-	UserEnterMethod() string
-	UserEnterAction() uint64
-	UserExit(ctx context.Context, in *UserExitEvent, conn *stmp.Conn, opts ...stmp.CallOption) (*empty.Empty, error)
-	UserExitForList(ctx context.Context, in *UserExitEvent, conns ...*stmp.Conn) error
-	UserExitForKeys(ctx context.Context, in *UserExitEvent, conns stmp.ConnSet) error
-	BroadcastUserExit(ctx context.Context, in *UserExitEvent, srv *stmp.Server, filter stmp.ConnFilter) error
-	UserExitMethod() string
-	UserExitAction() uint64
-	NewMessage(ctx context.Context, in *ChatMessageModel, conn *stmp.Conn, opts ...stmp.CallOption) (*empty.Empty, error)
-	NewMessageForList(ctx context.Context, in *ChatMessageModel, conns ...*stmp.Conn) error
-	NewMessageForKeys(ctx context.Context, in *ChatMessageModel, conns stmp.ConnSet) error
-	BroadcastNewMessage(ctx context.Context, in *ChatMessageModel, srv *stmp.Server, filter stmp.ConnFilter) error
-	NewMessageMethod() string
-	NewMessageAction() uint64
+	UserEnterToOne(ctx context.Context, in *UserEnterEvent, conn *stmp.Conn, opts ...stmp.CallOption) (*empty.Empty, error)
+	UserEnterToList(ctx context.Context, in *UserEnterEvent, conns ...*stmp.Conn) error
+	UserEnterToSet(ctx context.Context, in *UserEnterEvent, conns stmp.ConnSet) error
+	UserEnterToAll(ctx context.Context, in *UserEnterEvent, srv *stmp.Server, filter stmp.ConnFilter) error
+	UserExitToOne(ctx context.Context, in *UserExitEvent, conn *stmp.Conn, opts ...stmp.CallOption) (*empty.Empty, error)
+	UserExitToList(ctx context.Context, in *UserExitEvent, conns ...*stmp.Conn) error
+	UserExitToSet(ctx context.Context, in *UserExitEvent, conns stmp.ConnSet) error
+	UserExitToAll(ctx context.Context, in *UserExitEvent, srv *stmp.Server, filter stmp.ConnFilter) error
+	NewMessageToOne(ctx context.Context, in *ChatMessageModel, conn *stmp.Conn, opts ...stmp.CallOption) (*empty.Empty, error)
+	NewMessageToList(ctx context.Context, in *ChatMessageModel, conns ...*stmp.Conn) error
+	NewMessageToSet(ctx context.Context, in *ChatMessageModel, conns stmp.ConnSet) error
+	NewMessageToAll(ctx context.Context, in *ChatMessageModel, srv *stmp.Server, filter stmp.ConnFilter) error
 }
 
 type stmpRoomEventsBroadcaster struct{}
 
-func (s stmpRoomEventsBroadcaster) UserEnter(ctx context.Context, in *UserEnterEvent, conn *stmp.Conn, opts ...stmp.CallOption) (*empty.Empty, error) {
+func (s stmpRoomEventsBroadcaster) UserEnterToOne(ctx context.Context, in *UserEnterEvent, conn *stmp.Conn, opts ...stmp.CallOption) (*empty.Empty, error) {
 	out, err := conn.Invoke(ctx, "stmp.examples.room.RoomEvents.UserEnter", in, stmp.NewCallOptions(opts...))
 	return out.(*empty.Empty), err
 }
 
-func (s stmpRoomEventsBroadcaster) UserEnterForList(ctx context.Context, in *UserEnterEvent, conns ...*stmp.Conn) error {
+func (s stmpRoomEventsBroadcaster) UserEnterToList(ctx context.Context, in *UserEnterEvent, conns ...*stmp.Conn) error {
 	payloads := stmp.NewPayloadMap(in)
 	for _, conn := range conns {
 		payload, err := payloads.Marshal(conn)
@@ -613,7 +537,7 @@ func (s stmpRoomEventsBroadcaster) UserEnterForList(ctx context.Context, in *Use
 	return nil
 }
 
-func (s stmpRoomEventsBroadcaster) UserEnterForKeys(ctx context.Context, in *UserEnterEvent, conns stmp.ConnSet) error {
+func (s stmpRoomEventsBroadcaster) UserEnterToSet(ctx context.Context, in *UserEnterEvent, conns stmp.ConnSet) error {
 	payloads := stmp.NewPayloadMap(in)
 	for conn := range conns {
 		payload, err := payloads.Marshal(conn)
@@ -628,24 +552,16 @@ func (s stmpRoomEventsBroadcaster) UserEnterForKeys(ctx context.Context, in *Use
 	return nil
 }
 
-func (s stmpRoomEventsBroadcaster) BroadcastUserEnter(ctx context.Context, in *UserEnterEvent, srv *stmp.Server, filter stmp.ConnFilter) error {
+func (s stmpRoomEventsBroadcaster) UserEnterToAll(ctx context.Context, in *UserEnterEvent, srv *stmp.Server, filter stmp.ConnFilter) error {
 	return srv.Broadcast(ctx, "stmp.examples.room.RoomEvents.UserEnter", in, filter)
 }
 
-func (s stmpRoomEventsBroadcaster) UserEnterMethod() string {
-	return "stmp.examples.room.RoomEvents.UserEnter"
-}
-
-func (s stmpRoomEventsBroadcaster) UserEnterAction() uint64 {
-	return 0x1301
-}
-
-func (s stmpRoomEventsBroadcaster) UserExit(ctx context.Context, in *UserExitEvent, conn *stmp.Conn, opts ...stmp.CallOption) (*empty.Empty, error) {
+func (s stmpRoomEventsBroadcaster) UserExitToOne(ctx context.Context, in *UserExitEvent, conn *stmp.Conn, opts ...stmp.CallOption) (*empty.Empty, error) {
 	out, err := conn.Invoke(ctx, "stmp.examples.room.RoomEvents.UserExit", in, stmp.NewCallOptions(opts...))
 	return out.(*empty.Empty), err
 }
 
-func (s stmpRoomEventsBroadcaster) UserExitForList(ctx context.Context, in *UserExitEvent, conns ...*stmp.Conn) error {
+func (s stmpRoomEventsBroadcaster) UserExitToList(ctx context.Context, in *UserExitEvent, conns ...*stmp.Conn) error {
 	payloads := stmp.NewPayloadMap(in)
 	for _, conn := range conns {
 		payload, err := payloads.Marshal(conn)
@@ -660,7 +576,7 @@ func (s stmpRoomEventsBroadcaster) UserExitForList(ctx context.Context, in *User
 	return nil
 }
 
-func (s stmpRoomEventsBroadcaster) UserExitForKeys(ctx context.Context, in *UserExitEvent, conns stmp.ConnSet) error {
+func (s stmpRoomEventsBroadcaster) UserExitToSet(ctx context.Context, in *UserExitEvent, conns stmp.ConnSet) error {
 	payloads := stmp.NewPayloadMap(in)
 	for conn := range conns {
 		payload, err := payloads.Marshal(conn)
@@ -675,24 +591,16 @@ func (s stmpRoomEventsBroadcaster) UserExitForKeys(ctx context.Context, in *User
 	return nil
 }
 
-func (s stmpRoomEventsBroadcaster) BroadcastUserExit(ctx context.Context, in *UserExitEvent, srv *stmp.Server, filter stmp.ConnFilter) error {
+func (s stmpRoomEventsBroadcaster) UserExitToAll(ctx context.Context, in *UserExitEvent, srv *stmp.Server, filter stmp.ConnFilter) error {
 	return srv.Broadcast(ctx, "stmp.examples.room.RoomEvents.UserExit", in, filter)
 }
 
-func (s stmpRoomEventsBroadcaster) UserExitMethod() string {
-	return "stmp.examples.room.RoomEvents.UserExit"
-}
-
-func (s stmpRoomEventsBroadcaster) UserExitAction() uint64 {
-	return 0x1302
-}
-
-func (s stmpRoomEventsBroadcaster) NewMessage(ctx context.Context, in *ChatMessageModel, conn *stmp.Conn, opts ...stmp.CallOption) (*empty.Empty, error) {
+func (s stmpRoomEventsBroadcaster) NewMessageToOne(ctx context.Context, in *ChatMessageModel, conn *stmp.Conn, opts ...stmp.CallOption) (*empty.Empty, error) {
 	out, err := conn.Invoke(ctx, "stmp.examples.room.RoomEvents.NewMessage", in, stmp.NewCallOptions(opts...))
 	return out.(*empty.Empty), err
 }
 
-func (s stmpRoomEventsBroadcaster) NewMessageForList(ctx context.Context, in *ChatMessageModel, conns ...*stmp.Conn) error {
+func (s stmpRoomEventsBroadcaster) NewMessageToList(ctx context.Context, in *ChatMessageModel, conns ...*stmp.Conn) error {
 	payloads := stmp.NewPayloadMap(in)
 	for _, conn := range conns {
 		payload, err := payloads.Marshal(conn)
@@ -707,7 +615,7 @@ func (s stmpRoomEventsBroadcaster) NewMessageForList(ctx context.Context, in *Ch
 	return nil
 }
 
-func (s stmpRoomEventsBroadcaster) NewMessageForKeys(ctx context.Context, in *ChatMessageModel, conns stmp.ConnSet) error {
+func (s stmpRoomEventsBroadcaster) NewMessageToSet(ctx context.Context, in *ChatMessageModel, conns stmp.ConnSet) error {
 	payloads := stmp.NewPayloadMap(in)
 	for conn := range conns {
 		payload, err := payloads.Marshal(conn)
@@ -722,16 +630,8 @@ func (s stmpRoomEventsBroadcaster) NewMessageForKeys(ctx context.Context, in *Ch
 	return nil
 }
 
-func (s stmpRoomEventsBroadcaster) BroadcastNewMessage(ctx context.Context, in *ChatMessageModel, srv *stmp.Server, filter stmp.ConnFilter) error {
+func (s stmpRoomEventsBroadcaster) NewMessageToAll(ctx context.Context, in *ChatMessageModel, srv *stmp.Server, filter stmp.ConnFilter) error {
 	return srv.Broadcast(ctx, "stmp.examples.room.RoomEvents.NewMessage", in, filter)
-}
-
-func (s stmpRoomEventsBroadcaster) NewMessageMethod() string {
-	return "stmp.examples.room.RoomEvents.NewMessage"
-}
-
-func (s stmpRoomEventsBroadcaster) NewMessageAction() uint64 {
-	return 0x1303
 }
 
 func STMPNewRoomEventsBroadcaster() STMPRoomEventsBroadcaster {

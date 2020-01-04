@@ -72,8 +72,8 @@ func main() {
 		log.Fatalln("ERROR:", err)
 	}
 
-	uc := room_proto.STMPNewUserServiceClient(conn)
-	ls := NewLobbyScene(uc)
+	usc := room_proto.STMPNewUserServiceClient(conn)
+	ls := NewLobbyScene(usc)
 
 	ls.Mount()
 
