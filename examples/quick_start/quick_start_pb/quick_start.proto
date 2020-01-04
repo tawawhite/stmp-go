@@ -1,0 +1,41 @@
+// Copyright 2020 acrazing <joking.young@gmail.com>. All rights reserved.
+// Since 2020-01-04 23:06:26
+syntax = "proto3";
+package stmp.examples.quick_start;
+
+import "github.com/gogo/protobuf/gogoproto/gogo.proto";
+
+option (gogoproto.goproto_getters_all) = false;
+option go_package = "github.com/acrazing/stmp-go/examples/quick_start/quick_start_pb;pb";
+import "google/protobuf/empty.proto";
+
+message RoomModel {
+    string name = 1;
+    repeated string users = 2;
+}
+
+message JoinInput {
+    string name = 1;
+}
+
+message ExitInput {
+    string name = 1;
+}
+
+service RoomService {
+    rpc Join(JoinInput) returns (RoomModel) {}
+    rpc Exit(ExitInput) returns (google.protobuf.Empty) {}
+}
+
+message JoinEvent {
+    string user = 1;
+}
+
+message ExitEvent {
+    string user = 1;
+}
+
+service RoomEvents {
+    rpc Join(JoinEvent) returns (google.protobuf.Empty) {}
+    rpc Exit(ExitEvent) returns (google.protobuf.Empty) {}
+}

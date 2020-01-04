@@ -63,7 +63,13 @@ type Server struct {
 	done      chan error
 }
 
-func NewServer(config *ServerConfig) *Server {
+func NewServer(configs ...*ServerConfig) *Server {
+	var config *ServerConfig
+	if len(configs) == 0 {
+		config = NewServerConfig()
+	} else {
+		config = configs[0]
+	}
 	config = config.ApplyDefault()
 	return &Server{
 		router:    NewRouter(),

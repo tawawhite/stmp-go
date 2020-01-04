@@ -54,7 +54,7 @@ func (g *generator) js() []*plugin_go.CodeGeneratorResponse_File {
 				if serviceOption != nil && methodOption != nil {
 					action = stmpService<<8 | stmpMethod
 				} else {
-					action = murmur3.Sum64([]byte(method.FullMethod)) | (1 << 63)
+					action = uint64(murmur3.Sum32([]byte(method.FullMethod))) | (1 << 31)
 				}
 				method.ActionHex = strings.ToUpper(strconv.FormatUint(action, 16))
 				method.Input = m.GetInputType()[1:]

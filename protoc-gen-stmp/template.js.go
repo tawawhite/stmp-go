@@ -56,9 +56,9 @@ function initNamespace(root, ns, factory) {
 {{end}}  };
   
   ns.{{$service.ServiceName}}Broadcaster = class {{$service.ServiceName}}Broadcaster {
-{{range $i2, $method := $service.Methods}}    {{$method.MethodName}}ToOne(input, conn, options) { return conn.invoke("{{$method.FullMethod}}", input, options) }
-    {{$method.MethodName}}ToSet(input, conns) { const pm = new PayloadMap(input); for (const conn of conns) conn.call("{{$method.FullMethod}}", pm.get(conn), notifyOptions) }
-    {{$method.MethodName}}ToAll(input, srv, filter) { return srv.broadcast("{{$method.FullMethod}}", input, filter) }
+{{range $i2, $method := $service.Methods}}   static {{$method.MethodName}}ToOne(input, conn, options) { return conn.invoke("{{$method.FullMethod}}", input, options) }
+   static {{$method.MethodName}}ToSet(input, conns, excludes) { const pm = new PayloadMap(input); for (const conn of conns) (!excludes || excludes.indexOf(conn) < 0) && conn.call("{{$method.FullMethod}}", pm.get(conn), notifyOptions) }
+   static {{$method.MethodName}}ToAll(input, srv, filter) { return srv.broadcast("{{$method.FullMethod}}", input, filter) }
 {{end}}  };
   
   ns.{{$service.ServiceName}}Client = class {{$service.ServiceName}}Client {
@@ -89,9 +89,9 @@ declare namespace {{.RootNamespace}} {
 
     class {{$service.ServiceName}}Broadcaster {
       constructor()
-{{range $i1, $method := $service.Methods}}      {{$method.MethodName}}ToOne(input: pb.{{$method.IInput}}, conn: Connection, options?: Partial<CallOptions>): Promise<pb.{{$method.Output}}>
-      {{$method.MethodName}}ToSet(input: pb.{{$method.IInput}}, conns: Set<Connection>): void
-      {{$method.MethodName}}ToAll(input: pb.{{$method.IInput}}, srv: Server, filter?: ConnFilter): void
+{{range $i1, $method := $service.Methods}}     static {{$method.MethodName}}ToOne(input: pb.{{$method.IInput}}, conn: Connection, options?: Partial<CallOptions>): Promise<pb.{{$method.Output}}>
+     static {{$method.MethodName}}ToSet(input: pb.{{$method.IInput}}, conns: Set<Connection>, excludes?: Connection[]): void
+     static {{$method.MethodName}}ToAll(input: pb.{{$method.IInput}}, srv: Server, filter?: ConnFilter): void
 {{end}}    }
 
     class {{$service.ServiceName}}Client {

@@ -18,7 +18,7 @@ func ReadNegotiate(input string) (v string, n int) {
 	if seg == -1 {
 		seg = n
 	}
-	v = strings.TrimSpace(v[0:seg])
+	v = strings.TrimSpace(input[0:seg])
 	return
 }
 

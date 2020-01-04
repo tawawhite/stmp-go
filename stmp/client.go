@@ -78,8 +78,11 @@ type DialOptions struct {
 	InsecureSkipVerify bool
 }
 
-func dialOptionsDefaulter(addr string, opts *DialOptions) {
-	if opts.ServerName == "" {
+func dialOptionsDefaulter(addr string, opts *DialOptions) *DialOptions {
+	if opts == nil {
+		opts = new(DialOptions)
+	}
+	if opts.ServerName == "" && strings.Contains(addr, "://") {
 		URL, err := url.Parse(addr)
 		if err != nil {
 			panic(err)
@@ -119,6 +122,7 @@ func dialOptionsDefaulter(addr string, opts *DialOptions) {
 		}
 	}
 	opts.Header.Set(AcceptContentType, opts.ContentType)
+	return opts
 }
 
 func loadTLSClientConfig(certFile string, opts *DialOptions) (*tls.Config, error) {
@@ -282,7 +286,7 @@ func WebSocketClient(wc *websocket.Conn, opts *DialOptions) (c *Conn, err error)
 }
 
 func DialTCP(addr string, opts *DialOptions) (*Conn, error) {
-	dialOptionsDefaulter(addr, opts)
+	opts = dialOptionsDefaulter(addr, opts)
 	nc, err := net.Dial("tcp", addr)
 	if err != nil {
 		return nil, err
