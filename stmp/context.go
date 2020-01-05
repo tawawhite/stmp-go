@@ -24,12 +24,12 @@ func SelectServer(ctx context.Context) *Server {
 	return ctx.Value(ctxServerKey{}).(*Server)
 }
 
-type ctxActionKey struct{}
+type ctxPacketKey struct{}
 
-func WithAction(ctx context.Context, action uint64) context.Context {
-	return context.WithValue(ctx, ctxActionKey{}, action)
+func WithPacket(ctx context.Context, packet *Packet) context.Context {
+	return context.WithValue(ctx, ctxPacketKey{}, packet)
 }
 
-func SelectAction(ctx context.Context) uint64 {
-	return ctx.Value(ctxActionKey{}).(uint64)
+func SelectPacket(ctx context.Context) uint64 {
+	return ctx.Value(ctxPacketKey{}).(uint64)
 }

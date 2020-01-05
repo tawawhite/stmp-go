@@ -10,15 +10,11 @@ import (
 )
 
 type Packet struct {
-	Fin  bool
-	Kind byte
-	// except ping, close
-	Mid uint16
-	// request
-	Action uint64
-	// response, close
-	Status Status
-	// except ping
+	Fin     bool
+	Kind    byte
+	Mid     uint16
+	Action  uint64
+	Status  Status
 	Payload []byte
 }
 

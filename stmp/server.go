@@ -3,12 +3,10 @@
 package stmp
 
 import (
-	"bytes"
 	"context"
 	"crypto/tls"
 	"github.com/gorilla/websocket"
 	"github.com/xtaci/kcp-go"
-	"go.uber.org/zap"
 	"io"
 	"net"
 	"net/http"
@@ -16,79 +14,78 @@ import (
 	"time"
 )
 
-type ServerConfig struct {
-	Logger           *zap.Logger
-	LogAccess        []string
-	CompressLevel    int
-	Authenticate     func(c *Conn) error
-	MaxPacketSize    uint64
-	HandshakeTimeout time.Duration
-	WriteTimeout     time.Duration
-	ReadTimeout      time.Duration
+func init() {
+	RegisterMediaCodec(NewMsgpackCodec(), NewJsonCodec())
+	RegisterEncodingCodec(NewGzipCodec())
 }
 
-func (config *ServerConfig) ApplyDefault() *ServerConfig {
-	out := config
-	if out == nil {
-		out = NewServerConfig()
-	}
-	if out.Logger == nil {
-		var err error
-		out.Logger, err = zap.NewProduction()
-		if err != nil {
-			panic(err)
-		}
-	}
-	return out
+type ServerOptions struct {
+	*ConnOptions
+	LogAccess     []string
+	CompressLevel int
+	Authenticate  func(c *Conn) error
 }
 
-func NewServerConfig() *ServerConfig {
-	return &ServerConfig{
-		LogAccess:        []string{"host", "user-agent", "referer"},
-		CompressLevel:    6,
-		Authenticate:     func(c *Conn) error { return nil },
-		MaxPacketSize:    1 << 24,
-		HandshakeTimeout: time.Minute,
-		WriteTimeout:     time.Minute,
-		ReadTimeout:      time.Minute,
+func (o *ServerOptions) WithLogAccess(fields ...string) *ServerOptions {
+	o.LogAccess = fields
+	return o
+}
+
+func (o *ServerOptions) WithCompress(level int) *ServerOptions {
+	o.CompressLevel = level
+	return o
+}
+
+func (o *ServerOptions) WithAuthenticate(fn func(c *Conn) error) *ServerOptions {
+	o.Authenticate = fn
+	return o
+}
+
+func (o *ServerOptions) ApplyDefault() *ServerOptions {
+	no := o
+	if no == nil {
+		no = NewServerOptions()
+	}
+	no.ConnOptions = no.ConnOptions.ApplyDefault()
+	return no
+}
+
+func NewServerOptions() *ServerOptions {
+	return &ServerOptions{
+		ConnOptions:   NewConnOptions(),
+		LogAccess:     []string{"host", "user-agent", "referer"},
+		CompressLevel: 6,
+		Authenticate:  func(c *Conn) error { return nil },
 	}
 }
 
 type Server struct {
-	*router
-	config    *ServerConfig
+	*Router
+	opts      *ServerOptions
 	mu        sync.RWMutex
 	listeners map[io.Closer]struct{}
 	conns     ConnSet
 	done      chan error
 }
 
-func NewServer(configs ...*ServerConfig) *Server {
-	var config *ServerConfig
-	if len(configs) == 0 {
-		config = NewServerConfig()
-	} else {
-		config = configs[0]
-	}
-	config = config.ApplyDefault()
+func NewServer(opts *ServerOptions) *Server {
+	opts = opts.ApplyDefault()
 	return &Server{
-		router:    NewRouter(),
-		config:    config,
+		Router:    opts.Router,
+		opts:      opts,
 		listeners: map[io.Closer]struct{}{},
 		conns:     NewConnSet(),
-		done:      make(chan error),
+		done:      make(chan error, 1),
 	}
 }
 
 type ConnFilter func(conn *Conn) bool
 
-var filterAll ConnFilter = func(conn *Conn) bool {
-	return true
-}
+var AllowAll ConnFilter = func(conn *Conn) bool { return true }
 
 func (s *Server) Broadcast(ctx context.Context, method string, in interface{}, filter ConnFilter) error {
 	if filter == nil {
-		filter = filterAll
+		filter = AllowAll
 	}
 	payloads := NewPayloadMap(in)
 	s.mu.RLock()
@@ -109,83 +106,53 @@ func (s *Server) Broadcast(ctx context.Context, method string, in interface{}, f
 }
 
 func (s *Server) newClient(nc net.Conn) *Conn {
-	c := newConn(nc)
-	c.router = s.router
+	c := NewConn(nc, s.opts.ConnOptions)
 	c.ClientHeader = NewHeader()
 	c.ServerHeader = NewHeader()
 	return c
 }
 
-func (s *Server) HandleConn(nc net.Conn) (status *StatusError) {
+func (s *Server) HandleConn(nc net.Conn) (err error) {
 	c := s.newClient(nc)
 	defer func() {
-		if status != nil {
-			c.ServerMessage = status.err.Error()
-			c.writeHandshakeResponse(status.code)
+		if err != nil {
+			// TODO write handshake response
 			c.Conn.Close()
 		}
 	}()
-	nc.SetReadDeadline(time.Now().Add(s.config.HandshakeTimeout))
-	fixHead := make([]byte, 6)
-	_, err := nc.Read(fixHead)
+	ch := NewClientHandshake(0, 0, c.ClientHeader, "")
+	nc.SetReadDeadline(time.Now().Add(s.opts.HandshakeTimeout))
+	err = ch.Read(nc, s.opts.MaxPacketSize)
 	if err != nil {
-		status = NewStatusError(StatusBadRequest, "Read request error: "+err.Error())
 		return
 	}
-	if !bytes.Equal(fixHead[0:4], []byte("STMP")) {
-		status = NewStatusError(StatusProtocolError, "magic header is not STMP")
-		return
-	}
-	c.Major = fixHead[4]
-	c.Minor = fixHead[5]
-	if c.Major != 1 || c.Minor != 0 {
-		status = NewStatusError(StatusUnsupportedProtocolVersion, "unsupported STMP version: "+string([]byte{c.Major + '0', '.', c.Minor + '0'}))
-	}
-	// length
-	n, err := ReadUvarint(nc, fixHead[:1])
+	err = c.negotiate()
 	if err != nil {
-		status = NewStatusError(StatusBadRequest, "Read header length error: "+err.Error())
 		return
 	}
-	rawHeader := make([]byte, n)
-	_, err = nc.Read(rawHeader)
+	err = s.opts.Authenticate(c)
 	if err != nil {
-		status = NewStatusError(StatusBadRequest, "Read header error: "+err.Error())
+		err = DetectError(err, StatusUnauthorized)
 		return
 	}
-	err = c.ClientHeader.Unmarshal(rawHeader)
+	r, w, err := c.initEncoding(s.opts.CompressLevel)
 	if err != nil {
-		status = NewStatusError(StatusBadRequest, "parse header error: "+err.Error())
+		err = NewStatusError(StatusProtocolError, "init encoding error: "+err.Error())
 		return
 	}
-	status = c.negotiate()
-	if status != nil {
-		return
-	}
-	err = s.config.Authenticate(c)
+	sh := NewServerHandshake(StatusOk, c.ServerHeader, "")
+	err = sh.Write(nc)
 	if err != nil {
-		if se, ok := err.(*StatusError); ok {
-			status = se
-		} else {
-			status = NewStatusError(StatusInternalServerError, "authenticate error: "+err.Error())
-		}
-		return
-	}
-	r, w, err := c.initEncoding(s.config.CompressLevel)
-	if err != nil {
-		status = NewStatusError(StatusProtocolError, "init encoding error: "+err.Error())
-		return
-	}
-	err = c.writeHandshakeResponse(StatusOk)
-	if err != nil {
-		c.Conn.Close()
 		return
 	}
 	s.mu.Lock()
 	s.conns.Add(c)
 	s.mu.Unlock()
-	go c.binaryReadChannel(r, s.config.ReadTimeout)
-	go c.binaryWriteChannel(w, s.config.WriteTimeout)
+	go c.binaryWriteChannel(w)
+	go func() {
+		c.binaryReadChannel(r)
+		// TODO close connection
+	}()
 	return
 }
 
@@ -193,8 +160,7 @@ func (s *Server) HandleWebsocketConn(wc *websocket.Conn, req *http.Request) (sta
 	c := s.newClient(wc.UnderlyingConn())
 	defer func() {
 		if status != nil {
-			c.ServerMessage = status.err.Error()
-			c.websocketWriteHandshakeResponse(status.code)
+			// TODO write handshake response
 			wc.Close()
 		}
 	}()
@@ -219,7 +185,7 @@ func (s *Server) HandleWebsocketConn(wc *websocket.Conn, req *http.Request) (sta
 	if status != nil {
 		return
 	}
-	err := s.config.Authenticate(c)
+	err := s.opts.Authenticate(c)
 	if err != nil {
 		if se, ok := err.(*StatusError); ok {
 			status = se
@@ -228,20 +194,34 @@ func (s *Server) HandleWebsocketConn(wc *websocket.Conn, req *http.Request) (sta
 		}
 		return
 	}
-	err = c.websocketWriteHandshakeResponse(StatusOk)
+	sh := NewServerHandshake(StatusOk, c.ServerHeader, "")
+	var data []byte
+	format := c.ServerHeader.Get(DeterminePacketFormat)
+	var typ int
+	if format == "text" {
+		typ = websocket.TextMessage
+		data = sh.MarshalText()
+	} else {
+		typ = websocket.BinaryMessage
+		data = sh.MarshalBinary()
+	}
+	err = wc.WriteMessage(typ, data)
 	if err != nil {
-		wc.Close()
 		return
 	}
 	s.mu.Lock()
 	s.conns.Add(c)
 	s.mu.Unlock()
 	if c.ServerHeader.Get(DeterminePacketFormat) == "text" {
-		go c.websocketTextReadChannel(wc, s.config.ReadTimeout)
-		go c.websocketTextWriteChannel(wc, s.config.WriteTimeout)
+		go c.websocketTextWriteChannel(wc)
+		go func() {
+			c.websocketTextReadChannel(wc)
+		}()
 	} else {
-		go c.websocketBinaryReadChannel(wc, s.config.ReadTimeout)
-		go c.websocketBinaryWriteChannel(wc, s.config.WriteTimeout)
+		go c.websocketBinaryWriteChannel(wc)
+		go func() {
+			c.websocketBinaryReadChannel(wc)
+		}()
 	}
 	return
 }

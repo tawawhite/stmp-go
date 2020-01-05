@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"io"
+	"math/bits"
 	"strings"
 )
 
@@ -36,6 +37,10 @@ func UnescapeHeadKey(key string) string {
 
 func UnescapeHeadValue(value string) string {
 	return strings.TrimSpace(strings.ReplaceAll(strings.ReplaceAll(value, "%0A", "\n"), "%25", "%"))
+}
+
+func UvarintSize(x uint64) (n int) {
+	return (bits.Len64(x|1) + 6) / 7
 }
 
 func ReadUvarint(r io.Reader, b1 []byte) (uint64, error) {
@@ -104,6 +109,22 @@ func AppendHex(u uint64, buf []byte) int {
 	buf[i] = digits[u]
 	copy(buf, buf[i:])
 	return len(buf) - i
+}
+
+func ParseHexStatus(buf []byte) (s Status, err error) {
+	m := len(buf)
+	if m > 2 || m == 0 {
+		err = errors.New("out of range")
+		return
+	}
+	for i, c := range buf {
+		if chunks[c] > 15 {
+			err = errors.New("invalid bit: " + string(c))
+			return
+		}
+		s |= Status(uint16(chunks[c]) << hexOffsets[m-i-1])
+	}
+	return
 }
 
 func ParseHexUint16(buf []byte) (n uint16, err error) {

@@ -95,6 +95,25 @@ var cmds = map[string]func(flag *flagSet){
 		// panic: interface conversion: interface {} is map[string]bool, not map[string]interface {}
 		//log.Println("map.<string, bool> cast:", castMapInterface(msb))
 	},
+	"debugWriteClosed": func(flag *flagSet) {
+		defer func() {
+			if e := recover(); e != nil {
+				log.Printf("recover err: %s", e)
+			}
+		}()
+		c := make(chan int)
+		close(c)
+		c <- 1
+	},
+	"debugAppend": func(flag *flagSet) {
+		p1 := make([]byte, 2)
+		p1[0] = 'a'
+		p1[1] = 'b'
+		p2 := p1[:1]
+		p2 = append(p2, 'B')
+		p4 := append(p2, 'C')
+		log.Printf("p1: %s, p2: %s, p4: %s, cap(p1): %d, cap(p2): %d, cap(p4): %d", string(p1), string(p2), string(p4), cap(p1), cap(p2), cap(p4))
+	},
 }
 
 func castMapInterface(in interface{}) interface{} {

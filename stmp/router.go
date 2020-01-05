@@ -6,6 +6,7 @@ import (
 	"context"
 	"github.com/twmb/murmur3"
 	"strconv"
+	"sync"
 )
 
 type MethodMetadata struct {
@@ -45,7 +46,7 @@ func RegisterMethodAction(method string, action uint64, input ModelFactory, outp
 type MiddlewareFunc func(inCtx context.Context, method *MethodMetadata, in []byte) (outCtx context.Context, err error)
 type InterceptFunc func(inCtx context.Context, method *MethodMetadata, in []byte) (outCtx context.Context, done bool, out []byte, err error)
 type HandlerFunc func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error)
-type CloseHandlerFunc func(status Status, message string)
+type CloseHandlerFunc func(conn *Conn, status Status, message string)
 type ModelFactory func() interface{}
 
 type handlerOptions struct {
@@ -53,23 +54,15 @@ type handlerOptions struct {
 	inst interface{}
 }
 
-type Router interface {
-	Middleware(handlers ...MiddlewareFunc)
-	Intercept(handlers ...InterceptFunc)
-	Register(inst interface{}, method string, fn HandlerFunc)
-	Unregister(inst interface{}, method string)
-}
-
-type router struct {
+type Router struct {
+	mu           sync.RWMutex
 	middlewares  []MiddlewareFunc
 	interceptors []InterceptFunc
 	handlers     map[uint64][]handlerOptions
 }
 
-var _ Router = (*router)(nil)
-
-func NewRouter() *router {
-	return &router{
+func NewRouter() *Router {
+	return &Router{
 		middlewares:  []MiddlewareFunc{},
 		interceptors: []InterceptFunc{},
 		handlers:     map[uint64][]handlerOptions{},
@@ -78,18 +71,23 @@ func NewRouter() *router {
 
 // add bypass handler, the handler will not intercept the request
 // unless the handler returns error
-func (r *router) Middleware(handlers ...MiddlewareFunc) {
+func (r *Router) Middleware(handlers ...MiddlewareFunc) {
+	r.mu.Lock()
 	r.middlewares = append(r.middlewares, handlers...)
+	r.mu.Unlock()
 }
 
 // intercept will intercept request, if done == true, will not pass
 // the request to next handlers
-func (r *router) Intercept(handlers ...InterceptFunc) {
+func (r *Router) Intercept(handlers ...InterceptFunc) {
+	r.mu.Lock()
 	r.interceptors = append(r.interceptors, handlers...)
+	r.mu.Unlock()
 }
 
 // Action bound handler
-func (r *router) Register(inst interface{}, method string, fn HandlerFunc) {
+func (r *Router) Register(inst interface{}, method string, fn HandlerFunc) {
+	r.mu.Lock()
 	action, ok := ms.methods[method]
 	if !ok {
 		panic("method " + method + " is not registered")
@@ -104,9 +102,11 @@ func (r *router) Register(inst interface{}, method string, fn HandlerFunc) {
 		}
 		r.handlers[action] = append(r.handlers[action], handlerOptions{fn: fn, inst: inst})
 	}
+	r.mu.Unlock()
 }
 
-func (r *router) Unregister(inst interface{}, method string) {
+func (r *Router) Unregister(inst interface{}, method string) {
+	r.mu.Lock()
 	action, ok := ms.methods[method]
 	if !ok {
 		panic("method " + method + " is not registered")
@@ -122,24 +122,24 @@ func (r *router) Unregister(inst interface{}, method string) {
 			break
 		}
 	}
+	r.mu.Unlock()
 }
 
 // dispatch a request to handlers
-func (r *router) dispatch(ctx context.Context, action uint64, payload []byte, codec MediaCodec) (status Status, ret []byte) {
+func (r *Router) dispatch(ctx context.Context, action uint64, payload []byte, codec MediaCodec) (status Status, ret []byte) {
 	method := ms.actions[action]
-	ctx = WithAction(ctx, action)
 	var err error
 	for _, f := range r.middlewares {
 		ctx, err = f(ctx, method, payload)
 		if err != nil {
-			return DetectError(err, StatusInternalServerError)
+			return DetectError(err, StatusInternalServerError).Spread()
 		}
 	}
 	var done bool
 	for _, f := range r.interceptors {
 		ctx, done, ret, err = f(ctx, method, payload)
 		if err != nil {
-			return DetectError(err, StatusInternalServerError)
+			return DetectError(err, StatusInternalServerError).Spread()
 		}
 		if done {
 			return StatusOk, ret
@@ -147,26 +147,26 @@ func (r *router) dispatch(ctx context.Context, action uint64, payload []byte, co
 	}
 	h, ok := r.handlers[action]
 	if method == nil || !ok {
-		return DetectError(StatusNotFound, StatusNotFound)
+		return StatusNotFound.Spread()
 	}
 	in := method.input()
 	if payload != nil {
 		err = codec.Unmarshal(payload, in)
 		if err != nil {
-			return DetectError(err, StatusBadRequest)
+			return DetectError(err, StatusBadRequest).Spread()
 		}
 	}
 	var out interface{}
 	for _, hc := range h {
 		out, err = hc.fn(ctx, in, hc.inst)
 		if err != nil {
-			return DetectError(err, StatusInternalServerError)
+			return DetectError(err, StatusInternalServerError).Spread()
 		}
 	}
 	if out != nil {
 		ret, err = codec.Marshal(out)
 		if err != nil {
-			return DetectError(err, StatusInternalServerError)
+			return DetectError(err, StatusInternalServerError).Spread()
 		}
 	}
 	return StatusOk, ret

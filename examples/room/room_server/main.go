@@ -36,7 +36,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	srvConfig := stmp.NewServerConfig()
+	srvConfig := stmp.NewServerOptions()
 	srvConfig.Logger = log
 	stmp.RegisterMediaCodec(stmp.NewJsonCodec(), stmp.NewProtobufCodec())
 	srv := stmp.NewServer(srvConfig)

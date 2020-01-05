@@ -3,7 +3,6 @@
 package stmp
 
 import (
-	"errors"
 	"strconv"
 )
 
@@ -124,33 +123,45 @@ func (s Status) Error() string {
 	return "Unknown (0x" + strconv.FormatUint(uint64(s), 16) + ")"
 }
 
+func (s Status) Spread() (Status, []byte) {
+	return s, []byte(s.Error())
+}
+
 type StatusError struct {
-	code Status
-	err  error
+	code    Status
+	message string
 }
 
 func (e *StatusError) Error() string {
-	return "STMP " + e.code.Error() + ": " + e.err.Error()
+	return "STMP " + e.code.Error() + ": " + e.message
 }
 
-func NewStatusError(code Status, err interface{}) *StatusError {
-	if err == nil {
-		return &StatusError{code: code, err: errors.New(MapStatus[code])}
-	}
-	if str, ok := err.(string); ok {
-		return &StatusError{code: code, err: errors.New(str)}
-	}
-	return &StatusError{code: code, err: err.(error)}
+func (e *StatusError) Spread() (Status, []byte) {
+	return e.code, []byte(e.message)
 }
 
-func DetectError(err error, rollbackStatus Status) (Status, []byte) {
+func NewStatusError(code Status, data interface{}) *StatusError {
+	se := new(StatusError)
+	se.code = code
+	if m, ok := data.(string); ok {
+		se.message = m
+	} else if e, ok := data.(error); ok {
+		se.message = e.Error()
+	}
+	if se.message == "" {
+		se.message = se.code.Error()
+	}
+	return se
+}
+
+func DetectError(err error, rollbackStatus Status) *StatusError {
 	if se, ok := err.(*StatusError); ok {
-		return se.code, []byte(se.err.Error())
+		return se
 	}
 	if sc, ok := err.(Status); ok {
-		return sc, []byte(sc.Error())
+		return NewStatusError(sc, "")
 	}
-	return rollbackStatus, []byte(err.Error())
+	return NewStatusError(rollbackStatus, err.Error())
 }
 
 const AcceptContentType = "Accept"

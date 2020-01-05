@@ -108,14 +108,14 @@ func (p *PayloadMap) Marshal(conn *Conn) ([]byte, error) {
 	if p.in == nil {
 		return nil, nil
 	}
-	payload, ok := p.payloads[conn.media.Name()]
+	payload, ok := p.payloads[conn.Media.Name()]
 	if !ok {
 		var err error
-		payload, err = conn.media.Marshal(p.in)
+		payload, err = conn.Media.Marshal(p.in)
 		if err != nil {
 			return nil, err
 		}
-		p.payloads[conn.media.Name()] = payload
+		p.payloads[conn.Media.Name()] = payload
 	}
 	return payload, nil
 }
