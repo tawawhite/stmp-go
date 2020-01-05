@@ -46,6 +46,10 @@ func NewCallOptions(opts ...CallOption) *CallOptions {
 	return o
 }
 
+type ClientConn struct {
+	Conn
+}
+
 type DialOptions struct {
 	// the headers for writeHandshakeResponse
 	Header Header
@@ -153,7 +157,7 @@ func newClientConn(nc net.Conn, opts *DialOptions) (c *Conn) {
 }
 
 // create a client conn from Conn, will writeHandshakeResponse automatically
-func Client(nc net.Conn, opts *DialOptions) (c *Conn, err error) {
+func Client(nc net.Conn, opts *DialOptions) (c *ClientConn, err error) {
 	c = newClientConn(nc, opts)
 	defer func() {
 		if err != nil {
@@ -285,7 +289,7 @@ func WebSocketClient(wc *websocket.Conn, opts *DialOptions) (c *Conn, err error)
 	return
 }
 
-func DialTCP(addr string, opts *DialOptions) (*Conn, error) {
+func DialTCP(addr string, opts *DialOptions) (*ClientConn, error) {
 	opts = dialOptionsDefaulter(addr, opts)
 	nc, err := net.Dial("tcp", addr)
 	if err != nil {

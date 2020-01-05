@@ -67,4 +67,7 @@ declare module 'stmp' {
     export class TCPClient extends Connection {
         constructor(addr: string, options?: Partial<DialOptions>)
     }
+
+    export class Client extends Connection {
+    }
 }

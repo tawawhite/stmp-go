@@ -6,7 +6,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/acrazing/stmp-go/examples/room/room"
-	"github.com/acrazing/stmp-go/examples/room/room_proto"
+	roompb "github.com/acrazing/stmp-go/examples/room/room_pb"
 	"github.com/acrazing/stmp-go/stmp"
 	"log"
 	"os"
@@ -17,12 +17,12 @@ import (
 
 type LobbyScene struct {
 	us *room.UserTable
-	uc room_proto.STMPUserServiceClient
+	uc roompb.STMPUserServiceClient
 }
 
 func (ls *LobbyScene) Mount() {
 	log.Println("Entering lobby scene...")
-	out, err := ls.uc.ListUser(context.Background(), &room_proto.ListUserInput{Limit: 10})
+	out, err := ls.uc.ListUser(context.Background(), &roompb.ListInput{Limit: 20})
 	if err != nil {
 		log.Println("list user error:", err)
 		return
@@ -34,7 +34,7 @@ func (ls *LobbyScene) Unmount() {
 	log.Println("Exiting lobby scene...")
 }
 
-func NewLobbyScene(uc room_proto.STMPUserServiceClient) *LobbyScene {
+func NewLobbyScene(uc roompb.STMPUserServiceClient) *LobbyScene {
 	return &LobbyScene{uc: uc}
 }
 
@@ -72,7 +72,7 @@ func main() {
 		log.Fatalln("ERROR:", err)
 	}
 
-	usc := room_proto.STMPNewUserServiceClient(conn)
+	usc := roompb.STMPNewUserServiceClient(conn)
 	ls := NewLobbyScene(usc)
 	ls.Mount()
 

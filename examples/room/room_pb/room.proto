@@ -4,7 +4,7 @@
 syntax = "proto3";
 package stmp.examples.room;
 
-option go_package = "github.com/acrazing/stmp-go/examples/room/room_proto";
+option go_package = "github.com/acrazing/stmp-go/examples/room/room_pb;roompb";
 
 import "github.com/envoyproxy/protoc-gen-validate/validate/validate.proto";
 import "github.com/gogo/protobuf/gogoproto/gogo.proto";

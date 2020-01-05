@@ -34,12 +34,24 @@ type STMP{{$service.ServiceName}}Server interface {
 {{range $index, $method := $service.Methods}}	{{$method.MethodName}}(ctx context.Context, in *{{$method.Input}}) (out *{{$method.Output}}, err error)
 {{end}}}
 
-func STMPRegister{{$service.ServiceName}}Server(r stmp.Router, s STMP{{$service.ServiceName}}Server) {
-{{range $index, $method := $service.Methods}}	r.Register(s, "{{$method.FullMethod}}", func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMP{{$service.ServiceName}}Server).{{$method.MethodName}}(ctx, in.(*{{$method.Input}})) })
+func STMPRegister{{$service.ServiceName}}Server(srv *stmp.Server, s STMP{{$service.ServiceName}}Server) {
+{{range $index, $method := $service.Methods}}	srv.Register(s, "{{$method.FullMethod}}", func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMP{{$service.ServiceName}}Server).{{$method.MethodName}}(ctx, in.(*{{$method.Input}})) })
 {{end}}}
 
-func STMPUnregister{{$service.ServiceName}}Server(r stmp.Router, s STMP{{$service.ServiceName}}Server) {
-{{range $index, $method := $service.Methods}}	r.Unregister(s, "{{$method.FullMethod}}")
+func STMPUnregister{{$service.ServiceName}}Server(srv *stmp.Server, s STMP{{$service.ServiceName}}Server) {
+{{range $index, $method := $service.Methods}}	srv.Unregister(s, "{{$method.FullMethod}}")
+{{end}}}
+
+type STMP{{$service.ServiceName}}Listener interface {
+{{range $index, $method := $service.Methods}}	Handle{{$method.MethodName}}Of{{$service.ServiceName}}(ctx context.Context, in *{{$method.Input}}) (out *{{$method.Output}}, err error)
+{{end}}}
+
+func STMPRegister{{$service.ServiceName}}Listener(cc *stmp.ClientConn, s STMP{{$service.ServiceName}}Listener) {
+{{range $index, $method := $service.Methods}}	cc.Register(s, "{{$method.FullMethod}}", func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMP{{$service.ServiceName}}Server).Handle{{$method.MethodName}}Of{{$service.ServiceName}}(ctx, in.(*{{$method.Input}})) })
+{{end}}}
+
+func STMPUnregister{{$service.ServiceName}}Listener(cc *stmp.ClientConn, s STMP{{$service.ServiceName}}Listener) {
+{{range $index, $method := $service.Methods}}	cc.Unregister(s, "{{$method.FullMethod}}")
 {{end}}}
 
 type STMP{{$service.ServiceName}}Broadcaster struct{}

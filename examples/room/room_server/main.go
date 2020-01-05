@@ -5,7 +5,7 @@ package main
 import (
 	"context"
 	"github.com/acrazing/stmp-go/examples/room/room"
-	"github.com/acrazing/stmp-go/examples/room/room_proto"
+	roompb "github.com/acrazing/stmp-go/examples/room/room_pb"
 	"github.com/acrazing/stmp-go/stmp"
 	"go.uber.org/zap"
 	"os"
@@ -17,13 +17,17 @@ type UserService struct {
 	ut *room.UserTable
 }
 
-func (u *UserService) ListUser(ctx context.Context, in *room_proto.ListUserInput) (out *room_proto.ListUserOutput, err error) {
-	out = new(room_proto.ListUserOutput)
+func (u *UserService) Login(ctx context.Context, in *roompb.LoginInput) (out *roompb.UserModel, err error) {
+	panic("implement me")
+}
+
+func (u *UserService) ListUser(ctx context.Context, in *roompb.ListInput) (out *roompb.ListUserOutput, err error) {
+	out = new(roompb.ListUserOutput)
 	out.Total, out.Users = u.ut.List(in.Limit, in.Offset)
 	return
 }
 
-func NewUserService(ut *room.UserTable) room_proto.STMPUserServiceServer {
+func NewUserService(ut *room.UserTable) roompb.STMPUserServiceServer {
 	return &UserService{ut: ut}
 }
 
@@ -39,7 +43,7 @@ func main() {
 
 	ut := room.NewUserTable()
 	us := NewUserService(ut)
-	room_proto.STMPRegisterUserServiceServer(srv, us)
+	roompb.STMPRegisterUserServiceServer(srv, us)
 
 	go srv.ListenAndServeTCP("127.0.0.1:5001")
 	log.Info("room server is listening at tcp://127.0.0.1:5001")

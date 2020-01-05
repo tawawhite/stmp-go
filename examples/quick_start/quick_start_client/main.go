@@ -19,16 +19,16 @@ import (
 type RoomScene struct {
 	mu    sync.Mutex
 	rsc   pb.STMPRoomServiceClient
-	conn  *stmp.Conn
+	conn  *stmp.ClientConn
 	room  *string
 	users []string
 }
 
-func (r *RoomScene) Join(ctx context.Context, in *pb.JoinEvent) (out *empty.Empty, err error) {
+func (r *RoomScene) HandleJoinOfRoomEvents(ctx context.Context, in *pb.JoinEvent) (out *empty.Empty, err error) {
 	panic("implement me")
 }
 
-func (r *RoomScene) Exit(ctx context.Context, in *pb.ExitEvent) (out *empty.Empty, err error) {
+func (r *RoomScene) HandleExitOfRoomEvents(ctx context.Context, in *pb.ExitEvent) (out *empty.Empty, err error) {
 	panic("implement me")
 }
 
@@ -63,7 +63,7 @@ func (r *RoomScene) Run() {
 					r.room = &out.Name
 					r.users = out.Users
 					r.mu.Unlock()
-					pb.STMPRegisterRoomEventsServer(r.conn, r)
+					pb.STMPRegisterRoomEventsListener(r.conn, r)
 				}
 			}
 		}
@@ -88,7 +88,7 @@ func (r *RoomScene) Run() {
 	}
 }
 
-func NewRoomScene(rsc pb.STMPRoomServiceClient, conn *stmp.Conn) *RoomScene {
+func NewRoomScene(rsc pb.STMPRoomServiceClient, conn *stmp.ClientConn) *RoomScene {
 	return &RoomScene{
 		rsc:   rsc,
 		conn:  conn,

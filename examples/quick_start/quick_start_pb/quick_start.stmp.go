@@ -19,14 +19,29 @@ type STMPRoomServiceServer interface {
 	Exit(ctx context.Context, in *ExitInput) (out *empty.Empty, err error)
 }
 
-func STMPRegisterRoomServiceServer(r stmp.Router, s STMPRoomServiceServer) {
-	r.Register(s, "stmp.examples.quick_start.RoomService.Join", func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMPRoomServiceServer).Join(ctx, in.(*JoinInput)) })
-	r.Register(s, "stmp.examples.quick_start.RoomService.Exit", func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMPRoomServiceServer).Exit(ctx, in.(*ExitInput)) })
+func STMPRegisterRoomServiceServer(srv *stmp.Server, s STMPRoomServiceServer) {
+	srv.Register(s, "stmp.examples.quick_start.RoomService.Join", func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMPRoomServiceServer).Join(ctx, in.(*JoinInput)) })
+	srv.Register(s, "stmp.examples.quick_start.RoomService.Exit", func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMPRoomServiceServer).Exit(ctx, in.(*ExitInput)) })
 }
 
-func STMPUnregisterRoomServiceServer(r stmp.Router, s STMPRoomServiceServer) {
-	r.Unregister(s, "stmp.examples.quick_start.RoomService.Join")
-	r.Unregister(s, "stmp.examples.quick_start.RoomService.Exit")
+func STMPUnregisterRoomServiceServer(srv *stmp.Server, s STMPRoomServiceServer) {
+	srv.Unregister(s, "stmp.examples.quick_start.RoomService.Join")
+	srv.Unregister(s, "stmp.examples.quick_start.RoomService.Exit")
+}
+
+type STMPRoomServiceListener interface {
+	HandleJoinOfRoomService(ctx context.Context, in *JoinInput) (out *RoomModel, err error)
+	HandleExitOfRoomService(ctx context.Context, in *ExitInput) (out *empty.Empty, err error)
+}
+
+func STMPRegisterRoomServiceListener(cc *stmp.ClientConn, s STMPRoomServiceListener) {
+	cc.Register(s, "stmp.examples.quick_start.RoomService.Join", func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMPRoomServiceServer).HandleJoinOfRoomService(ctx, in.(*JoinInput)) })
+	cc.Register(s, "stmp.examples.quick_start.RoomService.Exit", func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMPRoomServiceServer).HandleExitOfRoomService(ctx, in.(*ExitInput)) })
+}
+
+func STMPUnregisterRoomServiceListener(cc *stmp.ClientConn, s STMPRoomServiceListener) {
+	cc.Unregister(s, "stmp.examples.quick_start.RoomService.Join")
+	cc.Unregister(s, "stmp.examples.quick_start.RoomService.Exit")
 }
 
 type STMPRoomServiceBroadcaster struct{}
@@ -160,14 +175,29 @@ type STMPRoomEventsServer interface {
 	Exit(ctx context.Context, in *ExitEvent) (out *empty.Empty, err error)
 }
 
-func STMPRegisterRoomEventsServer(r stmp.Router, s STMPRoomEventsServer) {
-	r.Register(s, "stmp.examples.quick_start.RoomEvents.Join", func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMPRoomEventsServer).Join(ctx, in.(*JoinEvent)) })
-	r.Register(s, "stmp.examples.quick_start.RoomEvents.Exit", func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMPRoomEventsServer).Exit(ctx, in.(*ExitEvent)) })
+func STMPRegisterRoomEventsServer(srv *stmp.Server, s STMPRoomEventsServer) {
+	srv.Register(s, "stmp.examples.quick_start.RoomEvents.Join", func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMPRoomEventsServer).Join(ctx, in.(*JoinEvent)) })
+	srv.Register(s, "stmp.examples.quick_start.RoomEvents.Exit", func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMPRoomEventsServer).Exit(ctx, in.(*ExitEvent)) })
 }
 
-func STMPUnregisterRoomEventsServer(r stmp.Router, s STMPRoomEventsServer) {
-	r.Unregister(s, "stmp.examples.quick_start.RoomEvents.Join")
-	r.Unregister(s, "stmp.examples.quick_start.RoomEvents.Exit")
+func STMPUnregisterRoomEventsServer(srv *stmp.Server, s STMPRoomEventsServer) {
+	srv.Unregister(s, "stmp.examples.quick_start.RoomEvents.Join")
+	srv.Unregister(s, "stmp.examples.quick_start.RoomEvents.Exit")
+}
+
+type STMPRoomEventsListener interface {
+	HandleJoinOfRoomEvents(ctx context.Context, in *JoinEvent) (out *empty.Empty, err error)
+	HandleExitOfRoomEvents(ctx context.Context, in *ExitEvent) (out *empty.Empty, err error)
+}
+
+func STMPRegisterRoomEventsListener(cc *stmp.ClientConn, s STMPRoomEventsListener) {
+	cc.Register(s, "stmp.examples.quick_start.RoomEvents.Join", func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMPRoomEventsServer).HandleJoinOfRoomEvents(ctx, in.(*JoinEvent)) })
+	cc.Register(s, "stmp.examples.quick_start.RoomEvents.Exit", func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMPRoomEventsServer).HandleExitOfRoomEvents(ctx, in.(*ExitEvent)) })
+}
+
+func STMPUnregisterRoomEventsListener(cc *stmp.ClientConn, s STMPRoomEventsListener) {
+	cc.Unregister(s, "stmp.examples.quick_start.RoomEvents.Join")
+	cc.Unregister(s, "stmp.examples.quick_start.RoomEvents.Exit")
 }
 
 type STMPRoomEventsBroadcaster struct{}

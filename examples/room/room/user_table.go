@@ -3,16 +3,16 @@
 package room
 
 import (
-	"github.com/acrazing/stmp-go/examples/room/room_proto"
+	roompb "github.com/acrazing/stmp-go/examples/room/room_pb"
 	"sync"
 )
 
 type UserTable struct {
 	mu   sync.RWMutex
-	rows map[string]*room_proto.UserModel
+	rows map[string]*roompb.UserModel
 }
 
-func (t *UserTable) List(limit int64, offset int64) (total int64, list []*room_proto.UserModel) {
+func (t *UserTable) List(limit int64, offset int64) (total int64, list []*roompb.UserModel) {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 	total = int64(len(t.rows))
@@ -20,7 +20,7 @@ func (t *UserTable) List(limit int64, offset int64) (total int64, list []*room_p
 	if limit < 1 {
 		return
 	}
-	list = make([]*room_proto.UserModel, limit, limit)
+	list = make([]*roompb.UserModel, limit, limit)
 	i := int64(0)
 	for _, row := range t.rows {
 		if offset == 0 {
@@ -42,7 +42,7 @@ func (t *UserTable) Size() int64 {
 	return int64(len(t.rows))
 }
 
-func (t *UserTable) Push(users []*room_proto.UserModel) {
+func (t *UserTable) Push(users []*roompb.UserModel) {
 	t.mu.Lock()
 	for _, u := range users {
 		t.rows[u.Name] = u
@@ -50,7 +50,7 @@ func (t *UserTable) Push(users []*room_proto.UserModel) {
 	t.mu.Unlock()
 }
 
-func (t *UserTable) Put(user *room_proto.UserModel) {
+func (t *UserTable) Put(user *roompb.UserModel) {
 	t.mu.Lock()
 	t.rows[user.Name] = user
 	t.mu.Unlock()
@@ -64,6 +64,6 @@ func (t *UserTable) Del(name string) {
 
 func NewUserTable() *UserTable {
 	return &UserTable{
-		rows: map[string]*room_proto.UserModel{},
+		rows: map[string]*roompb.UserModel{},
 	}
 }

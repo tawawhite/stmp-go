@@ -22,17 +22,17 @@ proto-room: gen-stmp
 		--gogofast_out=$$GOPATH/src \
 		--validate_out=lang=gogo:$$GOPATH/src \
 		--stmp_out=lang=go:$$GOPATH/src \
-		./examples/room/room_proto/*.proto
+		./examples/room/room_pb/*.proto
 	pbjs -t static-module -w commonjs -p ./vendor \
 		--no-create --no-verify \
 		--no-convert --no-delimited --keep-case --sparse \
-		-o ./examples/room/room_proto/room.pb.js ./examples/room/room_proto/*.proto
+		-o ./examples/room/room_pb/room.pb.js ./examples/room/room_pb/*.proto
 	pbts -n pb --no-comments \
-		-o ./examples/room/room_proto/room.pb.d.ts ./examples/room/room_proto/room.pb.js
+		-o ./examples/room/room_pb/room.pb.d.ts ./examples/room/room_pb/room.pb.js
 	protoc --proto_path=vendor --proto_path=. \
 		--plugin=protoc-gen-stmp=$$PWD/out/protoc-gen-stmp \
-		--stmp_out=lang=js,js.module=cjs,js.pb=./examples/room/room_proto/room.pb.js,js.out=./examples/room/room_proto/room.stmp.js:. \
-		./examples/room/room_proto/*.proto
+		--stmp_out=lang=js,js.module=cjs,js.pb=./examples/room/room_pb/room.pb.js,js.out=./examples/room/room_pb/room.stmp.js:. \
+		./examples/room/room_pb/*.proto
 
 proto-quick-start: gen-stmp
 	protoc --proto_path=vendor --proto_path=. \
