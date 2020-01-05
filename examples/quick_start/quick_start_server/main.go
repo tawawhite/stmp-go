@@ -77,7 +77,7 @@ func NewRoomServiceServer() pb.STMPRoomServiceServer {
 }
 
 func main() {
-	srv := stmp.NewServer()
+	srv := stmp.NewServer(nil)
 	pb.STMPRegisterRoomServiceServer(srv, NewRoomServiceServer())
 	go srv.ListenAndServeTCP("127.0.0.1:5001")
 	log.Println("server is listening at tcp://127.0.0.1:5001")

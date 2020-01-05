@@ -56,7 +56,7 @@ func STMPUnregister{{$service.ServiceName}}Listener(cc *stmp.ClientConn, s STMP{
 
 type STMP{{$service.ServiceName}}Broadcaster struct{}
 {{range $index, $method := $service.Methods}}
-func (s STMP{{$service.ServiceName}}Broadcaster) {{$method.MethodName}}ToOne(ctx context.Context, in *{{$method.Input}}, conn *stmp.Conn, opts ...stmp.CallOption) (*{{$method.Output}}, error) {
+func (s STMP{{$service.ServiceName}}Broadcaster) {{$method.MethodName}}(ctx context.Context, in *{{$method.Input}}, conn *stmp.Conn, opts ...stmp.CallOption) (*{{$method.Output}}, error) {
 	out, err := conn.Invoke(ctx, "{{$method.FullMethod}}", in, stmp.NewCallOptions(opts...))
 	return out.(*{{$method.Output}}), err
 }
@@ -109,7 +109,7 @@ type STMP{{$service.ServiceName}}Client interface {
 {{end}}}
 
 type stmp{{$service.ServiceName}}Client struct {
-	c *stmp.Conn
+	c *stmp.ClientConn
 }
 {{range $index, $method := $service.Methods}}
 func (s *stmp{{$service.ServiceName}}Client) {{$method.MethodName}}(ctx context.Context, in *{{$method.Input}}, opts ...stmp.CallOption) (*{{$method.Output}}, error) {
@@ -117,7 +117,7 @@ func (s *stmp{{$service.ServiceName}}Client) {{$method.MethodName}}(ctx context.
 	return out.(*{{$method.Output}}), err
 }
 {{end}}
-func STMPNew{{$service.ServiceName}}Client(c *stmp.Conn) STMP{{$service.ServiceName}}Client {
+func STMPNew{{$service.ServiceName}}Client(c *stmp.ClientConn) STMP{{$service.ServiceName}}Client {
 	return &stmp{{$service.ServiceName}}Client{c: c}
 }
 {{end}}`)

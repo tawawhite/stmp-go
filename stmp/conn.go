@@ -35,54 +35,54 @@ func NewCallOptions() *CallOptions {
 
 var NotifyOptions = NewCallOptions().Notify()
 
-type ConnOptions struct {
-	Logger           *zap.Logger
-	HandshakeTimeout time.Duration
-	ReadTimeout      time.Duration
-	WriteTimeout     time.Duration
-	Router           *Router
-	MaxPacketSize    uint64
-	WriteQueueSize   int
+type connOptions struct {
+	logger           *zap.Logger
+	handshakeTimeout time.Duration
+	readTimeout      time.Duration
+	writeTimeout     time.Duration
+	router           *Router
+	maxPacketSize    uint64
+	writeQueueSize   int
 }
 
-func (o *ConnOptions) WithLogger(logger *zap.Logger) *ConnOptions {
-	o.Logger = logger
+func (o *connOptions) WithLogger(logger *zap.Logger) *connOptions {
+	o.logger = logger
 	return o
 }
 
-func (o *ConnOptions) WithRouter(r *Router) *ConnOptions {
-	o.Router = r
+func (o *connOptions) WithRouter(r *Router) *connOptions {
+	o.router = r
 	return o
 }
 
-func (o *ConnOptions) WithWriteQueueLimit(max int) *ConnOptions {
-	o.WriteQueueSize = max
+func (o *connOptions) WithWriteQueueLimit(max int) *connOptions {
+	o.writeQueueSize = max
 	return o
 }
 
-func (o *ConnOptions) WithPacketSizeLimit(max uint64) *ConnOptions {
-	o.MaxPacketSize = max
+func (o *connOptions) WithPacketSizeLimit(max uint64) *connOptions {
+	o.maxPacketSize = max
 	return o
 }
 
-func (o *ConnOptions) WithTimeout(handshake, read, write time.Duration) *ConnOptions {
-	o.HandshakeTimeout = handshake
-	o.ReadTimeout = read
-	o.WriteTimeout = write
+func (o *connOptions) WithTimeout(handshake, read, write time.Duration) *connOptions {
+	o.handshakeTimeout = handshake
+	o.readTimeout = read
+	o.writeTimeout = write
 	return o
 }
 
-func (o *ConnOptions) ApplyDefault() *ConnOptions {
+func (o *connOptions) applyDefault() *connOptions {
 	no := o
 	if no == nil {
 		no = NewConnOptions()
 	}
-	if no.Router == nil {
-		no.Router = NewRouter()
+	if no.router == nil {
+		no.router = NewRouter()
 	}
-	if no.Logger == nil {
+	if no.logger == nil {
 		var err error
-		no.Logger, err = zap.NewProduction()
+		no.logger, err = zap.NewProduction()
 		if err != nil {
 			panic(err)
 		}
@@ -90,16 +90,16 @@ func (o *ConnOptions) ApplyDefault() *ConnOptions {
 	return no
 }
 
-func NewConnOptions() *ConnOptions {
-	return &ConnOptions{
-		HandshakeTimeout: time.Minute,
+func NewConnOptions() *connOptions {
+	return &connOptions{
+		handshakeTimeout: time.Minute,
 		// ping timeout
-		ReadTimeout:  time.Minute * 2,
-		WriteTimeout: time.Minute,
-		Router:       nil,
+		readTimeout:  time.Minute * 2,
+		writeTimeout: time.Minute,
+		router:       nil,
 		// 16 mb
-		MaxPacketSize:  1 << 24,
-		WriteQueueSize: 16,
+		maxPacketSize:  1 << 24,
+		writeQueueSize: 16,
 	}
 }
 
@@ -111,7 +111,7 @@ type writeEvent struct {
 // the struct will only keep the required fields for the connection to save space at server side
 type Conn struct {
 	net.Conn
-	opts *ConnOptions
+	opts *connOptions
 	mu   sync.Mutex
 	mid  *uint32
 
@@ -206,13 +206,13 @@ func (c *Conn) Close(status Status, message string) error {
 	return nil
 }
 
-func NewConn(nc net.Conn, opts *ConnOptions) *Conn {
+func NewConn(nc net.Conn, opts *connOptions) *Conn {
 	return &Conn{
 		Conn:      nc,
 		opts:      opts,
 		Major:     1,
 		Minor:     0,
-		writeChan: make(chan *writeEvent, opts.WriteQueueSize),
+		writeChan: make(chan *writeEvent, opts.writeQueueSize),
 		requests:  map[uint16]chan *Packet{},
 	}
 }
@@ -242,7 +242,7 @@ func (c *Conn) binaryReadChannel(r io.ReadCloser) error {
 	buf := make([]byte, MaxStreamHeadSize, MaxStreamHeadSize)
 	var err error
 	for {
-		c.Conn.SetReadDeadline(time.Now().Add(c.opts.ReadTimeout))
+		c.Conn.SetReadDeadline(time.Now().Add(c.opts.readTimeout))
 		err = p.Read(r, buf)
 		if err != nil {
 			// TODO
@@ -263,7 +263,7 @@ func (c *Conn) binaryWriteChannel(w EncodingWriter) {
 			// TODO
 			return
 		}
-		c.Conn.SetWriteDeadline(time.Now().Add(c.opts.WriteTimeout))
+		c.Conn.SetWriteDeadline(time.Now().Add(c.opts.writeTimeout))
 		err = e.p.Write(w, buf)
 		if e.r != nil {
 			e.r <- err
@@ -280,7 +280,7 @@ func (c *Conn) websocketBinaryReadChannel(wc *websocket.Conn) {
 	var err error
 	var data []byte
 	for {
-		wc.SetReadDeadline(time.Now().Add(c.opts.ReadTimeout))
+		wc.SetReadDeadline(time.Now().Add(c.opts.readTimeout))
 		_, data, err = wc.ReadMessage()
 		if err != nil {
 			// TODO
@@ -307,7 +307,7 @@ func (c *Conn) websocketBinaryWriteChannel(wc *websocket.Conn) {
 			// TODO
 			return
 		}
-		wc.SetWriteDeadline(time.Now().Add(c.opts.WriteTimeout))
+		wc.SetWriteDeadline(time.Now().Add(c.opts.writeTimeout))
 		data = e.p.MarshalBinary(buf)
 		err = wc.WriteMessage(websocket.BinaryMessage, data)
 		if e.r != nil {
@@ -325,7 +325,7 @@ func (c *Conn) websocketTextReadChannel(wc *websocket.Conn) {
 	var err error
 	var data []byte
 	for {
-		wc.SetReadDeadline(time.Now().Add(c.opts.ReadTimeout))
+		wc.SetReadDeadline(time.Now().Add(c.opts.readTimeout))
 		_, data, err = wc.ReadMessage()
 		if err != nil {
 			// TODO
@@ -352,7 +352,7 @@ func (c *Conn) websocketTextWriteChannel(wc *websocket.Conn) {
 			// TODO
 			return
 		}
-		wc.SetWriteDeadline(time.Now().Add(c.opts.WriteTimeout))
+		wc.SetWriteDeadline(time.Now().Add(c.opts.writeTimeout))
 		data = e.p.MarshalText(buf)
 		err = wc.WriteMessage(websocket.TextMessage, data)
 		if e.r != nil {
@@ -379,12 +379,12 @@ func (c *Conn) handleClose(status Status, message string) {
 
 func (c *Conn) handleNotify(action uint64, payload []byte) {
 	ctx := WithConn(context.Background(), c)
-	c.opts.Router.dispatch(ctx, action, payload, c.Media)
+	c.opts.router.dispatch(ctx, action, payload, c.Media)
 }
 
 func (c *Conn) handleRequest(mid uint16, action uint64, payload []byte) {
 	ctx := WithConn(context.Background(), c)
-	status, payload := c.opts.Router.dispatch(ctx, action, payload, c.Media)
+	status, payload := c.opts.router.dispatch(ctx, action, payload, c.Media)
 	we := &writeEvent{p: &Packet{
 		Fin:     true,
 		Kind:    MessageKindResponse,

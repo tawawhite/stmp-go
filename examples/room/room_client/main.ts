@@ -35,6 +35,6 @@ export async function main() {
     UserServiceBroadcaster.ListUserToAll({limit: 20}, srv);
     const userScene = new UserScene();
     UserEventsListener.register(client, userScene);
-    const users2 = await UserServiceBroadcaster.ListUserToOne({limit: 20}, client);
+    const users2 = await UserServiceBroadcaster.ListUser({limit: 20}, client);
     console.log(users.total == users2.total);
 }

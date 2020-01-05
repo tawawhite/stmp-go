@@ -68,14 +68,14 @@ function initNamespace(root, ns, factory) {
 {{end}}  };
 
   ns.{{$service.ServiceName}}Broadcaster = class {{$service.ServiceName}}Broadcaster {
-{{range $i2, $method := $service.Methods}}   static {{$method.MethodName}}ToOne(input, conn, options) { return conn.invoke("{{$method.FullMethod}}", input, options) }
+{{range $i2, $method := $service.Methods}}   static {{$method.MethodName}}(input, conn, options) { return conn.invoke("{{$method.FullMethod}}", input, options) }
    static {{$method.MethodName}}ToSet(input, conns, excludes) { const pm = new PayloadMap(input); for (const conn of conns) (!excludes || excludes.indexOf(conn) < 0) && conn.call("{{$method.FullMethod}}", pm.get(conn), notifyOptions) }
    static {{$method.MethodName}}ToAll(input, srv, filter) { return srv.broadcast("{{$method.FullMethod}}", input, filter) }
 {{end}}  };
   
   ns.{{$service.ServiceName}}Client = class {{$service.ServiceName}}Client {
-    constructor(conn) { this.conn = conn }
-{{range $i2, $method := $service.Methods}}    {{$method.MethodName}}(input, options) { return this.conn.invoke("{{$method.FullMethod}}", input, options) }
+    constructor(client) { this.client = client }
+{{range $i2, $method := $service.Methods}}    {{$method.MethodName}}(input, options) { return this.client.invoke("{{$method.FullMethod}}", input, options) }
 {{end}}  };{{end}}
 });{{end}}
 `)
@@ -107,14 +107,14 @@ declare namespace {{.RootNamespace}} {
 
     class {{$service.ServiceName}}Broadcaster {
       constructor()
-{{range $i1, $method := $service.Methods}}     static {{$method.MethodName}}ToOne(input: pb.{{$method.IInput}}, conn: Connection, options?: Partial<CallOptions>): Promise<pb.{{$method.Output}}>
+{{range $i1, $method := $service.Methods}}     static {{$method.MethodName}}(input: pb.{{$method.IInput}}, conn: Connection, options?: Partial<CallOptions>): Promise<pb.{{$method.Output}}>
      static {{$method.MethodName}}ToSet(input: pb.{{$method.IInput}}, conns: Set<Connection>, excludes?: Connection[]): void
      static {{$method.MethodName}}ToAll(input: pb.{{$method.IInput}}, srv: Server, filter?: ConnFilter): void
 {{end}}    }
 
     class {{$service.ServiceName}}Client {
-      private conn: Connection;
-      constructor(conn: Connection)
+      private client: Client;
+      constructor(client: Client)
 {{range $i1, $method := $service.Methods}}      {{$method.MethodName}}(data: pb.{{$method.IInput}}, options?: Partial<CallOptions>): Promise<pb.{{$method.Output}}>
 {{end}}    }{{end}}
   }

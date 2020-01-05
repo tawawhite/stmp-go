@@ -25,17 +25,17 @@ declare namespace stmp {
 
     class UserServiceBroadcaster {
       constructor()
-     static ListUserToOne(input: pb.stmp.examples.room.IListInput, conn: Connection, options?: Partial<CallOptions>): Promise<pb.stmp.examples.room.ListUserOutput>
+     static ListUser(input: pb.stmp.examples.room.IListInput, conn: Connection, options?: Partial<CallOptions>): Promise<pb.stmp.examples.room.ListUserOutput>
      static ListUserToSet(input: pb.stmp.examples.room.IListInput, conns: Set<Connection>, excludes?: Connection[]): void
      static ListUserToAll(input: pb.stmp.examples.room.IListInput, srv: Server, filter?: ConnFilter): void
-     static LoginToOne(input: pb.stmp.examples.room.ILoginInput, conn: Connection, options?: Partial<CallOptions>): Promise<pb.stmp.examples.room.UserModel>
+     static Login(input: pb.stmp.examples.room.ILoginInput, conn: Connection, options?: Partial<CallOptions>): Promise<pb.stmp.examples.room.UserModel>
      static LoginToSet(input: pb.stmp.examples.room.ILoginInput, conns: Set<Connection>, excludes?: Connection[]): void
      static LoginToAll(input: pb.stmp.examples.room.ILoginInput, srv: Server, filter?: ConnFilter): void
     }
 
     class UserServiceClient {
-      private conn: Connection;
-      constructor(conn: Connection)
+      private client: Client;
+      constructor(client: Client)
       ListUser(data: pb.stmp.examples.room.IListInput, options?: Partial<CallOptions>): Promise<pb.stmp.examples.room.ListUserOutput>
       Login(data: pb.stmp.examples.room.ILoginInput, options?: Partial<CallOptions>): Promise<pb.stmp.examples.room.UserModel>
     }
@@ -54,14 +54,14 @@ declare namespace stmp {
 
     class UserEventsBroadcaster {
       constructor()
-     static StatusUpdatedToOne(input: pb.stmp.examples.room.IUserModel, conn: Connection, options?: Partial<CallOptions>): Promise<pb.google.protobuf.Empty>
+     static StatusUpdated(input: pb.stmp.examples.room.IUserModel, conn: Connection, options?: Partial<CallOptions>): Promise<pb.google.protobuf.Empty>
      static StatusUpdatedToSet(input: pb.stmp.examples.room.IUserModel, conns: Set<Connection>, excludes?: Connection[]): void
      static StatusUpdatedToAll(input: pb.stmp.examples.room.IUserModel, srv: Server, filter?: ConnFilter): void
     }
 
     class UserEventsClient {
-      private conn: Connection;
-      constructor(conn: Connection)
+      private client: Client;
+      constructor(client: Client)
       StatusUpdated(data: pb.stmp.examples.room.IUserModel, options?: Partial<CallOptions>): Promise<pb.google.protobuf.Empty>
     }
 
@@ -87,26 +87,26 @@ declare namespace stmp {
 
     class RoomServiceBroadcaster {
       constructor()
-     static CreateRoomToOne(input: pb.stmp.examples.room.ICreateRoomInput, conn: Connection, options?: Partial<CallOptions>): Promise<pb.stmp.examples.room.RoomModel>
+     static CreateRoom(input: pb.stmp.examples.room.ICreateRoomInput, conn: Connection, options?: Partial<CallOptions>): Promise<pb.stmp.examples.room.RoomModel>
      static CreateRoomToSet(input: pb.stmp.examples.room.ICreateRoomInput, conns: Set<Connection>, excludes?: Connection[]): void
      static CreateRoomToAll(input: pb.stmp.examples.room.ICreateRoomInput, srv: Server, filter?: ConnFilter): void
-     static ListRoomToOne(input: pb.stmp.examples.room.IListInput, conn: Connection, options?: Partial<CallOptions>): Promise<pb.stmp.examples.room.ListRoomOutput>
+     static ListRoom(input: pb.stmp.examples.room.IListInput, conn: Connection, options?: Partial<CallOptions>): Promise<pb.stmp.examples.room.ListRoomOutput>
      static ListRoomToSet(input: pb.stmp.examples.room.IListInput, conns: Set<Connection>, excludes?: Connection[]): void
      static ListRoomToAll(input: pb.stmp.examples.room.IListInput, srv: Server, filter?: ConnFilter): void
-     static JoinRoomToOne(input: pb.stmp.examples.room.IJoinRoomInput, conn: Connection, options?: Partial<CallOptions>): Promise<pb.stmp.examples.room.RoomModel>
+     static JoinRoom(input: pb.stmp.examples.room.IJoinRoomInput, conn: Connection, options?: Partial<CallOptions>): Promise<pb.stmp.examples.room.RoomModel>
      static JoinRoomToSet(input: pb.stmp.examples.room.IJoinRoomInput, conns: Set<Connection>, excludes?: Connection[]): void
      static JoinRoomToAll(input: pb.stmp.examples.room.IJoinRoomInput, srv: Server, filter?: ConnFilter): void
-     static ExitRoomToOne(input: pb.stmp.examples.room.IExitRoomInput, conn: Connection, options?: Partial<CallOptions>): Promise<pb.google.protobuf.Empty>
+     static ExitRoom(input: pb.stmp.examples.room.IExitRoomInput, conn: Connection, options?: Partial<CallOptions>): Promise<pb.google.protobuf.Empty>
      static ExitRoomToSet(input: pb.stmp.examples.room.IExitRoomInput, conns: Set<Connection>, excludes?: Connection[]): void
      static ExitRoomToAll(input: pb.stmp.examples.room.IExitRoomInput, srv: Server, filter?: ConnFilter): void
-     static SendMessageToOne(input: pb.stmp.examples.room.ISendMessageInput, conn: Connection, options?: Partial<CallOptions>): Promise<pb.google.protobuf.Empty>
+     static SendMessage(input: pb.stmp.examples.room.ISendMessageInput, conn: Connection, options?: Partial<CallOptions>): Promise<pb.google.protobuf.Empty>
      static SendMessageToSet(input: pb.stmp.examples.room.ISendMessageInput, conns: Set<Connection>, excludes?: Connection[]): void
      static SendMessageToAll(input: pb.stmp.examples.room.ISendMessageInput, srv: Server, filter?: ConnFilter): void
     }
 
     class RoomServiceClient {
-      private conn: Connection;
-      constructor(conn: Connection)
+      private client: Client;
+      constructor(client: Client)
       CreateRoom(data: pb.stmp.examples.room.ICreateRoomInput, options?: Partial<CallOptions>): Promise<pb.stmp.examples.room.RoomModel>
       ListRoom(data: pb.stmp.examples.room.IListInput, options?: Partial<CallOptions>): Promise<pb.stmp.examples.room.ListRoomOutput>
       JoinRoom(data: pb.stmp.examples.room.IJoinRoomInput, options?: Partial<CallOptions>): Promise<pb.stmp.examples.room.RoomModel>
@@ -132,20 +132,20 @@ declare namespace stmp {
 
     class RoomEventsBroadcaster {
       constructor()
-     static UserEnterToOne(input: pb.stmp.examples.room.IUserEnterEvent, conn: Connection, options?: Partial<CallOptions>): Promise<pb.google.protobuf.Empty>
+     static UserEnter(input: pb.stmp.examples.room.IUserEnterEvent, conn: Connection, options?: Partial<CallOptions>): Promise<pb.google.protobuf.Empty>
      static UserEnterToSet(input: pb.stmp.examples.room.IUserEnterEvent, conns: Set<Connection>, excludes?: Connection[]): void
      static UserEnterToAll(input: pb.stmp.examples.room.IUserEnterEvent, srv: Server, filter?: ConnFilter): void
-     static UserExitToOne(input: pb.stmp.examples.room.IUserExitEvent, conn: Connection, options?: Partial<CallOptions>): Promise<pb.google.protobuf.Empty>
+     static UserExit(input: pb.stmp.examples.room.IUserExitEvent, conn: Connection, options?: Partial<CallOptions>): Promise<pb.google.protobuf.Empty>
      static UserExitToSet(input: pb.stmp.examples.room.IUserExitEvent, conns: Set<Connection>, excludes?: Connection[]): void
      static UserExitToAll(input: pb.stmp.examples.room.IUserExitEvent, srv: Server, filter?: ConnFilter): void
-     static NewMessageToOne(input: pb.stmp.examples.room.IChatMessageModel, conn: Connection, options?: Partial<CallOptions>): Promise<pb.google.protobuf.Empty>
+     static NewMessage(input: pb.stmp.examples.room.IChatMessageModel, conn: Connection, options?: Partial<CallOptions>): Promise<pb.google.protobuf.Empty>
      static NewMessageToSet(input: pb.stmp.examples.room.IChatMessageModel, conns: Set<Connection>, excludes?: Connection[]): void
      static NewMessageToAll(input: pb.stmp.examples.room.IChatMessageModel, srv: Server, filter?: ConnFilter): void
     }
 
     class RoomEventsClient {
-      private conn: Connection;
-      constructor(conn: Connection)
+      private client: Client;
+      constructor(client: Client)
       UserEnter(data: pb.stmp.examples.room.IUserEnterEvent, options?: Partial<CallOptions>): Promise<pb.google.protobuf.Empty>
       UserExit(data: pb.stmp.examples.room.IUserExitEvent, options?: Partial<CallOptions>): Promise<pb.google.protobuf.Empty>
       NewMessage(data: pb.stmp.examples.room.IChatMessageModel, options?: Partial<CallOptions>): Promise<pb.google.protobuf.Empty>

@@ -7,6 +7,7 @@ import (
 	"crypto/tls"
 	"github.com/gorilla/websocket"
 	"github.com/xtaci/kcp-go"
+	"go.uber.org/zap"
 	"io"
 	"net"
 	"net/http"
@@ -19,59 +20,84 @@ func init() {
 	RegisterEncodingCodec(NewGzipCodec())
 }
 
-type ServerOptions struct {
-	*ConnOptions
-	LogAccess     []string
-	CompressLevel int
-	Authenticate  func(c *Conn) error
+type serverOptions struct {
+	*connOptions
+	logAccess     []string
+	compressLevel int
+	authenticate  func(c *Conn) error
 }
 
-func (o *ServerOptions) WithLogAccess(fields ...string) *ServerOptions {
-	o.LogAccess = fields
+func (o *serverOptions) WithLogger(logger *zap.Logger) *serverOptions {
+	o.connOptions.WithLogger(logger)
 	return o
 }
 
-func (o *ServerOptions) WithCompress(level int) *ServerOptions {
-	o.CompressLevel = level
+func (o *serverOptions) WithRouter(r *Router) *serverOptions {
+	o.connOptions.WithRouter(r)
 	return o
 }
 
-func (o *ServerOptions) WithAuthenticate(fn func(c *Conn) error) *ServerOptions {
-	o.Authenticate = fn
+func (o *serverOptions) WithWriteQueueLimit(max int) *serverOptions {
+	o.connOptions.WithWriteQueueLimit(max)
 	return o
 }
 
-func (o *ServerOptions) ApplyDefault() *ServerOptions {
+func (o *serverOptions) WithPacketSizeLimit(max uint64) *serverOptions {
+	o.connOptions.WithPacketSizeLimit(max)
+	return o
+}
+
+func (o *serverOptions) WithTimeout(handshake, read, write time.Duration) *serverOptions {
+	o.connOptions.WithTimeout(handshake, read, write)
+	return o
+}
+
+func (o *serverOptions) WithLogAccess(fields ...string) *serverOptions {
+	o.logAccess = fields
+	return o
+}
+
+func (o *serverOptions) WithCompress(level int) *serverOptions {
+	o.compressLevel = level
+	return o
+}
+
+func (o *serverOptions) WithAuthenticate(fn func(c *Conn) error) *serverOptions {
+	o.authenticate = fn
+	return o
+}
+
+func (o *serverOptions) applyDefault() *serverOptions {
 	no := o
 	if no == nil {
 		no = NewServerOptions()
 	}
-	no.ConnOptions = no.ConnOptions.ApplyDefault()
+	no.connOptions = no.connOptions.applyDefault()
 	return no
 }
 
-func NewServerOptions() *ServerOptions {
-	return &ServerOptions{
-		ConnOptions:   NewConnOptions(),
-		LogAccess:     []string{"host", "user-agent", "referer"},
-		CompressLevel: 6,
-		Authenticate:  func(c *Conn) error { return nil },
+func NewServerOptions() *serverOptions {
+	return &serverOptions{
+		connOptions:   NewConnOptions(),
+		logAccess:     []string{"host", "user-agent", "referer"},
+		compressLevel: 6,
+		authenticate:  func(c *Conn) error { return nil },
 	}
 }
 
 type Server struct {
 	*Router
-	opts      *ServerOptions
+	opts      *serverOptions
 	mu        sync.RWMutex
 	listeners map[io.Closer]struct{}
 	conns     ConnSet
 	done      chan error
 }
 
-func NewServer(opts *ServerOptions) *Server {
-	opts = opts.ApplyDefault()
+func NewServer(opts *serverOptions) *Server {
+	opts = opts.applyDefault()
 	return &Server{
-		Router:    opts.Router,
+		Router:    opts.router,
 		opts:      opts,
 		listeners: map[io.Closer]struct{}{},
 		conns:     NewConnSet(),
@@ -106,7 +132,7 @@ func (s *Server) Broadcast(ctx context.Context, method string, in interface{}, f
 }
 
 func (s *Server) newClient(nc net.Conn) *Conn {
-	c := NewConn(nc, s.opts.ConnOptions)
+	c := NewConn(nc, s.opts.connOptions)
 	c.ClientHeader = NewHeader()
 	c.ServerHeader = NewHeader()
 	return c
@@ -121,8 +147,8 @@ func (s *Server) HandleConn(nc net.Conn) (err error) {
 		}
 	}()
 	ch := NewClientHandshake(0, 0, c.ClientHeader, "")
-	nc.SetReadDeadline(time.Now().Add(s.opts.HandshakeTimeout))
-	err = ch.Read(nc, s.opts.MaxPacketSize)
+	nc.SetReadDeadline(time.Now().Add(s.opts.handshakeTimeout))
+	err = ch.Read(nc, s.opts.maxPacketSize)
 	if err != nil {
 		return
 	}
@@ -130,12 +156,12 @@ func (s *Server) HandleConn(nc net.Conn) (err error) {
 	if err != nil {
 		return
 	}
-	err = s.opts.Authenticate(c)
+	err = s.opts.authenticate(c)
 	if err != nil {
 		err = DetectError(err, StatusUnauthorized)
 		return
 	}
-	r, w, err := c.initEncoding(s.opts.CompressLevel)
+	r, w, err := c.initEncoding(s.opts.compressLevel)
 	if err != nil {
 		err = NewStatusError(StatusProtocolError, "init encoding error: "+err.Error())
 		return
@@ -185,7 +211,7 @@ func (s *Server) HandleWebsocketConn(wc *websocket.Conn, req *http.Request) (sta
 	if status != nil {
 		return
 	}
-	err := s.opts.Authenticate(c)
+	err := s.opts.authenticate(c)
 	if err != nil {
 		if se, ok := err.(*StatusError); ok {
 			status = se

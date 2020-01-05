@@ -52,9 +52,8 @@ func main() {
 	if err != nil {
 		log.Fatalln("\nERROR:", err)
 	}
-	var conn *stmp.Conn
-	var dialOptions = &stmp.DialOptions{Header: stmp.NewHeader()}
-	dialOptions.Header.Set("X-User-Name", name)
+	var conn *stmp.ClientConn
+	var dialOptions = stmp.NewDialOptions().WithHeader("X-User-Name", name)
 	if strings.HasPrefix(addr, "ws://") || strings.HasPrefix(addr, "wss://") {
 		log.Println("dialing", addr)
 		conn, err = stmp.DialWebSocket(addr, dialOptions)

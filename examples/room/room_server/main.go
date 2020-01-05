@@ -36,10 +36,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	srvConfig := stmp.NewServerOptions()
-	srvConfig.Logger = log
-	stmp.RegisterMediaCodec(stmp.NewJsonCodec(), stmp.NewProtobufCodec())
-	srv := stmp.NewServer(srvConfig)
+	srv := stmp.NewServer(stmp.NewServerOptions().WithLogger(log))
 
 	ut := room.NewUserTable()
 	us := NewUserService(ut)
