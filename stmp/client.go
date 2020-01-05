@@ -18,7 +18,7 @@ import (
 )
 
 func init() {
-	RegisterMediaCodec(NewMsgpackCodec(), NewJsonCodec())
+	RegisterMediaCodec(NewProtobufCodec(), NewJsonCodec())
 }
 
 type dialOptions struct {

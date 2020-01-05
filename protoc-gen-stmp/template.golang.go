@@ -47,7 +47,7 @@ type STMP{{$service.ServiceName}}Listener interface {
 {{end}}}
 
 func STMPRegister{{$service.ServiceName}}Listener(cc *stmp.ClientConn, s STMP{{$service.ServiceName}}Listener) {
-{{range $index, $method := $service.Methods}}	cc.Register(s, "{{$method.FullMethod}}", func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMP{{$service.ServiceName}}Server).Handle{{$method.MethodName}}Of{{$service.ServiceName}}(ctx, in.(*{{$method.Input}})) })
+{{range $index, $method := $service.Methods}}	cc.Register(s, "{{$method.FullMethod}}", func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMP{{$service.ServiceName}}Listener).Handle{{$method.MethodName}}Of{{$service.ServiceName}}(ctx, in.(*{{$method.Input}})) })
 {{end}}}
 
 func STMPUnregister{{$service.ServiceName}}Listener(cc *stmp.ClientConn, s STMP{{$service.ServiceName}}Listener) {
@@ -56,8 +56,8 @@ func STMPUnregister{{$service.ServiceName}}Listener(cc *stmp.ClientConn, s STMP{
 
 type STMP{{$service.ServiceName}}Broadcaster struct{}
 {{range $index, $method := $service.Methods}}
-func (s STMP{{$service.ServiceName}}Broadcaster) {{$method.MethodName}}(ctx context.Context, in *{{$method.Input}}, conn *stmp.Conn, opts ...stmp.CallOption) (*{{$method.Output}}, error) {
-	out, err := conn.Invoke(ctx, "{{$method.FullMethod}}", in, stmp.NewCallOptions(opts...))
+func (s STMP{{$service.ServiceName}}Broadcaster) {{$method.MethodName}}(ctx context.Context, in *{{$method.Input}}, conn *stmp.Conn, opts ...*stmp.CallOptions) (*{{$method.Output}}, error) {
+	out, err := conn.Invoke(ctx, "{{$method.FullMethod}}", in, stmp.BuildCallOptions(opts...))
 	return out.(*{{$method.Output}}), err
 }
 
@@ -105,15 +105,15 @@ func (s STMP{{$service.ServiceName}}Broadcaster) {{$method.MethodName}}ToAll(ctx
 }
 {{end}}
 type STMP{{$service.ServiceName}}Client interface {
-{{range $index, $method := $service.Methods}}	{{$method.MethodName}}(ctx context.Context, in *{{$method.Input}}, opts ...stmp.CallOption) (*{{$method.Output}}, error)
+{{range $index, $method := $service.Methods}}	{{$method.MethodName}}(ctx context.Context, in *{{$method.Input}}, opts ...*stmp.CallOptions) (*{{$method.Output}}, error)
 {{end}}}
 
 type stmp{{$service.ServiceName}}Client struct {
 	c *stmp.ClientConn
 }
 {{range $index, $method := $service.Methods}}
-func (s *stmp{{$service.ServiceName}}Client) {{$method.MethodName}}(ctx context.Context, in *{{$method.Input}}, opts ...stmp.CallOption) (*{{$method.Output}}, error) {
-	out, err := s.c.Invoke(ctx, "{{$method.FullMethod}}", in, stmp.NewCallOptions(opts...))
+func (s *stmp{{$service.ServiceName}}Client) {{$method.MethodName}}(ctx context.Context, in *{{$method.Input}}, opts ...*stmp.CallOptions) (*{{$method.Output}}, error) {
+	out, err := s.c.Invoke(ctx, "{{$method.FullMethod}}", in, stmp.BuildCallOptions(opts...))
 	return out.(*{{$method.Output}}), err
 }
 {{end}}

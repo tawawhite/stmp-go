@@ -15,17 +15,25 @@ import (
 )
 
 type CallOptions struct {
-	UseNotify bool
-	Packet    *Packet
+	useNotify  bool
+	keepPacket *Packet
+}
+
+func (o *CallOptions) applyDefault() *CallOptions {
+	no := o
+	if no == nil {
+		no = NewCallOptions()
+	}
+	return no
 }
 
 func (o *CallOptions) Notify() *CallOptions {
-	o.UseNotify = true
+	o.useNotify = true
 	return o
 }
 
 func (o *CallOptions) KeepPacket(p *Packet) *CallOptions {
-	o.Packet = p
+	o.keepPacket = p
 	return o
 }
 
@@ -33,7 +41,14 @@ func NewCallOptions() *CallOptions {
 	return &CallOptions{}
 }
 
-var NotifyOptions = NewCallOptions().Notify()
+func BuildCallOptions(opts ...*CallOptions) *CallOptions {
+	if len(opts) == 0 {
+		return NewCallOptions()
+	}
+	return opts[0]
+}
+
+var NotifyOptions = NewCallOptions().applyDefault().Notify()
 
 type connOptions struct {
 	logger           *zap.Logger
@@ -136,12 +151,23 @@ type Conn struct {
 	ServerHeader Header
 }
 
+func NewConn(nc net.Conn, opts *connOptions) *Conn {
+	return &Conn{
+		Conn:      nc,
+		opts:      opts,
+		Major:     1,
+		Minor:     0,
+		writeChan: make(chan *writeEvent, opts.writeQueueSize),
+		requests:  map[uint16]chan *Packet{},
+	}
+}
+
 func (c *Conn) Call(ctx context.Context, method string, payload []byte, opts *CallOptions) (out interface{}, err error) {
 	action := ms.methods[method]
 	p := &Packet{Fin: true, Kind: MessageKindRequest, Action: action, Payload: payload}
 	we := &writeEvent{p: p}
 	var r chan *Packet
-	if opts.UseNotify {
+	if opts.useNotify {
 		p.Kind = MessageKindNotify
 	} else {
 		we.r = make(chan error, 1)
@@ -174,8 +200,8 @@ func (c *Conn) Call(ctx context.Context, method string, payload []byte, opts *Ca
 		err = NewStatusError(StatusCancelled, ctx.Err())
 		return
 	}
-	if opts.Packet != nil {
-		*opts.Packet = *p
+	if opts.keepPacket != nil {
+		*opts.keepPacket = *p
 	}
 	if p.Status != StatusOk {
 		err = NewStatusError(p.Status, string(p.Payload))
@@ -204,17 +230,6 @@ func (c *Conn) Invoke(ctx context.Context, method string, in interface{}, opts *
 func (c *Conn) Close(status Status, message string) error {
 	// TODO
 	return nil
-}
-
-func NewConn(nc net.Conn, opts *connOptions) *Conn {
-	return &Conn{
-		Conn:      nc,
-		opts:      opts,
-		Major:     1,
-		Minor:     0,
-		writeChan: make(chan *writeEvent, opts.writeQueueSize),
-		requests:  map[uint16]chan *Packet{},
-	}
 }
 
 func (c *Conn) checkPendingVolume() {

@@ -17,11 +17,9 @@ import "stmp/stmp.proto";
 
 option (gogoproto.description_all) = false;
 option (gogoproto.goproto_unrecognized_all) = false;
-option (gogoproto.goproto_getters_all) = false;
 option (gogoproto.goproto_extensions_map_all) = false;
 option (gogoproto.goproto_unkeyed_all) = false;
 option (gogoproto.goproto_sizecache_all) = false;
-option (gogoproto.goproto_stringer_all) = false;
 
 // the user model for the online server, does not represent the real user model
 message UserModel {

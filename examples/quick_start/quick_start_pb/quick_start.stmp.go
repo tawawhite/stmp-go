@@ -35,8 +35,8 @@ type STMPRoomServiceListener interface {
 }
 
 func STMPRegisterRoomServiceListener(cc *stmp.ClientConn, s STMPRoomServiceListener) {
-	cc.Register(s, "stmp.examples.quick_start.RoomService.Join", func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMPRoomServiceServer).HandleJoinOfRoomService(ctx, in.(*JoinInput)) })
-	cc.Register(s, "stmp.examples.quick_start.RoomService.Exit", func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMPRoomServiceServer).HandleExitOfRoomService(ctx, in.(*ExitInput)) })
+	cc.Register(s, "stmp.examples.quick_start.RoomService.Join", func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMPRoomServiceListener).HandleJoinOfRoomService(ctx, in.(*JoinInput)) })
+	cc.Register(s, "stmp.examples.quick_start.RoomService.Exit", func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMPRoomServiceListener).HandleExitOfRoomService(ctx, in.(*ExitInput)) })
 }
 
 func STMPUnregisterRoomServiceListener(cc *stmp.ClientConn, s STMPRoomServiceListener) {
@@ -46,8 +46,8 @@ func STMPUnregisterRoomServiceListener(cc *stmp.ClientConn, s STMPRoomServiceLis
 
 type STMPRoomServiceBroadcaster struct{}
 
-func (s STMPRoomServiceBroadcaster) Join(ctx context.Context, in *JoinInput, conn *stmp.Conn, opts ...stmp.CallOption) (*RoomModel, error) {
-	out, err := conn.Invoke(ctx, "stmp.examples.quick_start.RoomService.Join", in, stmp.NewCallOptions(opts...))
+func (s STMPRoomServiceBroadcaster) Join(ctx context.Context, in *JoinInput, conn *stmp.Conn, opts ...*stmp.CallOptions) (*RoomModel, error) {
+	out, err := conn.Invoke(ctx, "stmp.examples.quick_start.RoomService.Join", in, stmp.BuildCallOptions(opts...))
 	return out.(*RoomModel), err
 }
 
@@ -94,8 +94,8 @@ func (s STMPRoomServiceBroadcaster) JoinToAll(ctx context.Context, in *JoinInput
 	return srv.Broadcast(ctx, "stmp.examples.quick_start.RoomService.Join", in, filter)
 }
 
-func (s STMPRoomServiceBroadcaster) Exit(ctx context.Context, in *ExitInput, conn *stmp.Conn, opts ...stmp.CallOption) (*empty.Empty, error) {
-	out, err := conn.Invoke(ctx, "stmp.examples.quick_start.RoomService.Exit", in, stmp.NewCallOptions(opts...))
+func (s STMPRoomServiceBroadcaster) Exit(ctx context.Context, in *ExitInput, conn *stmp.Conn, opts ...*stmp.CallOptions) (*empty.Empty, error) {
+	out, err := conn.Invoke(ctx, "stmp.examples.quick_start.RoomService.Exit", in, stmp.BuildCallOptions(opts...))
 	return out.(*empty.Empty), err
 }
 
@@ -143,21 +143,21 @@ func (s STMPRoomServiceBroadcaster) ExitToAll(ctx context.Context, in *ExitInput
 }
 
 type STMPRoomServiceClient interface {
-	Join(ctx context.Context, in *JoinInput, opts ...stmp.CallOption) (*RoomModel, error)
-	Exit(ctx context.Context, in *ExitInput, opts ...stmp.CallOption) (*empty.Empty, error)
+	Join(ctx context.Context, in *JoinInput, opts ...*stmp.CallOptions) (*RoomModel, error)
+	Exit(ctx context.Context, in *ExitInput, opts ...*stmp.CallOptions) (*empty.Empty, error)
 }
 
 type stmpRoomServiceClient struct {
 	c *stmp.ClientConn
 }
 
-func (s *stmpRoomServiceClient) Join(ctx context.Context, in *JoinInput, opts ...stmp.CallOption) (*RoomModel, error) {
-	out, err := s.c.Invoke(ctx, "stmp.examples.quick_start.RoomService.Join", in, stmp.NewCallOptions(opts...))
+func (s *stmpRoomServiceClient) Join(ctx context.Context, in *JoinInput, opts ...*stmp.CallOptions) (*RoomModel, error) {
+	out, err := s.c.Invoke(ctx, "stmp.examples.quick_start.RoomService.Join", in, stmp.BuildCallOptions(opts...))
 	return out.(*RoomModel), err
 }
 
-func (s *stmpRoomServiceClient) Exit(ctx context.Context, in *ExitInput, opts ...stmp.CallOption) (*empty.Empty, error) {
-	out, err := s.c.Invoke(ctx, "stmp.examples.quick_start.RoomService.Exit", in, stmp.NewCallOptions(opts...))
+func (s *stmpRoomServiceClient) Exit(ctx context.Context, in *ExitInput, opts ...*stmp.CallOptions) (*empty.Empty, error) {
+	out, err := s.c.Invoke(ctx, "stmp.examples.quick_start.RoomService.Exit", in, stmp.BuildCallOptions(opts...))
 	return out.(*empty.Empty), err
 }
 
@@ -191,8 +191,8 @@ type STMPRoomEventsListener interface {
 }
 
 func STMPRegisterRoomEventsListener(cc *stmp.ClientConn, s STMPRoomEventsListener) {
-	cc.Register(s, "stmp.examples.quick_start.RoomEvents.Join", func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMPRoomEventsServer).HandleJoinOfRoomEvents(ctx, in.(*JoinEvent)) })
-	cc.Register(s, "stmp.examples.quick_start.RoomEvents.Exit", func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMPRoomEventsServer).HandleExitOfRoomEvents(ctx, in.(*ExitEvent)) })
+	cc.Register(s, "stmp.examples.quick_start.RoomEvents.Join", func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMPRoomEventsListener).HandleJoinOfRoomEvents(ctx, in.(*JoinEvent)) })
+	cc.Register(s, "stmp.examples.quick_start.RoomEvents.Exit", func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMPRoomEventsListener).HandleExitOfRoomEvents(ctx, in.(*ExitEvent)) })
 }
 
 func STMPUnregisterRoomEventsListener(cc *stmp.ClientConn, s STMPRoomEventsListener) {
@@ -202,8 +202,8 @@ func STMPUnregisterRoomEventsListener(cc *stmp.ClientConn, s STMPRoomEventsListe
 
 type STMPRoomEventsBroadcaster struct{}
 
-func (s STMPRoomEventsBroadcaster) Join(ctx context.Context, in *JoinEvent, conn *stmp.Conn, opts ...stmp.CallOption) (*empty.Empty, error) {
-	out, err := conn.Invoke(ctx, "stmp.examples.quick_start.RoomEvents.Join", in, stmp.NewCallOptions(opts...))
+func (s STMPRoomEventsBroadcaster) Join(ctx context.Context, in *JoinEvent, conn *stmp.Conn, opts ...*stmp.CallOptions) (*empty.Empty, error) {
+	out, err := conn.Invoke(ctx, "stmp.examples.quick_start.RoomEvents.Join", in, stmp.BuildCallOptions(opts...))
 	return out.(*empty.Empty), err
 }
 
@@ -250,8 +250,8 @@ func (s STMPRoomEventsBroadcaster) JoinToAll(ctx context.Context, in *JoinEvent,
 	return srv.Broadcast(ctx, "stmp.examples.quick_start.RoomEvents.Join", in, filter)
 }
 
-func (s STMPRoomEventsBroadcaster) Exit(ctx context.Context, in *ExitEvent, conn *stmp.Conn, opts ...stmp.CallOption) (*empty.Empty, error) {
-	out, err := conn.Invoke(ctx, "stmp.examples.quick_start.RoomEvents.Exit", in, stmp.NewCallOptions(opts...))
+func (s STMPRoomEventsBroadcaster) Exit(ctx context.Context, in *ExitEvent, conn *stmp.Conn, opts ...*stmp.CallOptions) (*empty.Empty, error) {
+	out, err := conn.Invoke(ctx, "stmp.examples.quick_start.RoomEvents.Exit", in, stmp.BuildCallOptions(opts...))
 	return out.(*empty.Empty), err
 }
 
@@ -299,21 +299,21 @@ func (s STMPRoomEventsBroadcaster) ExitToAll(ctx context.Context, in *ExitEvent,
 }
 
 type STMPRoomEventsClient interface {
-	Join(ctx context.Context, in *JoinEvent, opts ...stmp.CallOption) (*empty.Empty, error)
-	Exit(ctx context.Context, in *ExitEvent, opts ...stmp.CallOption) (*empty.Empty, error)
+	Join(ctx context.Context, in *JoinEvent, opts ...*stmp.CallOptions) (*empty.Empty, error)
+	Exit(ctx context.Context, in *ExitEvent, opts ...*stmp.CallOptions) (*empty.Empty, error)
 }
 
 type stmpRoomEventsClient struct {
 	c *stmp.ClientConn
 }
 
-func (s *stmpRoomEventsClient) Join(ctx context.Context, in *JoinEvent, opts ...stmp.CallOption) (*empty.Empty, error) {
-	out, err := s.c.Invoke(ctx, "stmp.examples.quick_start.RoomEvents.Join", in, stmp.NewCallOptions(opts...))
+func (s *stmpRoomEventsClient) Join(ctx context.Context, in *JoinEvent, opts ...*stmp.CallOptions) (*empty.Empty, error) {
+	out, err := s.c.Invoke(ctx, "stmp.examples.quick_start.RoomEvents.Join", in, stmp.BuildCallOptions(opts...))
 	return out.(*empty.Empty), err
 }
 
-func (s *stmpRoomEventsClient) Exit(ctx context.Context, in *ExitEvent, opts ...stmp.CallOption) (*empty.Empty, error) {
-	out, err := s.c.Invoke(ctx, "stmp.examples.quick_start.RoomEvents.Exit", in, stmp.NewCallOptions(opts...))
+func (s *stmpRoomEventsClient) Exit(ctx context.Context, in *ExitEvent, opts ...*stmp.CallOptions) (*empty.Empty, error) {
+	out, err := s.c.Invoke(ctx, "stmp.examples.quick_start.RoomEvents.Exit", in, stmp.BuildCallOptions(opts...))
 	return out.(*empty.Empty), err
 }
 

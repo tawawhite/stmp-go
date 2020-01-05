@@ -16,7 +16,7 @@ import (
 )
 
 func init() {
-	RegisterMediaCodec(NewMsgpackCodec(), NewJsonCodec())
+	RegisterMediaCodec(NewProtobufCodec(), NewProtobufCodec(), NewJsonCodec())
 	RegisterEncodingCodec(NewGzipCodec())
 }
 
