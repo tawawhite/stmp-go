@@ -1,5 +1,3 @@
-// Copyright 2019 yangjunbao <yangjunbao@shimo.im>. All rights reserved.
-// Since 2019-12-23 15:31:13
 package stmp
 
 import (
@@ -15,40 +13,35 @@ import (
 	"time"
 )
 
-func init() {
-	RegisterMediaCodec(NewProtobufCodec(), NewProtobufCodec(), NewJsonCodec())
-	RegisterEncodingCodec(NewGzipCodec())
-}
-
 type serverOptions struct {
-	*connOptions
+	*ConnOptions
 	logAccess     []string
 	compressLevel int
 	authenticate  func(c *Conn) error
 }
 
 func (o *serverOptions) WithLogger(logger *zap.Logger) *serverOptions {
-	o.connOptions.WithLogger(logger)
+	o.ConnOptions.WithLogger(logger)
 	return o
 }
 
 func (o *serverOptions) WithRouter(r *Router) *serverOptions {
-	o.connOptions.WithRouter(r)
+	o.ConnOptions.WithRouter(r)
 	return o
 }
 
 func (o *serverOptions) WithWriteQueueLimit(max int) *serverOptions {
-	o.connOptions.WithWriteQueueLimit(max)
+	o.ConnOptions.WithWriteQueueLimit(max)
 	return o
 }
 
 func (o *serverOptions) WithPacketSizeLimit(max uint64) *serverOptions {
-	o.connOptions.WithPacketSizeLimit(max)
+	o.ConnOptions.WithPacketSizeLimit(max)
 	return o
 }
 
 func (o *serverOptions) WithTimeout(handshake, read, write time.Duration) *serverOptions {
-	o.connOptions.WithTimeout(handshake, read, write)
+	o.ConnOptions.WithTimeout(handshake, read, write)
 	return o
 }
 
@@ -72,14 +65,14 @@ func (o *serverOptions) applyDefault() *serverOptions {
 	if no == nil {
 		no = NewServerOptions()
 	}
-	no.connOptions = no.connOptions.applyDefault()
+	no.ConnOptions = no.ConnOptions.ApplyDefault()
 	return no
 }
 
 func NewServerOptions() *serverOptions {
 	return &serverOptions{
-		connOptions:   NewConnOptions(),
-		logAccess:     []string{"host", "user-agent", "referer"},
+		ConnOptions:   NewConnOptions(),
+		logAccess:     []string{"host", "user-agent", "referer", AcceptContentType},
 		compressLevel: 6,
 		authenticate:  func(c *Conn) error { return nil },
 	}
@@ -109,9 +102,12 @@ type ConnFilter func(conn *Conn) bool
 
 var AllowAll ConnFilter = func(conn *Conn) bool { return true }
 
-func (s *Server) Broadcast(ctx context.Context, method string, in interface{}, filter ConnFilter) error {
-	if filter == nil {
+func (s *Server) Broadcast(ctx context.Context, method string, in interface{}, filters ...ConnFilter) error {
+	var filter ConnFilter
+	if len(filters) == 0 {
 		filter = AllowAll
+	} else {
+		filter = filters[0]
 	}
 	payloads := NewPayloadMap(in)
 	s.mu.RLock()
@@ -131,25 +127,59 @@ func (s *Server) Broadcast(ctx context.Context, method string, in interface{}, f
 	return nil
 }
 
-func (s *Server) newClient(nc net.Conn) *Conn {
-	c := NewConn(nc, s.opts.connOptions)
+func (s *Server) newConn(nc net.Conn) *Conn {
+	c := NewConn(nc, s.opts.ConnOptions)
 	c.ClientHeader = NewHeader()
 	c.ServerHeader = NewHeader()
 	return c
 }
 
-func (s *Server) HandleConn(nc net.Conn) (err error) {
-	c := s.newClient(nc)
-	defer func() {
-		if err != nil {
-			// TODO write handshake response
-			c.Conn.Close()
-		}
-	}()
-	ch := NewClientHandshake(0, 0, c.ClientHeader, "")
-	nc.SetReadDeadline(time.Now().Add(s.opts.handshakeTimeout))
-	err = ch.Read(nc, s.opts.maxPacketSize)
+func (s *Server) CloseConn(c *Conn, status Status, message string) error {
+	err := c.close(status, message)
+	s.mu.Lock()
+	s.conns.Del(c)
+	s.mu.Unlock()
+	return err
+}
+
+func (s *Server) logAccess(c *Conn, event string, sh *handshake, err error) {
+	if s.opts.logAccess == nil {
+		return
+	}
+	fields := []zap.Field{
+		zap.String("event", event),
+		zap.String("addr", c.RemoteAddr().String()),
+		zap.String("server", c.LocalAddr().String()),
+		zap.Uint8("status", uint8(sh.Status)),
+		zap.String("message", sh.Message),
+	}
 	if err != nil {
+		fields = append(fields, zap.Error(err))
+	}
+	if len(s.opts.logAccess) == 1 && s.opts.logAccess[0] == "*" {
+		for k, v := range c.ClientHeader {
+			if len(v) == 1 {
+				fields = append(fields, zap.String(k, v[0]))
+			} else {
+				fields = append(fields, zap.Strings(k, v))
+			}
+		}
+	} else {
+		for _, k := range s.opts.logAccess {
+			v := c.ClientHeader.GetAll(k)
+			if len(v) == 1 {
+				fields = append(fields, zap.String(k, v[0]))
+			} else if v != nil {
+				fields = append(fields, zap.Strings(k, v))
+			}
+		}
+	}
+	s.opts.logger.Info("access", fields...)
+}
+
+func (s *Server) prepare(c *Conn) (err error) {
+	if c.Major != 1 || c.Minor != 0 {
+		err = NewStatusError(StatusUnsupportedProtocolVersion, "")
 		return
 	}
 	err = c.negotiate()
@@ -161,16 +191,45 @@ func (s *Server) HandleConn(nc net.Conn) (err error) {
 		err = DetectError(err, StatusUnauthorized)
 		return
 	}
-	r, w, err := c.initEncoding(s.opts.compressLevel)
-	if err != nil {
-		err = NewStatusError(StatusProtocolError, "init encoding error: "+err.Error())
-		return
-	}
+	return
+}
+
+func (s *Server) HandleConn(nc net.Conn) (err error) {
+	c := s.newConn(nc)
+	closeSent := false
+	var r io.ReadCloser
+	var w EncodingWriter
+	ch := NewClientHandshake(0, 0, c.ClientHeader, "")
 	sh := NewServerHandshake(StatusOk, c.ServerHeader, "")
-	err = sh.Write(nc)
-	if err != nil {
+	defer func() {
+		// defer log access, close error connection
+		if !closeSent && err != nil {
+			se := DetectError(err, StatusInternalServerError)
+			sh.Status = se.Code()
+			sh.Message = se.Message()
+			err = sh.Write(nc)
+			nc.Close()
+		} else if err != nil {
+			nc.Close()
+		}
+		s.logAccess(c, "connect", sh, err)
+	}()
+	nc.SetReadDeadline(time.Now().Add(s.opts.handshakeTimeout))
+	if err = ch.Read(nc, s.opts.maxPacketSize); err != nil {
 		return
 	}
+	if err = s.prepare(c); err != nil {
+		return
+	}
+	if r, w, err = c.initEncoding(s.opts.compressLevel); err != nil {
+		return
+	}
+	closeSent = true
+	if err = sh.Write(nc); err != nil {
+		return
+	}
+
+	// fine
 	s.mu.Lock()
 	s.conns.Add(c)
 	s.mu.Unlock()
@@ -182,45 +241,7 @@ func (s *Server) HandleConn(nc net.Conn) (err error) {
 	return
 }
 
-func (s *Server) HandleWebsocketConn(wc *websocket.Conn, req *http.Request) (status *StatusError) {
-	c := s.newClient(wc.UnderlyingConn())
-	defer func() {
-		if status != nil {
-			// TODO write handshake response
-			wc.Close()
-		}
-	}()
-	for k, v := range req.Header {
-		c.ClientHeader.Set(k, v...)
-	}
-	for k, v := range req.URL.Query() {
-		c.ClientHeader.Set(k, v...)
-	}
-	rawVersion := c.ClientHeader.Get(DetermineStmpVersion)
-	if len(rawVersion) != 3 {
-		status = NewStatusError(StatusUnsupportedProtocolVersion, "unsupported STMP version: "+rawVersion)
-		return
-	}
-	c.Major = rawVersion[0] - '0'
-	c.Minor = rawVersion[2] - '0'
-	if c.Major != 1 || c.Minor != 0 {
-		status = NewStatusError(StatusUnsupportedProtocolVersion, "unsupported STMP version: "+rawVersion)
-		return
-	}
-	status = c.negotiate()
-	if status != nil {
-		return
-	}
-	err := s.opts.authenticate(c)
-	if err != nil {
-		if se, ok := err.(*StatusError); ok {
-			status = se
-		} else {
-			status = NewStatusError(StatusInternalServerError, "authenticate error: "+err.Error())
-		}
-		return
-	}
-	sh := NewServerHandshake(StatusOk, c.ServerHeader, "")
+func (s *Server) writeWebsocketHandshake(wc *websocket.Conn, c *Conn, sh *handshake) error {
 	var data []byte
 	format := c.ServerHeader.Get(DeterminePacketFormat)
 	var typ int
@@ -231,10 +252,56 @@ func (s *Server) HandleWebsocketConn(wc *websocket.Conn, req *http.Request) (sta
 		typ = websocket.BinaryMessage
 		data = sh.MarshalBinary()
 	}
-	err = wc.WriteMessage(typ, data)
-	if err != nil {
+	return wc.WriteMessage(typ, data)
+}
+
+func (s *Server) HandleWebsocketConn(wc *websocket.Conn, req *http.Request) (err error) {
+	c := s.newConn(wc.UnderlyingConn())
+	sh := NewServerHandshake(StatusOk, c.ServerHeader, "")
+	closeSent := false
+	defer func() {
+		if err != nil {
+			sh := NewServerHandshake(StatusOk, c.ServerHeader, "")
+			defer func() {
+				// defer log access, close error connection
+				if !closeSent && err != nil {
+					se := DetectError(err, StatusInternalServerError)
+					sh.Status = se.Code()
+					sh.Message = se.Message()
+					err = s.writeWebsocketHandshake(wc, c, sh)
+					wc.Close()
+				} else if err != nil {
+					wc.Close()
+				}
+				s.logAccess(c, "connect", sh, err)
+			}()
+		}
+	}()
+
+	// transfer headers to conn
+	for k, v := range req.Header {
+		c.ClientHeader.Set(k, v...)
+	}
+	for k, v := range req.URL.Query() {
+		c.ClientHeader.Set(k, v...)
+	}
+	rawVersion := c.ClientHeader.Get(DetermineStmpVersion)
+	if len(rawVersion) != 3 {
+		err = NewStatusError(StatusProtocolError, "invalid protocol version: "+rawVersion)
 		return
 	}
+	c.Major = chunks[rawVersion[0]]
+	c.Minor = chunks[rawVersion[2]]
+
+	if err = s.prepare(c); err != nil {
+		return
+	}
+	closeSent = true
+	if err = s.writeWebsocketHandshake(wc, c, sh); err != nil {
+		return
+	}
+
+	// fine
 	s.mu.Lock()
 	s.conns.Add(c)
 	s.mu.Unlock()
@@ -254,15 +321,20 @@ func (s *Server) HandleWebsocketConn(wc *websocket.Conn, req *http.Request) (sta
 
 func (s *Server) shutdown(err error) {
 	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.listeners == nil {
+		// closed already
+		return
+	}
+	for c := range s.conns {
+		c.close(StatusServerShutdown, "")
+		s.conns.Del(c)
+	}
 	for l := range s.listeners {
 		l.Close()
 		delete(s.listeners, l)
 	}
-	for c := range s.conns {
-		c.Close(StatusServerShutdown, "")
-		delete(s.conns, c)
-	}
-	s.mu.Unlock()
+	s.listeners = nil
 	s.done <- err
 }
 

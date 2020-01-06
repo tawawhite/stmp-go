@@ -61,7 +61,7 @@ initNamespace(stmp, "stmp.examples.room", (ns) => {
   };
 
   ns.UserEventsBroadcaster = class UserEventsBroadcaster {
-   static StatusUpdated(input, conn, options) { return conn.invoke("stmp.examples.room.UserEvents.StatusUpdated", input, options) }
+   static StatusUpdated(input, conn) { return conn.invoke("stmp.examples.room.UserEvents.StatusUpdated", input, notifyOptions) }
    static StatusUpdatedToSet(input, conns, excludes) { const pm = new PayloadMap(input); for (const conn of conns) (!excludes || excludes.indexOf(conn) < 0) && conn.call("stmp.examples.room.UserEvents.StatusUpdated", pm.get(conn), notifyOptions) }
    static StatusUpdatedToAll(input, srv, filter) { return srv.broadcast("stmp.examples.room.UserEvents.StatusUpdated", input, filter) }
   };
@@ -134,13 +134,13 @@ initNamespace(stmp, "stmp.examples.room", (ns) => {
   };
 
   ns.RoomEventsBroadcaster = class RoomEventsBroadcaster {
-   static UserEnter(input, conn, options) { return conn.invoke("stmp.examples.room.RoomEvents.UserEnter", input, options) }
+   static UserEnter(input, conn) { return conn.invoke("stmp.examples.room.RoomEvents.UserEnter", input, notifyOptions) }
    static UserEnterToSet(input, conns, excludes) { const pm = new PayloadMap(input); for (const conn of conns) (!excludes || excludes.indexOf(conn) < 0) && conn.call("stmp.examples.room.RoomEvents.UserEnter", pm.get(conn), notifyOptions) }
    static UserEnterToAll(input, srv, filter) { return srv.broadcast("stmp.examples.room.RoomEvents.UserEnter", input, filter) }
-   static UserExit(input, conn, options) { return conn.invoke("stmp.examples.room.RoomEvents.UserExit", input, options) }
+   static UserExit(input, conn) { return conn.invoke("stmp.examples.room.RoomEvents.UserExit", input, notifyOptions) }
    static UserExitToSet(input, conns, excludes) { const pm = new PayloadMap(input); for (const conn of conns) (!excludes || excludes.indexOf(conn) < 0) && conn.call("stmp.examples.room.RoomEvents.UserExit", pm.get(conn), notifyOptions) }
    static UserExitToAll(input, srv, filter) { return srv.broadcast("stmp.examples.room.RoomEvents.UserExit", input, filter) }
-   static NewMessage(input, conn, options) { return conn.invoke("stmp.examples.room.RoomEvents.NewMessage", input, options) }
+   static NewMessage(input, conn) { return conn.invoke("stmp.examples.room.RoomEvents.NewMessage", input, notifyOptions) }
    static NewMessageToSet(input, conns, excludes) { const pm = new PayloadMap(input); for (const conn of conns) (!excludes || excludes.indexOf(conn) < 0) && conn.call("stmp.examples.room.RoomEvents.NewMessage", pm.get(conn), notifyOptions) }
    static NewMessageToAll(input, srv, filter) { return srv.broadcast("stmp.examples.room.RoomEvents.NewMessage", input, filter) }
   };

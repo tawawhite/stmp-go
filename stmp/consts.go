@@ -1,8 +1,7 @@
-// Copyright 2019 yangjunbao <yangjunbao@shimo.im>. All rights reserved.
-// Since 2019-12-23 15:34:33
 package stmp
 
 import (
+	"log"
 	"strconv"
 )
 
@@ -15,28 +14,28 @@ const (
 	MessageKindClose    = 0x5
 )
 
-func ShouldAlwaysFinal(kind byte) bool {
+func shouldAlwaysFinal(kind byte) bool {
 	// always true for following is not implemented
 	return true
 }
 
-func ShouldHeadOnly(kind byte) bool {
+func shouldHeadOnly(kind byte) bool {
 	return kind == MessageKindPing || kind == MessageKindPong
 }
 
-func HasMid(kind byte) bool {
+func hasMid(kind byte) bool {
 	return kind == MessageKindRequest || kind == MessageKindResponse
 }
 
-func HasAction(kind byte) bool {
+func hasAction(kind byte) bool {
 	return kind == MessageKindRequest || kind == MessageKindNotify
 }
 
-func HasStatus(kind byte) bool {
+func hasStatus(kind byte) bool {
 	return kind == MessageKindResponse || kind == MessageKindClose
 }
 
-func IsValidKind(kind byte) bool {
+func isValidKind(kind byte) bool {
 	switch kind {
 	case MessageKindPing, MessageKindPong, MessageKindRequest, MessageKindNotify, MessageKindResponse, MessageKindClose:
 		return true
@@ -45,11 +44,11 @@ func IsValidKind(kind byte) bool {
 	}
 }
 
-const MaskFin = 0x80
-const MaskHead = 0b1000
-const OffsetKind = 4
+const maskFin = 0x80
+const maskHead = 0b1000
+const offsetKind = 4
 
-var MapTextKind = map[byte]byte{
+var mapTextKind = map[byte]byte{
 	'I': MessageKindPing,
 	'O': MessageKindPong,
 	'Q': MessageKindRequest,
@@ -59,7 +58,7 @@ var MapTextKind = map[byte]byte{
 	//'F': MessageKindFollowing,
 }
 
-var MapKindText = map[byte]byte{
+var mapKindText = map[byte]byte{
 	MessageKindPing:     'I',
 	MessageKindPong:     'O',
 	MessageKindRequest:  'Q',
@@ -116,6 +115,13 @@ var MapStatus = map[Status]string{
 	StatusServerShutdown:             "Server shutdown",
 }
 
+type StatusError interface {
+	Error() string
+	Spread() (Status, []byte)
+	Code() Status
+	Message() string
+}
+
 func (s Status) Error() string {
 	if m, ok := MapStatus[s]; ok {
 		return m
@@ -127,21 +133,37 @@ func (s Status) Spread() (Status, []byte) {
 	return s, []byte(s.Error())
 }
 
-type StatusError struct {
+func (s Status) Code() Status {
+	return s
+}
+
+func (s Status) Message() string {
+	return s.Error()
+}
+
+type detailedError struct {
 	code    Status
 	message string
 }
 
-func (e *StatusError) Error() string {
+func (e *detailedError) Code() Status {
+	return e.code
+}
+
+func (e *detailedError) Message() string {
+	return e.message
+}
+
+func (e *detailedError) Error() string {
 	return "STMP " + e.code.Error() + ": " + e.message
 }
 
-func (e *StatusError) Spread() (Status, []byte) {
+func (e *detailedError) Spread() (Status, []byte) {
 	return e.code, []byte(e.message)
 }
 
-func NewStatusError(code Status, data interface{}) *StatusError {
-	se := new(StatusError)
+func NewStatusError(code Status, data interface{}) StatusError {
+	se := new(detailedError)
 	se.code = code
 	if m, ok := data.(string); ok {
 		se.message = m
@@ -154,8 +176,9 @@ func NewStatusError(code Status, data interface{}) *StatusError {
 	return se
 }
 
-func DetectError(err error, rollbackStatus Status) *StatusError {
-	if se, ok := err.(*StatusError); ok {
+func DetectError(err error, rollbackStatus Status) StatusError {
+	if se, ok := err.(StatusError); ok {
+		log.Printf("detect err, err is nil: %t, se is nil: %t, err: %s.", err == nil, se == nil, err.Error())
 		return se
 	}
 	if sc, ok := err.(Status); ok {
@@ -164,11 +187,13 @@ func DetectError(err error, rollbackStatus Status) *StatusError {
 	return NewStatusError(rollbackStatus, err.Error())
 }
 
-const AcceptContentType = "Accept"
-const AcceptEncoding = "Accept-Encoding"
-const AcceptPacketFormat = "Accept-Packet-Format"
+const (
+	AcceptContentType  = "Accept"
+	AcceptEncoding     = "Accept-Encoding"
+	AcceptPacketFormat = "Accept-Packet-Format"
 
-const DetermineContentType = "Content-Type"
-const DetermineEncoding = "Content-Encoding"
-const DeterminePacketFormat = "Packet-Format"
-const DetermineStmpVersion = "Stmp-Version"
+	DetermineContentType  = "Content-Type"
+	DetermineEncoding     = "Content-Encoding"
+	DeterminePacketFormat = "Packet-Format"
+	DetermineStmpVersion  = "Stmp-Version"
+)

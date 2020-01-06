@@ -1,10 +1,7 @@
-// Copyright 2019 acrazing <joking.young@gmail.com>. All rights reserved.
-// Since 2019-12-26 18:16:34
 package stmp
 
 import (
 	"context"
-	"errors"
 	"github.com/gorilla/websocket"
 	"go.uber.org/zap"
 	"io"
@@ -14,12 +11,22 @@ import (
 	"time"
 )
 
+// the options to make a call
+//
+// The options to keep response packet.
+//  func ExampleCallOptions_keepPacket() {
+//      p := stmp.NewPacket()
+//      someClient.DoSomething(ctx, input, stmp.NewCallOptions().KeepPacket(p))
+//      log.Printf("Kind=%d, Mid=%d, Status=%d, Payload=%s.", p.Kind, p.Mid, p.Status, string(p.Payload))
+//      // Output: Kind=4, Mid=1, Status=0, Payload=.
+//  }
 type CallOptions struct {
 	useNotify  bool
 	keepPacket *Packet
 }
 
-func (o *CallOptions) applyDefault() *CallOptions {
+// set default options
+func (o *CallOptions) ApplyDefault() *CallOptions {
 	no := o
 	if no == nil {
 		no = NewCallOptions()
@@ -27,30 +34,36 @@ func (o *CallOptions) applyDefault() *CallOptions {
 	return no
 }
 
+// call with notify, which means the conn will not wait for the response
 func (o *CallOptions) Notify() *CallOptions {
 	o.useNotify = true
 	return o
 }
 
+// keep response packet, you can get the raw information from the packet
 func (o *CallOptions) KeepPacket(p *Packet) *CallOptions {
 	o.keepPacket = p
 	return o
 }
 
+// create a default call options
 func NewCallOptions() *CallOptions {
 	return &CallOptions{}
 }
 
-func BuildCallOptions(opts ...*CallOptions) *CallOptions {
+// pick the first call options, if the input is empty, will build a default options
+func PickCallOptions(opts ...*CallOptions) *CallOptions {
 	if len(opts) == 0 {
-		return NewCallOptions()
+		return NewCallOptions().ApplyDefault()
 	}
 	return opts[0]
 }
 
-var NotifyOptions = NewCallOptions().applyDefault().Notify()
+// the default notify options, this is used for protoc-gen-stmp
+var NotifyOptions = NewCallOptions().ApplyDefault().Notify()
 
-type connOptions struct {
+// the connection configurations
+type ConnOptions struct {
 	logger           *zap.Logger
 	handshakeTimeout time.Duration
 	readTimeout      time.Duration
@@ -60,34 +73,40 @@ type connOptions struct {
 	writeQueueSize   int
 }
 
-func (o *connOptions) WithLogger(logger *zap.Logger) *connOptions {
+// set custom logger, default is zap.NewProduction()
+func (o *ConnOptions) WithLogger(logger *zap.Logger) *ConnOptions {
 	o.logger = logger
 	return o
 }
 
-func (o *connOptions) WithRouter(r *Router) *connOptions {
+// set custom router
+func (o *ConnOptions) WithRouter(r *Router) *ConnOptions {
 	o.router = r
 	return o
 }
 
-func (o *connOptions) WithWriteQueueLimit(max int) *connOptions {
+// set max write queue size, default is 8
+func (o *ConnOptions) WithWriteQueueLimit(max int) *ConnOptions {
 	o.writeQueueSize = max
 	return o
 }
 
-func (o *connOptions) WithPacketSizeLimit(max uint64) *connOptions {
+// set the max packet size, default is 16mb
+func (o *ConnOptions) WithPacketSizeLimit(max uint64) *ConnOptions {
 	o.maxPacketSize = max
 	return o
 }
 
-func (o *connOptions) WithTimeout(handshake, read, write time.Duration) *connOptions {
+// set timeouts, the read timeout means ping interval
+func (o *ConnOptions) WithTimeout(handshake, read, write time.Duration) *ConnOptions {
 	o.handshakeTimeout = handshake
 	o.readTimeout = read
 	o.writeTimeout = write
 	return o
 }
 
-func (o *connOptions) applyDefault() *connOptions {
+// build final options, check default options
+func (o *ConnOptions) ApplyDefault() *ConnOptions {
 	no := o
 	if no == nil {
 		no = NewConnOptions()
@@ -105,8 +124,9 @@ func (o *connOptions) applyDefault() *connOptions {
 	return no
 }
 
-func NewConnOptions() *connOptions {
-	return &connOptions{
+// create a new conn options
+func NewConnOptions() *ConnOptions {
+	return &ConnOptions{
 		handshakeTimeout: time.Minute,
 		// ping timeout
 		readTimeout:  time.Minute * 2,
@@ -114,7 +134,7 @@ func NewConnOptions() *connOptions {
 		router:       nil,
 		// 16 mb
 		maxPacketSize:  1 << 24,
-		writeQueueSize: 16,
+		writeQueueSize: 8,
 	}
 }
 
@@ -126,7 +146,7 @@ type writeEvent struct {
 // the struct will only keep the required fields for the connection to save space at server side
 type Conn struct {
 	net.Conn
-	opts *connOptions
+	opts *ConnOptions
 	mu   sync.Mutex
 	mid  *uint32
 
@@ -142,26 +162,29 @@ type Conn struct {
 	// the stmp minor version
 	Minor byte
 
-	// content-type codec
+	// the content-type codec
 	Media MediaCodec
 
-	// client writeHandshakeResponse request header
+	// client handshake request header
 	ClientHeader Header
-	// server writeHandshakeResponse response header
+	// server handshake response header
 	ServerHeader Header
 }
 
-func NewConn(nc net.Conn, opts *connOptions) *Conn {
+// create a conn from net.Conn and options
+func NewConn(nc net.Conn, opts *ConnOptions) *Conn {
 	return &Conn{
 		Conn:      nc,
 		opts:      opts,
 		Major:     1,
 		Minor:     0,
+		mid:       new(uint32),
 		writeChan: make(chan *writeEvent, opts.writeQueueSize),
 		requests:  map[uint16]chan *Packet{},
 	}
 }
 
+// Private: invoke a method arbitrary
 func (c *Conn) Call(ctx context.Context, method string, payload []byte, opts *CallOptions) (out interface{}, err error) {
 	action := ms.methods[method]
 	p := &Packet{Fin: true, Kind: MessageKindRequest, Action: action, Payload: payload}
@@ -215,6 +238,7 @@ func (c *Conn) Call(ctx context.Context, method string, payload []byte, opts *Ca
 	return
 }
 
+// Private: invoke a method arbitrary, this method will marshal the input to payload bytes with conn's codec.
 func (c *Conn) Invoke(ctx context.Context, method string, in interface{}, opts *CallOptions) (interface{}, error) {
 	var payload []byte
 	if in != nil {
@@ -227,12 +251,16 @@ func (c *Conn) Invoke(ctx context.Context, method string, in interface{}, opts *
 	return c.Call(ctx, method, payload, opts)
 }
 
-func (c *Conn) Close(status Status, message string) error {
+// error occurred, or received close message, or sent close message, interrupt the connection only
+func (c *Conn) terminate() error {
 	// TODO
 	return nil
 }
 
-func (c *Conn) checkPendingVolume() {
+// close connection manually, this should be manipulated by Server or ClientConn
+func (c *Conn) close(status Status, message string) error {
+	// TODO
+	return nil
 }
 
 func (c *Conn) dispatchPacket(p *Packet) {
@@ -254,7 +282,7 @@ func (c *Conn) dispatchPacket(p *Packet) {
 
 func (c *Conn) binaryReadChannel(r io.ReadCloser) error {
 	p := new(Packet)
-	buf := make([]byte, MaxStreamHeadSize, MaxStreamHeadSize)
+	buf := make([]byte, maxStreamHeadSize, maxStreamHeadSize)
 	var err error
 	for {
 		c.Conn.SetReadDeadline(time.Now().Add(c.opts.readTimeout))
@@ -271,7 +299,7 @@ func (c *Conn) binaryWriteChannel(w EncodingWriter) {
 	var e *writeEvent
 	var ok bool
 	var err error
-	buf := make([]byte, MaxStreamHeadSize, MaxStreamHeadSize)
+	buf := make([]byte, maxStreamHeadSize, maxStreamHeadSize)
 	for {
 		e, ok = <-c.writeChan
 		if !ok {
@@ -315,7 +343,7 @@ func (c *Conn) websocketBinaryWriteChannel(wc *websocket.Conn) {
 	var ok bool
 	var err error
 	var data []byte
-	buf := make([]byte, MaxBinaryHeadSize, MaxBinaryHeadSize)
+	buf := make([]byte, maxBinaryHeadSize, maxBinaryHeadSize)
 	for {
 		e, ok = <-c.writeChan
 		if !ok {
@@ -360,7 +388,7 @@ func (c *Conn) websocketTextWriteChannel(wc *websocket.Conn) {
 	var ok bool
 	var err error
 	var data []byte
-	buf := make([]byte, MaxTextHeadSize, MaxTextHeadSize)
+	buf := make([]byte, maxTextHeadSize, maxTextHeadSize)
 	for {
 		e, ok = <-c.writeChan
 		if !ok {
@@ -421,29 +449,34 @@ func (c *Conn) handleResponse(mid uint16, status Status, payload []byte) {
 	}
 }
 
-func (c *Conn) negotiate() *StatusError {
+func (c *Conn) negotiate() error {
 	mediaInput := c.ClientHeader.Get(AcceptContentType)
-	inputLength := 0
-	var inputValue string
-	for inputLength < len(mediaInput) {
-		inputValue, inputLength = ReadNegotiate(mediaInput)
+	for {
+		inputValue, inputLength := readNegotiate(mediaInput)
 		if c.Media = GetMediaCodec(inputValue); c.Media != nil {
 			c.ServerHeader.Set(DetermineContentType, inputValue)
 			break
 		}
+		if inputLength == len(mediaInput) {
+			break
+		}
+		mediaInput = mediaInput[inputLength:]
 	}
 	if c.Media == nil {
 		return NewStatusError(StatusUnsupportedContentType, "")
 	}
 	encodingInput := c.ClientHeader.Get(AcceptEncoding)
-	inputLength = 0
 	var encoding EncodingCodec
-	for inputLength < len(encodingInput) {
-		inputValue, inputLength = ReadNegotiate(encodingInput)
+	for {
+		inputValue, inputLength := readNegotiate(encodingInput)
 		if encoding = GetEncodingCodec(inputValue); encoding != nil {
 			c.ServerHeader.Set(DetermineEncoding, inputValue)
 			break
 		}
+		if inputLength == len(encodingInput) {
+			break
+		}
+		mediaInput = mediaInput[inputLength:]
 	}
 	packetFormat := c.ClientHeader.Get(DeterminePacketFormat)
 	if packetFormat != "" {
@@ -455,7 +488,7 @@ func (c *Conn) negotiate() *StatusError {
 func (c *Conn) initEncoding(compressLevel int) (r io.ReadCloser, w EncodingWriter, err error) {
 	c.Media = GetMediaCodec(c.ServerHeader.Get(DetermineContentType))
 	if c.Media == nil {
-		err = errors.New("cannot find content-type: " + c.ServerHeader.Get(DetermineContentType) + ", please register it first")
+		err = NewStatusError(StatusUnsupportedContentType, "cannot find codec: "+c.ServerHeader.Get(DetermineContentType)+", please register it first")
 		return
 	}
 	ec := GetEncodingCodec(c.ServerHeader.Get(DetermineEncoding))

@@ -1,5 +1,3 @@
-// Copyright 2019 acrazing <joking.young@gmail.com>. All rights reserved.
-// Since 2019-12-23 19:55:29
 package stmp
 
 import (
@@ -10,10 +8,13 @@ import (
 	"strings"
 )
 
-func ReadNegotiate(input string) (v string, n int) {
+// read input value
+func readNegotiate(input string) (v string, n int) {
 	n = strings.IndexByte(input, ',')
 	if n == -1 {
 		n = len(input)
+	} else {
+		n += 1
 	}
 	seg := strings.IndexByte(input[0:n], ';')
 	if seg == -1 {
@@ -23,27 +24,11 @@ func ReadNegotiate(input string) (v string, n int) {
 	return
 }
 
-func EscapeHeadKey(key string) string {
-	return strings.ReplaceAll(strings.ReplaceAll(key, "%", "%25"), ":", "%3A")
-}
-
-func EscapeHeadValue(value string) string {
-	return strings.ReplaceAll(strings.ReplaceAll(value, "%", "%25"), "\n", "%0A")
-}
-
-func UnescapeHeadKey(key string) string {
-	return strings.TrimSpace(strings.ReplaceAll(strings.ReplaceAll(key, "%3A", ":"), "%25", "%"))
-}
-
-func UnescapeHeadValue(value string) string {
-	return strings.TrimSpace(strings.ReplaceAll(strings.ReplaceAll(value, "%0A", "\n"), "%25", "%"))
-}
-
-func UvarintSize(x uint64) (n int) {
+func uvarintSize(x uint64) (n int) {
 	return (bits.Len64(x|1) + 6) / 7
 }
 
-func ReadUvarint(r io.Reader, b1 []byte) (uint64, error) {
+func readUvarint(r io.Reader, b1 []byte) (uint64, error) {
 	var x uint64
 	var s uint
 	for i := 0; ; i++ {
@@ -63,7 +48,7 @@ func ReadUvarint(r io.Reader, b1 []byte) (uint64, error) {
 	}
 }
 
-func ReadUint16(r io.Reader, b2 []byte) (v uint16, err error) {
+func readUint16(r io.Reader, b2 []byte) (v uint16, err error) {
 	_, err = r.Read(b2)
 	if err != nil {
 		return
@@ -97,7 +82,7 @@ func init() {
 	}
 }
 
-func AppendHex(u uint64, buf []byte) int {
+func appendHex(u uint64, buf []byte) int {
 	i := len(buf)
 	for u > 15 {
 		i--
@@ -111,7 +96,7 @@ func AppendHex(u uint64, buf []byte) int {
 	return len(buf) - i
 }
 
-func ParseHexStatus(buf []byte) (s Status, err error) {
+func parseHexStatus(buf []byte) (s Status, err error) {
 	m := len(buf)
 	if m > 2 || m == 0 {
 		err = errors.New("out of range")
@@ -127,7 +112,7 @@ func ParseHexStatus(buf []byte) (s Status, err error) {
 	return
 }
 
-func ParseHexUint16(buf []byte) (n uint16, err error) {
+func parseHexUint16(buf []byte) (n uint16, err error) {
 	m := len(buf)
 	if m > 4 || m == 0 {
 		err = errors.New("out of range")
@@ -143,7 +128,7 @@ func ParseHexUint16(buf []byte) (n uint16, err error) {
 	return n, nil
 }
 
-func ParseHexUint64(buf []byte) (n uint64, err error) {
+func parseHexUint64(buf []byte) (n uint64, err error) {
 	m := len(buf)
 	if m == 0 || m > 16 {
 		err = errors.New("out of range")

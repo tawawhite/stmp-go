@@ -1,5 +1,3 @@
-// Copyright 2019 acrazing <joking.young@gmail.com>. All rights reserved.
-// Since 2019-12-27 13:55:03
 package main
 
 import (
@@ -7,7 +5,9 @@ import (
 	"flag"
 	_ "github.com/envoyproxy/protoc-gen-validate/validate"
 	_ "github.com/gogo/protobuf/gogoproto"
+	"io"
 	"log"
+	"net"
 	"os"
 	"strings"
 	"time"
@@ -113,6 +113,15 @@ var cmds = map[string]func(flag *flagSet){
 		p2 = append(p2, 'B')
 		p4 := append(p2, 'C')
 		log.Printf("p1: %s, p2: %s, p4: %s, cap(p1): %d, cap(p2): %d, cap(p4): %d", string(p1), string(p2), string(p4), cap(p1), cap(p2), cap(p4))
+	},
+	"debugSize": func(flag *flagSet) {
+		type foo struct {
+			net.Conn
+			io.ReadWriteCloser
+		}
+		log.Printf("Sizeof foo with mutliple ReadWriteCloser: 32=%d.", unsafe.Sizeof(foo{}))
+		var ifc io.ReadWriteCloser
+		log.Printf("Sizeof single interface: 16=%d.", unsafe.Sizeof(ifc))
 	},
 }
 

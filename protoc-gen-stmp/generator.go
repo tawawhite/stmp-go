@@ -1,6 +1,3 @@
-// Copyright 2019 acrazing <joking.young@gmail.com>. All rights reserved.
-// Since 2019-12-30 22:20:00
-// most of the code comes from {@link https://github.com/golang/protobuf/protoc-gen-go}
 package main
 
 import (

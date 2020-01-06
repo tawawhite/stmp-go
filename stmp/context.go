@@ -1,5 +1,3 @@
-// Copyright 2019 acrazing <joking.young@gmail.com>. All rights reserved.
-// Since 2019-12-31 18:55:07
 package stmp
 
 import "context"

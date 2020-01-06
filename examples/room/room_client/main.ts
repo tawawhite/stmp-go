@@ -11,7 +11,7 @@ import UserServiceClient = stmp.stmp.examples.room.UserServiceClient;
 import UserEventsListener = stmp.stmp.examples.room.UserEventsListener;
 
 class UserScene implements UserEventsListener {
-    HandleStatusUpdated(ctx: Context, input: pb.stmp.examples.room.UserModel, output: pb.google.protobuf.Empty): void | Promise<void> {
+    HandleStatusUpdated(ctx: Context, input: pb.stmp.examples.room.UserModel, output: pb.google.protobuf.Empty): void {
     }
 }
 

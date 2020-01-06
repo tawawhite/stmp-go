@@ -1,5 +1,3 @@
-// Copyright 2020 acrazing <joking.young@gmail.com>. All rights reserved.
-// Since 2020-01-03 19:39:13
 package main
 
 import "text/template"
@@ -51,8 +49,8 @@ type stmp{{$service.ServiceName}}Client struct {
 }
 {{range $index, $method := $service.Methods}}
 func (s *stmp{{$service.ServiceName}}Client) {{$method.MethodName}}(ctx context.Context, in *{{$method.Input}}, opts ...*stmp.CallOptions) (*{{$method.Output}}, error) {
-	out, err := s.c.Invoke(ctx, "{{$method.FullMethod}}", in, stmp.BuildCallOptions(opts...))
-	return out.(*{{$method.Output}}), err
+	out, err := s.c.Invoke(ctx, "{{$method.FullMethod}}", in, stmp.PickCallOptions(opts...))
+	if out == nil { return (*{{$method.Output}})(nil), err } else { return out.(*{{$method.Output}}), err }
 }
 {{end}}
 func STMPNew{{$service.ServiceName}}Client(c *stmp.ClientConn) STMP{{$service.ServiceName}}Client {
@@ -61,11 +59,14 @@ func STMPNew{{$service.ServiceName}}Client(c *stmp.ClientConn) STMP{{$service.Se
 {{end}}
 {{if $service.IsEvents}}
 type STMP{{$service.ServiceName}}Listener interface {
-{{range $index, $method := $service.Methods}}	Handle{{$method.MethodName}}(ctx context.Context, in *{{$method.Input}}) (out *{{$method.Output}}, err error)
+{{range $index, $method := $service.Methods}}	Handle{{$method.MethodName}}(ctx context.Context, in *{{$method.Input}})
 {{end}}}
 
 func STMPRegister{{$service.ServiceName}}Listener(cc *stmp.ClientConn, s STMP{{$service.ServiceName}}Listener) {
-{{range $index, $method := $service.Methods}}	cc.Register(s, "{{$method.FullMethod}}", func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMP{{$service.ServiceName}}Listener).Handle{{$method.MethodName}}(ctx, in.(*{{$method.Input}})) })
+{{range $index, $method := $service.Methods}}	cc.Register(s, "{{$method.FullMethod}}", func(ctx context.Context, in interface{}, inst interface{}) (interface{}, error) {
+		inst.(STMP{{$service.ServiceName}}Listener).Handle{{$method.MethodName}}(ctx, in.(*{{$method.Input}}))
+		return nil, nil
+	})
 {{end}}}
 
 func STMPUnregister{{$service.ServiceName}}Listener(cc *stmp.ClientConn, s STMP{{$service.ServiceName}}Listener) {
@@ -74,9 +75,9 @@ func STMPUnregister{{$service.ServiceName}}Listener(cc *stmp.ClientConn, s STMP{
 
 type STMP{{$service.ServiceName}}Broadcaster struct{}
 {{range $index, $method := $service.Methods}}
-func (s STMP{{$service.ServiceName}}Broadcaster) {{$method.MethodName}}(ctx context.Context, in *{{$method.Input}}, conn *stmp.Conn, opts ...*stmp.CallOptions) (*{{$method.Output}}, error) {
-	out, err := conn.Invoke(ctx, "{{$method.FullMethod}}", in, stmp.BuildCallOptions(opts...))
-	return out.(*{{$method.Output}}), err
+func (s STMP{{$service.ServiceName}}Broadcaster) {{$method.MethodName}}(ctx context.Context, in *{{$method.Input}}, conn *stmp.Conn, opts ...*stmp.CallOptions) error {
+	_, err := conn.Invoke(ctx, "{{$method.FullMethod}}", in, stmp.PickCallOptions(opts...).Notify())
+	return err
 }
 
 func (s STMP{{$service.ServiceName}}Broadcaster) {{$method.MethodName}}ToList(ctx context.Context, in *{{$method.Input}}, conns ...*stmp.Conn) error {
@@ -118,8 +119,8 @@ func (s STMP{{$service.ServiceName}}Broadcaster) {{$method.MethodName}}ToSet(ctx
 	return nil
 }
 
-func (s STMP{{$service.ServiceName}}Broadcaster) {{$method.MethodName}}ToAll(ctx context.Context, in *{{$method.Input}}, srv *stmp.Server, filter stmp.ConnFilter) error {
-	return srv.Broadcast(ctx, "{{$method.FullMethod}}", in, filter)
+func (s STMP{{$service.ServiceName}}Broadcaster) {{$method.MethodName}}ToAll(ctx context.Context, in *{{$method.Input}}, srv *stmp.Server, filter ...stmp.ConnFilter) error {
+	return srv.Broadcast(ctx, "{{$method.FullMethod}}", in, filter...)
 }{{end}}{{/* broadcaster.methods */}}{{end}}{{/* service.isEvents */}}{{end}}{{/* range $services */}}
 `)
 	if err != nil {

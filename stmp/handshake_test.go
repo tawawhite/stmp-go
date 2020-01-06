@@ -1,5 +1,3 @@
-// Copyright 2020 acrazing <joking.young@gmail.com>. All rights reserved.
-// Since 2020-01-05 21:56:24
 package stmp_test
 
 import (

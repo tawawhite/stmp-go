@@ -1,5 +1,3 @@
-// Copyright 2020 acrazing <joking.young@gmail.com>. All rights reserved.
-// Since 2020-01-04 23:06:08
 package main
 
 import (

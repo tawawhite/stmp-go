@@ -1,5 +1,3 @@
-// Copyright 2019 yangjunbao <yangjunbao@shimo.im>. All rights reserved.
-// Since 2019-12-23 16:03:13
 package stmp
 
 import (
@@ -7,6 +5,22 @@ import (
 	"errors"
 	"strings"
 )
+
+func escapeHeadKey(key string) string {
+	return strings.ReplaceAll(escapeHeadValue(key), ":", "%3A")
+}
+
+func escapeHeadValue(value string) string {
+	return strings.ReplaceAll(strings.ReplaceAll(value, "%", "%25"), "\n", "%0A")
+}
+
+func unescapeHeadKey(key string) string {
+	return strings.TrimSpace(strings.ReplaceAll(unescapeHeadValue(key), "%3A", ":"))
+}
+
+func unescapeHeadValue(value string) string {
+	return strings.TrimSpace(strings.ReplaceAll(strings.ReplaceAll(value, "%0A", "\n"), "%25", "%"))
+}
 
 type Header map[string][]string
 
@@ -50,7 +64,7 @@ func (h Header) Marshal() []byte {
 	chunks := make([]string, 0, len(h))
 	for k, vs := range h {
 		for _, v := range vs {
-			chunks = append(chunks, EscapeHeadKey(k)+":"+EscapeHeadValue(v))
+			chunks = append(chunks, escapeHeadKey(k)+":"+escapeHeadValue(v))
 		}
 	}
 	return []byte(strings.Join(chunks, "\n"))
@@ -66,12 +80,12 @@ func (h Header) Unmarshal(data []byte) error {
 		if sep < 0 {
 			return errors.New("miss ':' in header")
 		}
-		key = UnescapeHeadKey(string(data[:sep]))
+		key = unescapeHeadKey(string(data[:sep]))
 		end = bytes.IndexByte(data[sep+1:], '\n')
 		if end == -1 {
-			value = UnescapeHeadValue(string(data[sep+1:]))
+			value = unescapeHeadValue(string(data[sep+1:]))
 		} else {
-			value = UnescapeHeadValue(string(data[sep+1 : end]))
+			value = unescapeHeadValue(string(data[sep+1 : end]))
 		}
 		if len(h[key]) > 0 {
 			h[key] = append(h[key], value)

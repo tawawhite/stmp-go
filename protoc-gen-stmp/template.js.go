@@ -1,5 +1,3 @@
-// Copyright 2020 acrazing <joking.young@gmail.com>. All rights reserved.
-// Since 2020-01-03 22:59:02
 package main
 
 import "text/template"
@@ -73,7 +71,7 @@ function initNamespace(root, ns, factory) {
 {{end}}{{/* listener.method */}}  };
 
   ns.{{$service.ServiceName}}Broadcaster = class {{$service.ServiceName}}Broadcaster {
-{{range $i2, $method := $service.Methods}}   static {{$method.MethodName}}(input, conn, options) { return conn.invoke("{{$method.FullMethod}}", input, options) }
+{{range $i2, $method := $service.Methods}}   static {{$method.MethodName}}(input, conn) { return conn.invoke("{{$method.FullMethod}}", input, notifyOptions) }
    static {{$method.MethodName}}ToSet(input, conns, excludes) { const pm = new PayloadMap(input); for (const conn of conns) (!excludes || excludes.indexOf(conn) < 0) && conn.call("{{$method.FullMethod}}", pm.get(conn), notifyOptions) }
    static {{$method.MethodName}}ToAll(input, srv, filter) { return srv.broadcast("{{$method.FullMethod}}", input, filter) }
 {{end}}{{/* broadcaster.methods */}}  };
@@ -117,13 +115,13 @@ declare namespace {{.RootNamespace}} {
       static register(c: Client, inst: {{$service.ServiceName}}Listener): void
       static unregister(c: Client, inst: {{$service.ServiceName}}Listener): void
       {{range $i1, $method := $service.Methods}}
-      Handle{{$method.MethodName}}(ctx: Context, input: pb.{{$method.Input}}, output: pb.{{$method.Output}}): void | Promise<void>
+      Handle{{$method.MethodName}}(ctx: Context, input: pb.{{$method.Input}}, output: pb.{{$method.Output}}): void
       {{end}}
     }
 
     class {{$service.ServiceName}}Broadcaster {
       {{range $i1, $method := $service.Methods}}
-      static {{$method.MethodName}}(input: pb.{{$method.IInput}}, conn: Connection, options?: Partial<CallOptions>): Promise<pb.{{$method.Output}}>
+      static {{$method.MethodName}}(input: pb.{{$method.IInput}}, conn: Connection): void
       static {{$method.MethodName}}ToSet(input: pb.{{$method.IInput}}, conns: Set<Connection>, excludes?: Connection[]): void
       static {{$method.MethodName}}ToAll(input: pb.{{$method.IInput}}, srv: Server, filter?: ConnFilter): void
       {{end}}

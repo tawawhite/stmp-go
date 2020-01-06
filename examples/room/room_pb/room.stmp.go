@@ -39,13 +39,13 @@ type stmpUserServiceClient struct {
 }
 
 func (s *stmpUserServiceClient) ListUser(ctx context.Context, in *ListInput, opts ...*stmp.CallOptions) (*ListUserOutput, error) {
-	out, err := s.c.Invoke(ctx, "stmp.examples.room.UserService.ListUser", in, stmp.BuildCallOptions(opts...))
-	return out.(*ListUserOutput), err
+	out, err := s.c.Invoke(ctx, "stmp.examples.room.UserService.ListUser", in, stmp.PickCallOptions(opts...))
+	if out == nil { return (*ListUserOutput)(nil), err } else { return out.(*ListUserOutput), err }
 }
 
 func (s *stmpUserServiceClient) Login(ctx context.Context, in *LoginInput, opts ...*stmp.CallOptions) (*UserModel, error) {
-	out, err := s.c.Invoke(ctx, "stmp.examples.room.UserService.Login", in, stmp.BuildCallOptions(opts...))
-	return out.(*UserModel), err
+	out, err := s.c.Invoke(ctx, "stmp.examples.room.UserService.Login", in, stmp.PickCallOptions(opts...))
+	if out == nil { return (*UserModel)(nil), err } else { return out.(*UserModel), err }
 }
 
 func STMPNewUserServiceClient(c *stmp.ClientConn) STMPUserServiceClient {
@@ -59,11 +59,14 @@ func init() {
 
 
 type STMPUserEventsListener interface {
-	HandleStatusUpdated(ctx context.Context, in *UserModel) (out *empty.Empty, err error)
+	HandleStatusUpdated(ctx context.Context, in *UserModel)
 }
 
 func STMPRegisterUserEventsListener(cc *stmp.ClientConn, s STMPUserEventsListener) {
-	cc.Register(s, "stmp.examples.room.UserEvents.StatusUpdated", func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMPUserEventsListener).HandleStatusUpdated(ctx, in.(*UserModel)) })
+	cc.Register(s, "stmp.examples.room.UserEvents.StatusUpdated", func(ctx context.Context, in interface{}, inst interface{}) (interface{}, error) {
+		inst.(STMPUserEventsListener).HandleStatusUpdated(ctx, in.(*UserModel))
+		return nil, nil
+	})
 }
 
 func STMPUnregisterUserEventsListener(cc *stmp.ClientConn, s STMPUserEventsListener) {
@@ -72,9 +75,9 @@ func STMPUnregisterUserEventsListener(cc *stmp.ClientConn, s STMPUserEventsListe
 
 type STMPUserEventsBroadcaster struct{}
 
-func (s STMPUserEventsBroadcaster) StatusUpdated(ctx context.Context, in *UserModel, conn *stmp.Conn, opts ...*stmp.CallOptions) (*empty.Empty, error) {
-	out, err := conn.Invoke(ctx, "stmp.examples.room.UserEvents.StatusUpdated", in, stmp.BuildCallOptions(opts...))
-	return out.(*empty.Empty), err
+func (s STMPUserEventsBroadcaster) StatusUpdated(ctx context.Context, in *UserModel, conn *stmp.Conn, opts ...*stmp.CallOptions) error {
+	_, err := conn.Invoke(ctx, "stmp.examples.room.UserEvents.StatusUpdated", in, stmp.PickCallOptions(opts...).Notify())
+	return err
 }
 
 func (s STMPUserEventsBroadcaster) StatusUpdatedToList(ctx context.Context, in *UserModel, conns ...*stmp.Conn) error {
@@ -116,8 +119,8 @@ func (s STMPUserEventsBroadcaster) StatusUpdatedToSet(ctx context.Context, in *U
 	return nil
 }
 
-func (s STMPUserEventsBroadcaster) StatusUpdatedToAll(ctx context.Context, in *UserModel, srv *stmp.Server, filter stmp.ConnFilter) error {
-	return srv.Broadcast(ctx, "stmp.examples.room.UserEvents.StatusUpdated", in, filter)
+func (s STMPUserEventsBroadcaster) StatusUpdatedToAll(ctx context.Context, in *UserModel, srv *stmp.Server, filter ...stmp.ConnFilter) error {
+	return srv.Broadcast(ctx, "stmp.examples.room.UserEvents.StatusUpdated", in, filter...)
 }
 func init() {
 	stmp.RegisterMethodAction("stmp.examples.room.RoomService.CreateRoom", 0x1201, func() interface{} { return &CreateRoomInput{} }, func() interface{} { return &RoomModel{} })
@@ -164,28 +167,28 @@ type stmpRoomServiceClient struct {
 }
 
 func (s *stmpRoomServiceClient) CreateRoom(ctx context.Context, in *CreateRoomInput, opts ...*stmp.CallOptions) (*RoomModel, error) {
-	out, err := s.c.Invoke(ctx, "stmp.examples.room.RoomService.CreateRoom", in, stmp.BuildCallOptions(opts...))
-	return out.(*RoomModel), err
+	out, err := s.c.Invoke(ctx, "stmp.examples.room.RoomService.CreateRoom", in, stmp.PickCallOptions(opts...))
+	if out == nil { return (*RoomModel)(nil), err } else { return out.(*RoomModel), err }
 }
 
 func (s *stmpRoomServiceClient) ListRoom(ctx context.Context, in *ListInput, opts ...*stmp.CallOptions) (*ListRoomOutput, error) {
-	out, err := s.c.Invoke(ctx, "stmp.examples.room.RoomService.ListRoom", in, stmp.BuildCallOptions(opts...))
-	return out.(*ListRoomOutput), err
+	out, err := s.c.Invoke(ctx, "stmp.examples.room.RoomService.ListRoom", in, stmp.PickCallOptions(opts...))
+	if out == nil { return (*ListRoomOutput)(nil), err } else { return out.(*ListRoomOutput), err }
 }
 
 func (s *stmpRoomServiceClient) JoinRoom(ctx context.Context, in *JoinRoomInput, opts ...*stmp.CallOptions) (*RoomModel, error) {
-	out, err := s.c.Invoke(ctx, "stmp.examples.room.RoomService.JoinRoom", in, stmp.BuildCallOptions(opts...))
-	return out.(*RoomModel), err
+	out, err := s.c.Invoke(ctx, "stmp.examples.room.RoomService.JoinRoom", in, stmp.PickCallOptions(opts...))
+	if out == nil { return (*RoomModel)(nil), err } else { return out.(*RoomModel), err }
 }
 
 func (s *stmpRoomServiceClient) ExitRoom(ctx context.Context, in *ExitRoomInput, opts ...*stmp.CallOptions) (*empty.Empty, error) {
-	out, err := s.c.Invoke(ctx, "stmp.examples.room.RoomService.ExitRoom", in, stmp.BuildCallOptions(opts...))
-	return out.(*empty.Empty), err
+	out, err := s.c.Invoke(ctx, "stmp.examples.room.RoomService.ExitRoom", in, stmp.PickCallOptions(opts...))
+	if out == nil { return (*empty.Empty)(nil), err } else { return out.(*empty.Empty), err }
 }
 
 func (s *stmpRoomServiceClient) SendMessage(ctx context.Context, in *SendMessageInput, opts ...*stmp.CallOptions) (*empty.Empty, error) {
-	out, err := s.c.Invoke(ctx, "stmp.examples.room.RoomService.SendMessage", in, stmp.BuildCallOptions(opts...))
-	return out.(*empty.Empty), err
+	out, err := s.c.Invoke(ctx, "stmp.examples.room.RoomService.SendMessage", in, stmp.PickCallOptions(opts...))
+	if out == nil { return (*empty.Empty)(nil), err } else { return out.(*empty.Empty), err }
 }
 
 func STMPNewRoomServiceClient(c *stmp.ClientConn) STMPRoomServiceClient {
@@ -201,15 +204,24 @@ func init() {
 
 
 type STMPRoomEventsListener interface {
-	HandleUserEnter(ctx context.Context, in *UserEnterEvent) (out *empty.Empty, err error)
-	HandleUserExit(ctx context.Context, in *UserExitEvent) (out *empty.Empty, err error)
-	HandleNewMessage(ctx context.Context, in *ChatMessageModel) (out *empty.Empty, err error)
+	HandleUserEnter(ctx context.Context, in *UserEnterEvent)
+	HandleUserExit(ctx context.Context, in *UserExitEvent)
+	HandleNewMessage(ctx context.Context, in *ChatMessageModel)
 }
 
 func STMPRegisterRoomEventsListener(cc *stmp.ClientConn, s STMPRoomEventsListener) {
-	cc.Register(s, "stmp.examples.room.RoomEvents.UserEnter", func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMPRoomEventsListener).HandleUserEnter(ctx, in.(*UserEnterEvent)) })
-	cc.Register(s, "stmp.examples.room.RoomEvents.UserExit", func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMPRoomEventsListener).HandleUserExit(ctx, in.(*UserExitEvent)) })
-	cc.Register(s, "stmp.examples.room.RoomEvents.NewMessage", func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMPRoomEventsListener).HandleNewMessage(ctx, in.(*ChatMessageModel)) })
+	cc.Register(s, "stmp.examples.room.RoomEvents.UserEnter", func(ctx context.Context, in interface{}, inst interface{}) (interface{}, error) {
+		inst.(STMPRoomEventsListener).HandleUserEnter(ctx, in.(*UserEnterEvent))
+		return nil, nil
+	})
+	cc.Register(s, "stmp.examples.room.RoomEvents.UserExit", func(ctx context.Context, in interface{}, inst interface{}) (interface{}, error) {
+		inst.(STMPRoomEventsListener).HandleUserExit(ctx, in.(*UserExitEvent))
+		return nil, nil
+	})
+	cc.Register(s, "stmp.examples.room.RoomEvents.NewMessage", func(ctx context.Context, in interface{}, inst interface{}) (interface{}, error) {
+		inst.(STMPRoomEventsListener).HandleNewMessage(ctx, in.(*ChatMessageModel))
+		return nil, nil
+	})
 }
 
 func STMPUnregisterRoomEventsListener(cc *stmp.ClientConn, s STMPRoomEventsListener) {
@@ -220,9 +232,9 @@ func STMPUnregisterRoomEventsListener(cc *stmp.ClientConn, s STMPRoomEventsListe
 
 type STMPRoomEventsBroadcaster struct{}
 
-func (s STMPRoomEventsBroadcaster) UserEnter(ctx context.Context, in *UserEnterEvent, conn *stmp.Conn, opts ...*stmp.CallOptions) (*empty.Empty, error) {
-	out, err := conn.Invoke(ctx, "stmp.examples.room.RoomEvents.UserEnter", in, stmp.BuildCallOptions(opts...))
-	return out.(*empty.Empty), err
+func (s STMPRoomEventsBroadcaster) UserEnter(ctx context.Context, in *UserEnterEvent, conn *stmp.Conn, opts ...*stmp.CallOptions) error {
+	_, err := conn.Invoke(ctx, "stmp.examples.room.RoomEvents.UserEnter", in, stmp.PickCallOptions(opts...).Notify())
+	return err
 }
 
 func (s STMPRoomEventsBroadcaster) UserEnterToList(ctx context.Context, in *UserEnterEvent, conns ...*stmp.Conn) error {
@@ -264,12 +276,12 @@ func (s STMPRoomEventsBroadcaster) UserEnterToSet(ctx context.Context, in *UserE
 	return nil
 }
 
-func (s STMPRoomEventsBroadcaster) UserEnterToAll(ctx context.Context, in *UserEnterEvent, srv *stmp.Server, filter stmp.ConnFilter) error {
-	return srv.Broadcast(ctx, "stmp.examples.room.RoomEvents.UserEnter", in, filter)
+func (s STMPRoomEventsBroadcaster) UserEnterToAll(ctx context.Context, in *UserEnterEvent, srv *stmp.Server, filter ...stmp.ConnFilter) error {
+	return srv.Broadcast(ctx, "stmp.examples.room.RoomEvents.UserEnter", in, filter...)
 }
-func (s STMPRoomEventsBroadcaster) UserExit(ctx context.Context, in *UserExitEvent, conn *stmp.Conn, opts ...*stmp.CallOptions) (*empty.Empty, error) {
-	out, err := conn.Invoke(ctx, "stmp.examples.room.RoomEvents.UserExit", in, stmp.BuildCallOptions(opts...))
-	return out.(*empty.Empty), err
+func (s STMPRoomEventsBroadcaster) UserExit(ctx context.Context, in *UserExitEvent, conn *stmp.Conn, opts ...*stmp.CallOptions) error {
+	_, err := conn.Invoke(ctx, "stmp.examples.room.RoomEvents.UserExit", in, stmp.PickCallOptions(opts...).Notify())
+	return err
 }
 
 func (s STMPRoomEventsBroadcaster) UserExitToList(ctx context.Context, in *UserExitEvent, conns ...*stmp.Conn) error {
@@ -311,12 +323,12 @@ func (s STMPRoomEventsBroadcaster) UserExitToSet(ctx context.Context, in *UserEx
 	return nil
 }
 
-func (s STMPRoomEventsBroadcaster) UserExitToAll(ctx context.Context, in *UserExitEvent, srv *stmp.Server, filter stmp.ConnFilter) error {
-	return srv.Broadcast(ctx, "stmp.examples.room.RoomEvents.UserExit", in, filter)
+func (s STMPRoomEventsBroadcaster) UserExitToAll(ctx context.Context, in *UserExitEvent, srv *stmp.Server, filter ...stmp.ConnFilter) error {
+	return srv.Broadcast(ctx, "stmp.examples.room.RoomEvents.UserExit", in, filter...)
 }
-func (s STMPRoomEventsBroadcaster) NewMessage(ctx context.Context, in *ChatMessageModel, conn *stmp.Conn, opts ...*stmp.CallOptions) (*empty.Empty, error) {
-	out, err := conn.Invoke(ctx, "stmp.examples.room.RoomEvents.NewMessage", in, stmp.BuildCallOptions(opts...))
-	return out.(*empty.Empty), err
+func (s STMPRoomEventsBroadcaster) NewMessage(ctx context.Context, in *ChatMessageModel, conn *stmp.Conn, opts ...*stmp.CallOptions) error {
+	_, err := conn.Invoke(ctx, "stmp.examples.room.RoomEvents.NewMessage", in, stmp.PickCallOptions(opts...).Notify())
+	return err
 }
 
 func (s STMPRoomEventsBroadcaster) NewMessageToList(ctx context.Context, in *ChatMessageModel, conns ...*stmp.Conn) error {
@@ -358,6 +370,6 @@ func (s STMPRoomEventsBroadcaster) NewMessageToSet(ctx context.Context, in *Chat
 	return nil
 }
 
-func (s STMPRoomEventsBroadcaster) NewMessageToAll(ctx context.Context, in *ChatMessageModel, srv *stmp.Server, filter stmp.ConnFilter) error {
-	return srv.Broadcast(ctx, "stmp.examples.room.RoomEvents.NewMessage", in, filter)
+func (s STMPRoomEventsBroadcaster) NewMessageToAll(ctx context.Context, in *ChatMessageModel, srv *stmp.Server, filter ...stmp.ConnFilter) error {
+	return srv.Broadcast(ctx, "stmp.examples.room.RoomEvents.NewMessage", in, filter...)
 }

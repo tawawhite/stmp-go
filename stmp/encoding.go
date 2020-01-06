@@ -1,5 +1,3 @@
-// Copyright 2019 acrazing <joking.young@gmail.com>. All rights reserved.
-// Since 2019-12-27 20:03:48
 package stmp
 
 import (
@@ -59,4 +57,8 @@ func (plainEncoding) Close() error {
 
 func (plainEncoding) Flush() error {
 	return nil
+}
+
+func init() {
+	RegisterEncodingCodec(NewGzipCodec())
 }

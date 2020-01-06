@@ -38,13 +38,13 @@ declare namespace stmp {
       static register(c: Client, inst: UserEventsListener): void
       static unregister(c: Client, inst: UserEventsListener): void
       
-      HandleStatusUpdated(ctx: Context, input: pb.stmp.examples.room.UserModel, output: pb.google.protobuf.Empty): void | Promise<void>
+      HandleStatusUpdated(ctx: Context, input: pb.stmp.examples.room.UserModel, output: pb.google.protobuf.Empty): void
       
     }
 
     class UserEventsBroadcaster {
       
-      static StatusUpdated(input: pb.stmp.examples.room.IUserModel, conn: Connection, options?: Partial<CallOptions>): Promise<pb.google.protobuf.Empty>
+      static StatusUpdated(input: pb.stmp.examples.room.IUserModel, conn: Connection): void
       static StatusUpdatedToSet(input: pb.stmp.examples.room.IUserModel, conns: Set<Connection>, excludes?: Connection[]): void
       static StatusUpdatedToAll(input: pb.stmp.examples.room.IUserModel, srv: Server, filter?: ConnFilter): void
       
@@ -93,25 +93,25 @@ declare namespace stmp {
       static register(c: Client, inst: RoomEventsListener): void
       static unregister(c: Client, inst: RoomEventsListener): void
       
-      HandleUserEnter(ctx: Context, input: pb.stmp.examples.room.UserEnterEvent, output: pb.google.protobuf.Empty): void | Promise<void>
+      HandleUserEnter(ctx: Context, input: pb.stmp.examples.room.UserEnterEvent, output: pb.google.protobuf.Empty): void
       
-      HandleUserExit(ctx: Context, input: pb.stmp.examples.room.UserExitEvent, output: pb.google.protobuf.Empty): void | Promise<void>
+      HandleUserExit(ctx: Context, input: pb.stmp.examples.room.UserExitEvent, output: pb.google.protobuf.Empty): void
       
-      HandleNewMessage(ctx: Context, input: pb.stmp.examples.room.ChatMessageModel, output: pb.google.protobuf.Empty): void | Promise<void>
+      HandleNewMessage(ctx: Context, input: pb.stmp.examples.room.ChatMessageModel, output: pb.google.protobuf.Empty): void
       
     }
 
     class RoomEventsBroadcaster {
       
-      static UserEnter(input: pb.stmp.examples.room.IUserEnterEvent, conn: Connection, options?: Partial<CallOptions>): Promise<pb.google.protobuf.Empty>
+      static UserEnter(input: pb.stmp.examples.room.IUserEnterEvent, conn: Connection): void
       static UserEnterToSet(input: pb.stmp.examples.room.IUserEnterEvent, conns: Set<Connection>, excludes?: Connection[]): void
       static UserEnterToAll(input: pb.stmp.examples.room.IUserEnterEvent, srv: Server, filter?: ConnFilter): void
       
-      static UserExit(input: pb.stmp.examples.room.IUserExitEvent, conn: Connection, options?: Partial<CallOptions>): Promise<pb.google.protobuf.Empty>
+      static UserExit(input: pb.stmp.examples.room.IUserExitEvent, conn: Connection): void
       static UserExitToSet(input: pb.stmp.examples.room.IUserExitEvent, conns: Set<Connection>, excludes?: Connection[]): void
       static UserExitToAll(input: pb.stmp.examples.room.IUserExitEvent, srv: Server, filter?: ConnFilter): void
       
-      static NewMessage(input: pb.stmp.examples.room.IChatMessageModel, conn: Connection, options?: Partial<CallOptions>): Promise<pb.google.protobuf.Empty>
+      static NewMessage(input: pb.stmp.examples.room.IChatMessageModel, conn: Connection): void
       static NewMessageToSet(input: pb.stmp.examples.room.IChatMessageModel, conns: Set<Connection>, excludes?: Connection[]): void
       static NewMessageToAll(input: pb.stmp.examples.room.IChatMessageModel, srv: Server, filter?: ConnFilter): void
       

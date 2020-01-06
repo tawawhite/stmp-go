@@ -1,5 +1,3 @@
-// Copyright 2020 acrazing <joking.young@gmail.com>. All rights reserved.
-// Since 2020-01-03 16:22:18
 package stmp
 
 type ConnSet map[*Conn]struct{}

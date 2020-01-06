@@ -1,5 +1,3 @@
-// Copyright 2019 acrazing <joking.young@gmail.com>. All rights reserved.
-// Since 2019-12-26 18:33:52
 package stmp
 
 import (
@@ -10,6 +8,7 @@ import (
 	"github.com/vmihailenco/msgpack"
 )
 
+// A media codec should Marshal/Unmarshal its Name specified content-type
 type MediaCodec interface {
 	Name() string
 	Marshal(v interface{}) ([]byte, error)
@@ -18,19 +17,17 @@ type MediaCodec interface {
 
 var mapMediaCodec = map[string]MediaCodec{}
 
+// register custom media codec
 func RegisterMediaCodec(codecs ...MediaCodec) {
 	for _, codec := range codecs {
 		mapMediaCodec[codec.Name()] = codec
 	}
 }
 
+// get media codec by content type
 func GetMediaCodec(name string) MediaCodec {
 	return mapMediaCodec[name]
 }
-
-var (
-	ErrCodecInvalidValue = errors.New("invalid value for codec")
-)
 
 type jsonCodec struct{}
 
@@ -46,6 +43,7 @@ func (j jsonCodec) Unmarshal(data []byte, v interface{}) error {
 	return jsoniter.Unmarshal(data, v)
 }
 
+// create json codec
 func NewJsonCodec() MediaCodec {
 	return jsonCodec{}
 }
@@ -71,6 +69,7 @@ func (m msgpackCodec) Unmarshal(data []byte, v interface{}) error {
 	return msgpack.Unmarshal(data, v)
 }
 
+// create msgpack codec
 func NewMsgpackCodec() MediaCodec {
 	return msgpackCodec{}
 }
@@ -85,25 +84,28 @@ func (p protobufCodec) Marshal(v interface{}) ([]byte, error) {
 	if pv, ok := v.(proto.Marshaler); ok {
 		return pv.Marshal()
 	}
-	return nil, ErrCodecInvalidValue
+	return nil, errors.New("invalid protobuf message")
 }
 
 func (p protobufCodec) Unmarshal(data []byte, v interface{}) error {
 	if pv, ok := v.(proto.Unmarshaler); ok {
 		return pv.Unmarshal(data)
 	}
-	return ErrCodecInvalidValue
+	return errors.New("invalid protobuf message")
 }
 
+// create protobuf codec
 func NewProtobufCodec() MediaCodec {
 	return protobufCodec{}
 }
 
+// payload map will cache the marshalled data for the same content-type
 type PayloadMap struct {
 	in       interface{}
 	payloads map[string][]byte
 }
 
+// marshal and cache the result according to the content type
 func (p *PayloadMap) Marshal(conn *Conn) ([]byte, error) {
 	if p.in == nil {
 		return nil, nil
@@ -120,6 +122,12 @@ func (p *PayloadMap) Marshal(conn *Conn) ([]byte, error) {
 	return payload, nil
 }
 
+// create a new PayloadMap
 func NewPayloadMap(in interface{}) *PayloadMap {
 	return &PayloadMap{in: in, payloads: map[string][]byte{}}
+}
+
+func init() {
+	// maybe should be optimized
+	RegisterMediaCodec(NewProtobufCodec(), NewMsgpackCodec(), NewJsonCodec())
 }

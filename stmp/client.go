@@ -1,5 +1,3 @@
-// Copyright 2019 acrazing <joking.young@gmail.com>. All rights reserved.
-// Since 2019-12-28 15:15:32
 package stmp
 
 import (
@@ -17,85 +15,106 @@ import (
 	"time"
 )
 
-func init() {
-	RegisterMediaCodec(NewProtobufCodec(), NewJsonCodec())
-}
-
-type dialOptions struct {
-	*connOptions
-	// the headers for handshake
-	header Header
-	// works only if encoding is not empty
-	// range is [1, 9], default is 6
+type DialOptions struct {
+	*ConnOptions
+	header        Header
 	compressLevel int
-	// the server name, if addr is ip & with tls, this is required
-	serverName string
-	// if with tls and server name is empty, this should be true
-	insecureSkipVerify bool
+	serverName    string
+	insecure      bool
+	reconnect     Backoff
 }
 
-func (o *dialOptions) WithLogger(logger *zap.Logger) *dialOptions {
-	o.connOptions.WithLogger(logger)
+// set logger for client, default is zap.NewProduction()
+func (o *DialOptions) WithLogger(logger *zap.Logger) *DialOptions {
+	o.ConnOptions.WithLogger(logger)
 	return o
 }
 
-func (o *dialOptions) WithRouter(r *Router) *dialOptions {
-	o.connOptions.WithRouter(r)
+// set custom router for client, you do not need this
+func (o *DialOptions) WithRouter(r *Router) *DialOptions {
+	o.ConnOptions.WithRouter(r)
 	return o
 }
 
-func (o *dialOptions) WithWriteQueueLimit(max int) *dialOptions {
-	o.connOptions.WithWriteQueueLimit(max)
+// the max pending write packet size, default is 8
+func (o *DialOptions) WithWriteQueueLimit(max int) *DialOptions {
+	o.ConnOptions.WithWriteQueueLimit(max)
 	return o
 }
 
-func (o *dialOptions) WithPacketSizeLimit(max uint64) *dialOptions {
-	o.connOptions.WithPacketSizeLimit(max)
+// the max message packet size, include handshake, exchange, close message, default is 16mb
+func (o *DialOptions) WithPacketSizeLimit(max uint64) *DialOptions {
+	o.ConnOptions.WithPacketSizeLimit(max)
 	return o
 }
 
-func (o *dialOptions) WithTimeout(handshake, read, write time.Duration) *dialOptions {
-	o.connOptions.WithTimeout(handshake, read, write)
+// set timeout for handshake and exchange
+// the read means at least one packet should be received in this time
+// client will auto send ping message with the interval, if client do not receive pong from
+// server in this time, client will close with StatusNetworkError
+func (o *DialOptions) WithTimeout(handshake, read, write time.Duration) *DialOptions {
+	o.ConnOptions.WithTimeout(handshake, read, write)
 	return o
 }
 
-func (o *dialOptions) WithHeader(key string, value ...string) *dialOptions {
+// set a custom handshake header
+func (o *DialOptions) WithHeader(key string, value ...string) *DialOptions {
 	o.header.Set(key, value...)
 	return o
 }
 
-func (o *dialOptions) WithPacketFormat(format string) *dialOptions {
+// packet format, only for websocket, could be text or binary, default is binary
+func (o *DialOptions) WithPacketFormat(format string) *DialOptions {
 	o.header.Set(AcceptPacketFormat, format)
 	return o
 }
 
-func (o *dialOptions) WithEncoding(name string, level int) *dialOptions {
+// enable compress, only available algorithm is gzip, you can implement your custom
+// algorithm with EncodingCodec interface, and register it with RegisterEncodingCodec
+// (both server and client side need to register it)
+// only supports tcp/kcp connections, websocket cannot use this
+func (o *DialOptions) WithEncoding(name string, level int) *DialOptions {
 	o.header.Set(AcceptEncoding, name)
 	o.compressLevel = level
 	return o
 }
 
-func (o *dialOptions) WithContentType(typ string) *dialOptions {
+// set the payload content type, available values are application/json, application/protobuf, application/msgpack
+// you can implement custom MediaCodec and register it both server and client side to activate it.
+func (o *DialOptions) WithContentType(typ string) *DialOptions {
 	o.header.Set(AcceptContentType, typ)
 	return o
 }
 
-func (o *dialOptions) WithServerName(name string) *dialOptions {
+// set the server name for tls connection, this is required for SNI
+func (o *DialOptions) WithServerName(name string) *DialOptions {
 	o.serverName = name
 	return o
 }
 
-func (o *dialOptions) WithInsecure() *dialOptions {
-	o.insecureSkipVerify = true
+// do not check the certificate for tls connection
+func (o *DialOptions) WithInsecure() *DialOptions {
+	o.insecure = true
 	return o
 }
 
-func (o *dialOptions) applyDefault(addr string) *dialOptions {
+// enable or disable reconnect
+// if backoff is nil, will not reconnect
+// else will retry when network error delay with backoff
+func (o *DialOptions) WithReconnect(backoff Backoff) *DialOptions {
+	o.reconnect = backoff
+	return o
+}
+
+// apply default configuration, you do not to call this when call DialXXX(addr, opts)
+// only when you want to create ClientConn by call NewClientConn(net.Conn, opts)
+// you should call this.
+func (o *DialOptions) ApplyDefault(addr string) *DialOptions {
 	no := o
 	if no == nil {
 		no = NewDialOptions()
 	}
-	no.connOptions = no.connOptions.applyDefault()
+	no.ConnOptions = no.ConnOptions.ApplyDefault()
 	if no.header == nil {
 		no.header = NewHeader()
 	}
@@ -137,22 +156,26 @@ func (o *dialOptions) applyDefault(addr string) *dialOptions {
 	return no
 }
 
-func NewDialOptions() *dialOptions {
-	return &dialOptions{
-		connOptions: NewConnOptions(),
+// create dial options
+func NewDialOptions() *DialOptions {
+	return &DialOptions{
+		ConnOptions: NewConnOptions(),
 		header:      NewHeader(),
+		reconnect:   NewBackoff(time.Second, 200*time.Millisecond, 20, 7),
 	}
 }
 
+// client conn
 type ClientConn struct {
 	*Router
 	*Conn
-	opts *dialOptions
+	opts *DialOptions
 }
 
-func LoadTLSClientConfig(certFile string, opts *dialOptions) (*tls.Config, error) {
-	if opts.serverName == "" && !opts.insecureSkipVerify {
-		return nil, errors.New("opts.ServerName is required for tls connection")
+// load tls client certificate from file system
+func loadTLSClientConfig(certFile string, opts *DialOptions) (*tls.Config, error) {
+	if opts.serverName == "" && !opts.insecure {
+		return nil, errors.New("serverName is required for tls connection")
 	}
 	b, err := ioutil.ReadFile(certFile)
 	if err != nil {
@@ -165,38 +188,46 @@ func LoadTLSClientConfig(certFile string, opts *dialOptions) (*tls.Config, error
 	return &tls.Config{
 		RootCAs:            cp,
 		ServerName:         opts.serverName,
-		InsecureSkipVerify: opts.insecureSkipVerify,
+		InsecureSkipVerify: opts.insecure,
 	}, nil
 }
 
-// Private: opts should be inited with NewDialOptions().applyDefault()
-func newClientConn(nc net.Conn, opts *dialOptions) *ClientConn {
+// create a client conn, the opts must not be nil, and should called ApplyDefault()
+func NewClientConn(nc net.Conn, opts *DialOptions) *ClientConn {
 	cc := &ClientConn{
 		Router: opts.router,
-		Conn:   NewConn(nc, opts.connOptions),
+		Conn:   NewConn(nc, opts.ConnOptions),
 		opts:   opts,
 	}
 	cc.ClientHeader = opts.header
+	cc.ServerHeader = NewHeader()
 	return cc
 }
 
+// send & accept handshake packet, and run the read/write channel,
+// use net.Conn as the transport.
+// if status is not StatusOk, or do not receive the correct handshake response,
+// will emit an error, the error should be StatusError
 func (c *ClientConn) Handshake() (err error) {
 	defer func() {
 		if err != nil {
-			c.Conn.Conn.Close()
+			c.Close()
 		}
 	}()
 	c.SetWriteDeadline(time.Now().Add(c.opts.handshakeTimeout))
-	h := NewClientHandshake(c.Major, c.Minor, c.ClientHeader, "")
-	err = h.Write(c)
+	ch := NewClientHandshake(c.Major, c.Minor, c.ClientHeader, "")
+	err = ch.Write(c)
 	if err != nil {
 		return
+	}
+	sh := NewServerHandshake(0, c.ServerHeader, "")
+	if err = sh.Read(c, c.opts.maxPacketSize); err != nil {
+		return NewStatusError(StatusNetworkError, err)
 	}
 	var r io.ReadCloser
 	var w EncodingWriter
 	r, w, err = c.initEncoding(c.opts.compressLevel)
 	if err != nil {
-		err = NewStatusError(StatusUnsupportedContentType, err)
 		return
 	}
 	go c.binaryWriteChannel(w)
@@ -208,6 +239,10 @@ func (c *ClientConn) Handshake() (err error) {
 	return
 }
 
+// send & accept handshake packet, and run the read/write channel
+// use websocket.Conn as the transport.
+// if status is not StatusOk, or do not receive the correct handshake response,
+// will emit an error, the error should be StatusError
 func (c *ClientConn) WebSocketHandshake(wc *websocket.Conn) (err error) {
 	defer func() {
 		if err != nil {
@@ -253,19 +288,21 @@ func (c *ClientConn) WebSocketHandshake(wc *websocket.Conn) (err error) {
 	return
 }
 
-func DialTCP(addr string, opts *dialOptions) (*ClientConn, error) {
-	opts = opts.applyDefault(addr)
+// create a tcp connection and auto handshake with addr and opts
+func DialTCP(addr string, opts *DialOptions) (*ClientConn, error) {
+	opts = opts.ApplyDefault(addr)
 	nc, err := net.Dial("tcp", addr)
 	if err != nil {
 		return nil, err
 	}
-	cc := newClientConn(nc, opts)
+	cc := NewClientConn(nc, opts)
 	return cc, cc.Handshake()
 }
 
-func DialTCPWithTLS(addr, certFile string, opts *dialOptions) (*ClientConn, error) {
-	opts = opts.applyDefault(addr)
-	tc, err := LoadTLSClientConfig(certFile, opts)
+// create a tls tcp connection and auto handshake with addr and opts
+func DialTCPWithTLS(addr, certFile string, opts *DialOptions) (*ClientConn, error) {
+	opts = opts.ApplyDefault(addr)
+	tc, err := loadTLSClientConfig(certFile, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -273,23 +310,25 @@ func DialTCPWithTLS(addr, certFile string, opts *dialOptions) (*ClientConn, erro
 	if err != nil {
 		return nil, err
 	}
-	cc := newClientConn(nc, opts)
+	cc := NewClientConn(nc, opts)
 	return cc, cc.Handshake()
 }
 
-func DialKCP(addr string, opts *dialOptions) (*ClientConn, error) {
-	opts = opts.applyDefault(addr)
+// create a kcp connection and auto handshake with addr and opts
+func DialKCP(addr string, opts *DialOptions) (*ClientConn, error) {
+	opts = opts.ApplyDefault(addr)
 	nc, err := kcp.Dial(addr)
 	if err != nil {
 		return nil, err
 	}
-	cc := newClientConn(nc, opts)
+	cc := NewClientConn(nc, opts)
 	return cc, cc.Handshake()
 }
 
-func DialKCPWithTLS(addr, certFile string, opts *dialOptions) (*ClientConn, error) {
-	opts = opts.applyDefault(addr)
-	tc, err := LoadTLSClientConfig(certFile, opts)
+// create a tls kcp connection and auto handshake with addr and opts
+func DialKCPWithTLS(addr, certFile string, opts *DialOptions) (*ClientConn, error) {
+	opts = opts.ApplyDefault(addr)
+	tc, err := loadTLSClientConfig(certFile, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -301,26 +340,26 @@ func DialKCPWithTLS(addr, certFile string, opts *dialOptions) (*ClientConn, erro
 	if err = tlsConn.Handshake(); err != nil {
 		return nil, err
 	}
-	cc := newClientConn(nc, opts)
+	cc := NewClientConn(nc, opts)
 	return cc, cc.Handshake()
 }
 
-// the gorilla/websocket only accepts public verified tls config for tls connection
-func DialWebSocket(urlStr string, opts *dialOptions) (*ClientConn, error) {
-	opts = opts.applyDefault(urlStr)
+// create a websocket connection and auto handshake with urlstr and opts
+func DialWebSocket(urlstr string, opts *DialOptions) (*ClientConn, error) {
+	opts = opts.ApplyDefault(urlstr)
 	if len(opts.header) > 0 {
 		headStr := url.Values(opts.header).Encode()
-		if strings.IndexByte(urlStr, '?') > 0 {
-			urlStr += "&" + headStr
+		if strings.IndexByte(urlstr, '?') > 0 {
+			urlstr += "&" + headStr
 		} else {
-			urlStr += "?" + headStr
+			urlstr += "?" + headStr
 		}
 	}
 	dialer := websocket.Dialer{HandshakeTimeout: opts.handshakeTimeout}
-	wc, _, err := dialer.Dial(urlStr, nil)
+	wc, _, err := dialer.Dial(urlstr, nil)
 	if err != nil {
 		return nil, err
 	}
-	cc := newClientConn(wc.UnderlyingConn(), opts)
+	cc := NewClientConn(wc.UnderlyingConn(), opts)
 	return cc, cc.WebSocketHandshake(wc)
 }
