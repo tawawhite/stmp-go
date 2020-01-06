@@ -1,7 +1,6 @@
 package stmp
 
 import (
-	"log"
 	"strconv"
 )
 

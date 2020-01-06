@@ -7,7 +7,6 @@ import (
 	"github.com/xtaci/kcp-go"
 	"go.uber.org/zap"
 	"io"
-	"log"
 	"net"
 	"net/http"
 	"sync"
