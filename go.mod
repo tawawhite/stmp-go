@@ -22,6 +22,7 @@ require (
 	github.com/twmb/murmur3 v1.0.0
 	github.com/vmihailenco/msgpack v4.0.4+incompatible
 	github.com/xtaci/kcp-go v5.4.20+incompatible
+	github.com/xtaci/lossyconn v0.0.0-20190602105132-8df528c0c9ae // indirect
 	go.uber.org/zap v1.13.0
 	google.golang.org/grpc v1.26.0 // indirect
 )
