@@ -65,25 +65,25 @@ func (m *RoomModel) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_RoomModel proto.InternalMessageInfo
 
-type JoinInput struct {
+type JoinRoomInput struct {
 	Name                 string   `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *JoinInput) Reset()         { *m = JoinInput{} }
-func (m *JoinInput) String() string { return proto.CompactTextString(m) }
-func (*JoinInput) ProtoMessage()    {}
-func (*JoinInput) Descriptor() ([]byte, []int) {
+func (m *JoinRoomInput) Reset()         { *m = JoinRoomInput{} }
+func (m *JoinRoomInput) String() string { return proto.CompactTextString(m) }
+func (*JoinRoomInput) ProtoMessage()    {}
+func (*JoinRoomInput) Descriptor() ([]byte, []int) {
 	return fileDescriptor_86bfa63495ffd955, []int{1}
 }
-func (m *JoinInput) XXX_Unmarshal(b []byte) error {
+func (m *JoinRoomInput) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
 }
-func (m *JoinInput) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+func (m *JoinRoomInput) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	if deterministic {
-		return xxx_messageInfo_JoinInput.Marshal(b, m, deterministic)
+		return xxx_messageInfo_JoinRoomInput.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
 		n, err := m.MarshalToSizedBuffer(b)
@@ -93,37 +93,37 @@ func (m *JoinInput) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return b[:n], nil
 	}
 }
-func (m *JoinInput) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_JoinInput.Merge(m, src)
+func (m *JoinRoomInput) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_JoinRoomInput.Merge(m, src)
 }
-func (m *JoinInput) XXX_Size() int {
+func (m *JoinRoomInput) XXX_Size() int {
 	return m.Size()
 }
-func (m *JoinInput) XXX_DiscardUnknown() {
-	xxx_messageInfo_JoinInput.DiscardUnknown(m)
+func (m *JoinRoomInput) XXX_DiscardUnknown() {
+	xxx_messageInfo_JoinRoomInput.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_JoinInput proto.InternalMessageInfo
+var xxx_messageInfo_JoinRoomInput proto.InternalMessageInfo
 
-type ExitInput struct {
+type ExitRoomInput struct {
 	Name                 string   `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *ExitInput) Reset()         { *m = ExitInput{} }
-func (m *ExitInput) String() string { return proto.CompactTextString(m) }
-func (*ExitInput) ProtoMessage()    {}
-func (*ExitInput) Descriptor() ([]byte, []int) {
+func (m *ExitRoomInput) Reset()         { *m = ExitRoomInput{} }
+func (m *ExitRoomInput) String() string { return proto.CompactTextString(m) }
+func (*ExitRoomInput) ProtoMessage()    {}
+func (*ExitRoomInput) Descriptor() ([]byte, []int) {
 	return fileDescriptor_86bfa63495ffd955, []int{2}
 }
-func (m *ExitInput) XXX_Unmarshal(b []byte) error {
+func (m *ExitRoomInput) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
 }
-func (m *ExitInput) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+func (m *ExitRoomInput) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	if deterministic {
-		return xxx_messageInfo_ExitInput.Marshal(b, m, deterministic)
+		return xxx_messageInfo_ExitRoomInput.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
 		n, err := m.MarshalToSizedBuffer(b)
@@ -133,37 +133,37 @@ func (m *ExitInput) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return b[:n], nil
 	}
 }
-func (m *ExitInput) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_ExitInput.Merge(m, src)
+func (m *ExitRoomInput) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ExitRoomInput.Merge(m, src)
 }
-func (m *ExitInput) XXX_Size() int {
+func (m *ExitRoomInput) XXX_Size() int {
 	return m.Size()
 }
-func (m *ExitInput) XXX_DiscardUnknown() {
-	xxx_messageInfo_ExitInput.DiscardUnknown(m)
+func (m *ExitRoomInput) XXX_DiscardUnknown() {
+	xxx_messageInfo_ExitRoomInput.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_ExitInput proto.InternalMessageInfo
+var xxx_messageInfo_ExitRoomInput proto.InternalMessageInfo
 
-type JoinEvent struct {
+type UserJoinEvent struct {
 	User                 string   `protobuf:"bytes,1,opt,name=user,proto3" json:"user,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *JoinEvent) Reset()         { *m = JoinEvent{} }
-func (m *JoinEvent) String() string { return proto.CompactTextString(m) }
-func (*JoinEvent) ProtoMessage()    {}
-func (*JoinEvent) Descriptor() ([]byte, []int) {
+func (m *UserJoinEvent) Reset()         { *m = UserJoinEvent{} }
+func (m *UserJoinEvent) String() string { return proto.CompactTextString(m) }
+func (*UserJoinEvent) ProtoMessage()    {}
+func (*UserJoinEvent) Descriptor() ([]byte, []int) {
 	return fileDescriptor_86bfa63495ffd955, []int{3}
 }
-func (m *JoinEvent) XXX_Unmarshal(b []byte) error {
+func (m *UserJoinEvent) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
 }
-func (m *JoinEvent) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+func (m *UserJoinEvent) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	if deterministic {
-		return xxx_messageInfo_JoinEvent.Marshal(b, m, deterministic)
+		return xxx_messageInfo_UserJoinEvent.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
 		n, err := m.MarshalToSizedBuffer(b)
@@ -173,37 +173,37 @@ func (m *JoinEvent) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return b[:n], nil
 	}
 }
-func (m *JoinEvent) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_JoinEvent.Merge(m, src)
+func (m *UserJoinEvent) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_UserJoinEvent.Merge(m, src)
 }
-func (m *JoinEvent) XXX_Size() int {
+func (m *UserJoinEvent) XXX_Size() int {
 	return m.Size()
 }
-func (m *JoinEvent) XXX_DiscardUnknown() {
-	xxx_messageInfo_JoinEvent.DiscardUnknown(m)
+func (m *UserJoinEvent) XXX_DiscardUnknown() {
+	xxx_messageInfo_UserJoinEvent.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_JoinEvent proto.InternalMessageInfo
+var xxx_messageInfo_UserJoinEvent proto.InternalMessageInfo
 
-type ExitEvent struct {
+type UserExitEvent struct {
 	User                 string   `protobuf:"bytes,1,opt,name=user,proto3" json:"user,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *ExitEvent) Reset()         { *m = ExitEvent{} }
-func (m *ExitEvent) String() string { return proto.CompactTextString(m) }
-func (*ExitEvent) ProtoMessage()    {}
-func (*ExitEvent) Descriptor() ([]byte, []int) {
+func (m *UserExitEvent) Reset()         { *m = UserExitEvent{} }
+func (m *UserExitEvent) String() string { return proto.CompactTextString(m) }
+func (*UserExitEvent) ProtoMessage()    {}
+func (*UserExitEvent) Descriptor() ([]byte, []int) {
 	return fileDescriptor_86bfa63495ffd955, []int{4}
 }
-func (m *ExitEvent) XXX_Unmarshal(b []byte) error {
+func (m *UserExitEvent) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
 }
-func (m *ExitEvent) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+func (m *UserExitEvent) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 	if deterministic {
-		return xxx_messageInfo_ExitEvent.Marshal(b, m, deterministic)
+		return xxx_messageInfo_UserExitEvent.Marshal(b, m, deterministic)
 	} else {
 		b = b[:cap(b)]
 		n, err := m.MarshalToSizedBuffer(b)
@@ -213,24 +213,24 @@ func (m *ExitEvent) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
 		return b[:n], nil
 	}
 }
-func (m *ExitEvent) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_ExitEvent.Merge(m, src)
+func (m *UserExitEvent) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_UserExitEvent.Merge(m, src)
 }
-func (m *ExitEvent) XXX_Size() int {
+func (m *UserExitEvent) XXX_Size() int {
 	return m.Size()
 }
-func (m *ExitEvent) XXX_DiscardUnknown() {
-	xxx_messageInfo_ExitEvent.DiscardUnknown(m)
+func (m *UserExitEvent) XXX_DiscardUnknown() {
+	xxx_messageInfo_UserExitEvent.DiscardUnknown(m)
 }
 
-var xxx_messageInfo_ExitEvent proto.InternalMessageInfo
+var xxx_messageInfo_UserExitEvent proto.InternalMessageInfo
 
 func init() {
 	proto.RegisterType((*RoomModel)(nil), "stmp.examples.quick_start.RoomModel")
-	proto.RegisterType((*JoinInput)(nil), "stmp.examples.quick_start.JoinInput")
-	proto.RegisterType((*ExitInput)(nil), "stmp.examples.quick_start.ExitInput")
-	proto.RegisterType((*JoinEvent)(nil), "stmp.examples.quick_start.JoinEvent")
-	proto.RegisterType((*ExitEvent)(nil), "stmp.examples.quick_start.ExitEvent")
+	proto.RegisterType((*JoinRoomInput)(nil), "stmp.examples.quick_start.JoinRoomInput")
+	proto.RegisterType((*ExitRoomInput)(nil), "stmp.examples.quick_start.ExitRoomInput")
+	proto.RegisterType((*UserJoinEvent)(nil), "stmp.examples.quick_start.UserJoinEvent")
+	proto.RegisterType((*UserExitEvent)(nil), "stmp.examples.quick_start.UserExitEvent")
 }
 
 func init() {
@@ -238,29 +238,30 @@ func init() {
 }
 
 var fileDescriptor_86bfa63495ffd955 = []byte{
-	// 340 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x8c, 0x92, 0x31, 0x4e, 0xf3, 0x30,
-	0x14, 0xc7, 0xeb, 0xef, 0x2b, 0x48, 0x31, 0x9b, 0x85, 0x50, 0x09, 0x52, 0xa8, 0x22, 0x86, 0x2e,
-	0x75, 0xa4, 0xa2, 0x4e, 0x6c, 0x95, 0x8a, 0x04, 0x12, 0x4b, 0xe9, 0xc4, 0x52, 0x25, 0xc1, 0x18,
-	0x8b, 0x3a, 0xcf, 0xc4, 0x4e, 0x55, 0x38, 0x0b, 0x37, 0xe0, 0x22, 0x1d, 0x39, 0x02, 0xf4, 0x24,
-	0xc8, 0x8e, 0x52, 0x32, 0xd0, 0x92, 0xed, 0x3d, 0xf9, 0xf7, 0x7e, 0x7e, 0xfe, 0xcb, 0x78, 0xc8,
-	0x96, 0xb1, 0x54, 0x73, 0xa6, 0xa3, 0xe7, 0x42, 0xa4, 0x4f, 0x33, 0x6d, 0xe2, 0xdc, 0xd4, 0xeb,
-	0x99, 0x4a, 0xea, 0x2d, 0x55, 0x39, 0x18, 0x20, 0xc7, 0xda, 0x48, 0x45, 0xab, 0x59, 0x5a, 0x03,
-	0xfc, 0x3e, 0x17, 0xe6, 0xb1, 0x48, 0x68, 0x0a, 0x32, 0xe2, 0xc0, 0x21, 0x72, 0x13, 0x49, 0xf1,
-	0xe0, 0x3a, 0xd7, 0xb8, 0xaa, 0x34, 0xf9, 0x27, 0x1c, 0x80, 0xcf, 0xd9, 0x0f, 0xc5, 0xa4, 0x32,
-	0x2f, 0xe5, 0x61, 0x38, 0xc4, 0xde, 0x04, 0x40, 0xde, 0xc0, 0x3d, 0x9b, 0x13, 0x82, 0xdb, 0x59,
-	0x2c, 0x59, 0x07, 0x75, 0x51, 0xcf, 0x9b, 0xb8, 0x9a, 0x1c, 0xe2, 0xbd, 0x42, 0xb3, 0x5c, 0x77,
-	0xfe, 0x75, 0xff, 0xf7, 0xbc, 0x49, 0xd9, 0x84, 0xa7, 0xd8, 0xbb, 0x06, 0x91, 0x5d, 0x65, 0xaa,
-	0x30, 0xbf, 0x8d, 0x59, 0x60, 0xbc, 0x14, 0x66, 0x27, 0x60, 0x0d, 0xe3, 0x05, 0xcb, 0x1c, 0x60,
-	0xbd, 0x15, 0x60, 0xeb, 0xca, 0xb0, 0x15, 0x18, 0xbc, 0x23, 0x7c, 0x60, 0x77, 0xbf, 0x65, 0xf9,
-	0x42, 0xa4, 0x8c, 0x4c, 0x71, 0xdb, 0x1a, 0xc9, 0x19, 0xdd, 0x1a, 0x1d, 0xdd, 0x2c, 0xed, 0xef,
-	0xa2, 0x36, 0x89, 0x84, 0x2d, 0x72, 0x89, 0xdb, 0x76, 0x8d, 0x9d, 0xd6, 0xcd, 0x4b, 0xfd, 0x23,
-	0x5a, 0x86, 0x4d, 0xab, 0xb0, 0xe9, 0xd8, 0x86, 0x1d, 0xb6, 0x06, 0x6f, 0x08, 0x63, 0xeb, 0x75,
-	0xef, 0xd1, 0x56, 0xdb, 0x68, 0x59, 0x87, 0x6f, 0xd7, 0x36, 0x5e, 0xef, 0x0f, 0xcf, 0x68, 0xba,
-	0xfa, 0x0a, 0x5a, 0xab, 0x75, 0x80, 0x3e, 0xd6, 0x01, 0xfa, 0x5c, 0x07, 0xe8, 0x6e, 0x54, 0xfb,
-	0x65, 0x71, 0x9a, 0xc7, 0xaf, 0x22, 0xe3, 0x91, 0xbd, 0xa4, 0xcf, 0x21, 0x6a, 0xf0, 0xa7, 0x2f,
-	0x54, 0x92, 0xec, 0xbb, 0x7b, 0xce, 0xbf, 0x03, 0x00, 0x00, 0xff, 0xff, 0xcb, 0x4b, 0x42, 0x27,
-	0x04, 0x03, 0x00, 0x00,
+	// 358 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x8c, 0x93, 0xcf, 0x4a, 0xc3, 0x40,
+	0x10, 0xc6, 0xbb, 0xfe, 0xa3, 0x5d, 0xf1, 0xb2, 0x88, 0xd4, 0x08, 0xa1, 0x44, 0x0f, 0xbd, 0x74,
+	0x03, 0x95, 0x9e, 0xbc, 0x15, 0x7a, 0x50, 0xd0, 0x43, 0xd5, 0x8b, 0x08, 0x25, 0x89, 0xeb, 0x1a,
+	0x6c, 0xb2, 0x6b, 0x76, 0x53, 0xaa, 0xcf, 0xe4, 0x1b, 0xf8, 0x02, 0x3d, 0xfa, 0x08, 0xda, 0x27,
+	0x91, 0xd9, 0xb0, 0x35, 0x05, 0xd3, 0x7a, 0x9b, 0x21, 0xdf, 0xfc, 0x66, 0xe6, 0x9b, 0x2c, 0xee,
+	0xb1, 0x69, 0x90, 0xc8, 0x31, 0x53, 0xfe, 0x4b, 0x1e, 0x47, 0xcf, 0x23, 0xa5, 0x83, 0x4c, 0x97,
+	0xe3, 0x91, 0x0c, 0xcb, 0x29, 0x95, 0x99, 0xd0, 0x82, 0x1c, 0x2a, 0x9d, 0x48, 0x6a, 0x6b, 0x69,
+	0x49, 0xe0, 0x74, 0x78, 0xac, 0x9f, 0xf2, 0x90, 0x46, 0x22, 0xf1, 0xb9, 0xe0, 0xc2, 0x37, 0x15,
+	0x61, 0xfe, 0x68, 0x32, 0x93, 0x98, 0xa8, 0x20, 0x39, 0x47, 0x5c, 0x08, 0x3e, 0x66, 0xbf, 0x2a,
+	0x96, 0x48, 0xfd, 0x5a, 0x7c, 0xf4, 0x7a, 0xb8, 0x31, 0x14, 0x22, 0xb9, 0x14, 0x0f, 0x6c, 0x4c,
+	0x08, 0xde, 0x4a, 0x83, 0x84, 0x35, 0x51, 0x0b, 0xb5, 0x1b, 0x43, 0x13, 0x93, 0x7d, 0xbc, 0x9d,
+	0x2b, 0x96, 0xa9, 0xe6, 0x46, 0x6b, 0xb3, 0xdd, 0x18, 0x16, 0x89, 0x77, 0x8c, 0xf7, 0x2e, 0x44,
+	0x9c, 0x42, 0xe9, 0x79, 0x2a, 0x73, 0xfd, 0x57, 0x29, 0x88, 0x06, 0xd3, 0x58, 0xaf, 0x15, 0xdd,
+	0x2a, 0x96, 0x01, 0x6d, 0x30, 0x61, 0xa9, 0x11, 0x41, 0x0f, 0x2b, 0x82, 0xd8, 0x8a, 0x80, 0x56,
+	0x29, 0xea, 0x7e, 0x20, 0xbc, 0x0b, 0xbd, 0xae, 0x59, 0x36, 0x89, 0x23, 0x46, 0xee, 0x71, 0xdd,
+	0xce, 0x48, 0xda, 0xb4, 0xd2, 0x4e, 0xba, 0xb4, 0x88, 0x73, 0xb2, 0x42, 0xb9, 0x70, 0xca, 0xab,
+	0x91, 0x2b, 0x5c, 0xb7, 0xcb, 0xad, 0xa4, 0x2f, 0x39, 0xe0, 0x1c, 0xd0, 0xe2, 0x18, 0xd4, 0x1e,
+	0x83, 0x0e, 0xe0, 0x18, 0x5e, 0xad, 0xfb, 0x8e, 0x30, 0x06, 0x9d, 0xd9, 0x4f, 0x01, 0xde, 0xda,
+	0xb2, 0x12, 0xbf, 0xe4, 0x5d, 0x35, 0xde, 0xf2, 0x60, 0x9a, 0xb5, 0xbc, 0x85, 0xcd, 0xd5, 0xbc,
+	0xfe, 0xcd, 0xec, 0xdb, 0xad, 0xcd, 0xe6, 0x2e, 0xfa, 0x9c, 0xbb, 0xe8, 0x6b, 0xee, 0xa2, 0xbb,
+	0x7e, 0xe9, 0xaf, 0x0c, 0xa2, 0x2c, 0x78, 0x8b, 0x53, 0xee, 0x43, 0xa3, 0x0e, 0x17, 0xfe, 0x3f,
+	0xde, 0xc0, 0x99, 0x0c, 0xc3, 0x1d, 0xd3, 0xe7, 0xf4, 0x27, 0x00, 0x00, 0xff, 0xff, 0x8e, 0x28,
+	0x3b, 0xa2, 0x34, 0x03, 0x00, 0x00,
 }
 
 func (m *RoomModel) Marshal() (dAtA []byte, err error) {
@@ -306,7 +307,7 @@ func (m *RoomModel) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	return len(dAtA) - i, nil
 }
 
-func (m *JoinInput) Marshal() (dAtA []byte, err error) {
+func (m *JoinRoomInput) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
 	n, err := m.MarshalToSizedBuffer(dAtA[:size])
@@ -316,12 +317,12 @@ func (m *JoinInput) Marshal() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *JoinInput) MarshalTo(dAtA []byte) (int, error) {
+func (m *JoinRoomInput) MarshalTo(dAtA []byte) (int, error) {
 	size := m.Size()
 	return m.MarshalToSizedBuffer(dAtA[:size])
 }
 
-func (m *JoinInput) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+func (m *JoinRoomInput) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	i := len(dAtA)
 	_ = i
 	var l int
@@ -340,7 +341,7 @@ func (m *JoinInput) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	return len(dAtA) - i, nil
 }
 
-func (m *ExitInput) Marshal() (dAtA []byte, err error) {
+func (m *ExitRoomInput) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
 	n, err := m.MarshalToSizedBuffer(dAtA[:size])
@@ -350,12 +351,12 @@ func (m *ExitInput) Marshal() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *ExitInput) MarshalTo(dAtA []byte) (int, error) {
+func (m *ExitRoomInput) MarshalTo(dAtA []byte) (int, error) {
 	size := m.Size()
 	return m.MarshalToSizedBuffer(dAtA[:size])
 }
 
-func (m *ExitInput) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+func (m *ExitRoomInput) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	i := len(dAtA)
 	_ = i
 	var l int
@@ -374,7 +375,7 @@ func (m *ExitInput) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	return len(dAtA) - i, nil
 }
 
-func (m *JoinEvent) Marshal() (dAtA []byte, err error) {
+func (m *UserJoinEvent) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
 	n, err := m.MarshalToSizedBuffer(dAtA[:size])
@@ -384,12 +385,12 @@ func (m *JoinEvent) Marshal() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *JoinEvent) MarshalTo(dAtA []byte) (int, error) {
+func (m *UserJoinEvent) MarshalTo(dAtA []byte) (int, error) {
 	size := m.Size()
 	return m.MarshalToSizedBuffer(dAtA[:size])
 }
 
-func (m *JoinEvent) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+func (m *UserJoinEvent) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	i := len(dAtA)
 	_ = i
 	var l int
@@ -408,7 +409,7 @@ func (m *JoinEvent) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	return len(dAtA) - i, nil
 }
 
-func (m *ExitEvent) Marshal() (dAtA []byte, err error) {
+func (m *UserExitEvent) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
 	n, err := m.MarshalToSizedBuffer(dAtA[:size])
@@ -418,12 +419,12 @@ func (m *ExitEvent) Marshal() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *ExitEvent) MarshalTo(dAtA []byte) (int, error) {
+func (m *UserExitEvent) MarshalTo(dAtA []byte) (int, error) {
 	size := m.Size()
 	return m.MarshalToSizedBuffer(dAtA[:size])
 }
 
-func (m *ExitEvent) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+func (m *UserExitEvent) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	i := len(dAtA)
 	_ = i
 	var l int
@@ -475,7 +476,7 @@ func (m *RoomModel) Size() (n int) {
 	return n
 }
 
-func (m *JoinInput) Size() (n int) {
+func (m *JoinRoomInput) Size() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -491,7 +492,7 @@ func (m *JoinInput) Size() (n int) {
 	return n
 }
 
-func (m *ExitInput) Size() (n int) {
+func (m *ExitRoomInput) Size() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -507,7 +508,7 @@ func (m *ExitInput) Size() (n int) {
 	return n
 }
 
-func (m *JoinEvent) Size() (n int) {
+func (m *UserJoinEvent) Size() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -523,7 +524,7 @@ func (m *JoinEvent) Size() (n int) {
 	return n
 }
 
-func (m *ExitEvent) Size() (n int) {
+func (m *UserExitEvent) Size() (n int) {
 	if m == nil {
 		return 0
 	}
@@ -663,7 +664,7 @@ func (m *RoomModel) Unmarshal(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *JoinInput) Unmarshal(dAtA []byte) error {
+func (m *JoinRoomInput) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -686,10 +687,10 @@ func (m *JoinInput) Unmarshal(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: JoinInput: wiretype end group for non-group")
+			return fmt.Errorf("proto: JoinRoomInput: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: JoinInput: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: JoinRoomInput: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
@@ -749,7 +750,7 @@ func (m *JoinInput) Unmarshal(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *ExitInput) Unmarshal(dAtA []byte) error {
+func (m *ExitRoomInput) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -772,10 +773,10 @@ func (m *ExitInput) Unmarshal(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: ExitInput: wiretype end group for non-group")
+			return fmt.Errorf("proto: ExitRoomInput: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: ExitInput: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: ExitRoomInput: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
@@ -835,7 +836,7 @@ func (m *ExitInput) Unmarshal(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *JoinEvent) Unmarshal(dAtA []byte) error {
+func (m *UserJoinEvent) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -858,10 +859,10 @@ func (m *JoinEvent) Unmarshal(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: JoinEvent: wiretype end group for non-group")
+			return fmt.Errorf("proto: UserJoinEvent: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: JoinEvent: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: UserJoinEvent: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
@@ -921,7 +922,7 @@ func (m *JoinEvent) Unmarshal(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *ExitEvent) Unmarshal(dAtA []byte) error {
+func (m *UserExitEvent) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -944,10 +945,10 @@ func (m *ExitEvent) Unmarshal(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: ExitEvent: wiretype end group for non-group")
+			return fmt.Errorf("proto: UserExitEvent: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: ExitEvent: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: UserExitEvent: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:

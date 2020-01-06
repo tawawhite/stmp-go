@@ -8,7 +8,7 @@ type GolangRenderData struct {
 	Filename string
 	Package  string
 	Deps     map[string]string
-	Services []*RenderService
+	Services []*ServiceOptions
 }
 
 var templateGolang *template.Template
@@ -29,7 +29,7 @@ import (
 func init() {
 {{range $index, $method := $service.Methods}}	stmp.RegisterMethodAction("{{$method.FullMethod}}", 0x{{$method.ActionHex}}, func() interface{} { return &{{$method.Input}}{} }, func() interface{} { return &{{$method.Output}}{} })
 {{end}}}
-
+{{if $service.IsService}}
 type STMP{{$service.ServiceName}}Server interface {
 {{range $index, $method := $service.Methods}}	{{$method.MethodName}}(ctx context.Context, in *{{$method.Input}}) (out *{{$method.Output}}, err error)
 {{end}}}
@@ -42,12 +42,30 @@ func STMPUnregister{{$service.ServiceName}}Server(srv *stmp.Server, s STMP{{$ser
 {{range $index, $method := $service.Methods}}	srv.Unregister(s, "{{$method.FullMethod}}")
 {{end}}}
 
+type STMP{{$service.ServiceName}}Client interface {
+{{range $index, $method := $service.Methods}}	{{$method.MethodName}}(ctx context.Context, in *{{$method.Input}}, opts ...*stmp.CallOptions) (*{{$method.Output}}, error)
+{{end}}}
+
+type stmp{{$service.ServiceName}}Client struct {
+	c *stmp.ClientConn
+}
+{{range $index, $method := $service.Methods}}
+func (s *stmp{{$service.ServiceName}}Client) {{$method.MethodName}}(ctx context.Context, in *{{$method.Input}}, opts ...*stmp.CallOptions) (*{{$method.Output}}, error) {
+	out, err := s.c.Invoke(ctx, "{{$method.FullMethod}}", in, stmp.BuildCallOptions(opts...))
+	return out.(*{{$method.Output}}), err
+}
+{{end}}
+func STMPNew{{$service.ServiceName}}Client(c *stmp.ClientConn) STMP{{$service.ServiceName}}Client {
+	return &stmp{{$service.ServiceName}}Client{c: c}
+}
+{{end}}
+{{if $service.IsEvents}}
 type STMP{{$service.ServiceName}}Listener interface {
-{{range $index, $method := $service.Methods}}	Handle{{$method.MethodName}}Of{{$service.ServiceName}}(ctx context.Context, in *{{$method.Input}}) (out *{{$method.Output}}, err error)
+{{range $index, $method := $service.Methods}}	Handle{{$method.MethodName}}(ctx context.Context, in *{{$method.Input}}) (out *{{$method.Output}}, err error)
 {{end}}}
 
 func STMPRegister{{$service.ServiceName}}Listener(cc *stmp.ClientConn, s STMP{{$service.ServiceName}}Listener) {
-{{range $index, $method := $service.Methods}}	cc.Register(s, "{{$method.FullMethod}}", func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMP{{$service.ServiceName}}Listener).Handle{{$method.MethodName}}Of{{$service.ServiceName}}(ctx, in.(*{{$method.Input}})) })
+{{range $index, $method := $service.Methods}}	cc.Register(s, "{{$method.FullMethod}}", func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMP{{$service.ServiceName}}Listener).Handle{{$method.MethodName}}(ctx, in.(*{{$method.Input}})) })
 {{end}}}
 
 func STMPUnregister{{$service.ServiceName}}Listener(cc *stmp.ClientConn, s STMP{{$service.ServiceName}}Listener) {
@@ -102,25 +120,8 @@ func (s STMP{{$service.ServiceName}}Broadcaster) {{$method.MethodName}}ToSet(ctx
 
 func (s STMP{{$service.ServiceName}}Broadcaster) {{$method.MethodName}}ToAll(ctx context.Context, in *{{$method.Input}}, srv *stmp.Server, filter stmp.ConnFilter) error {
 	return srv.Broadcast(ctx, "{{$method.FullMethod}}", in, filter)
-}
-{{end}}
-type STMP{{$service.ServiceName}}Client interface {
-{{range $index, $method := $service.Methods}}	{{$method.MethodName}}(ctx context.Context, in *{{$method.Input}}, opts ...*stmp.CallOptions) (*{{$method.Output}}, error)
-{{end}}}
-
-type stmp{{$service.ServiceName}}Client struct {
-	c *stmp.ClientConn
-}
-{{range $index, $method := $service.Methods}}
-func (s *stmp{{$service.ServiceName}}Client) {{$method.MethodName}}(ctx context.Context, in *{{$method.Input}}, opts ...*stmp.CallOptions) (*{{$method.Output}}, error) {
-	out, err := s.c.Invoke(ctx, "{{$method.FullMethod}}", in, stmp.BuildCallOptions(opts...))
-	return out.(*{{$method.Output}}), err
-}
-{{end}}
-func STMPNew{{$service.ServiceName}}Client(c *stmp.ClientConn) STMP{{$service.ServiceName}}Client {
-	return &stmp{{$service.ServiceName}}Client{c: c}
-}
-{{end}}`)
+}{{end}}{{/* broadcaster.methods */}}{{end}}{{/* service.isEvents */}}{{end}}{{/* range $services */}}
+`)
 	if err != nil {
 		panic(err)
 	}

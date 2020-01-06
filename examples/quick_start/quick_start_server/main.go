@@ -18,7 +18,7 @@ type RoomService struct {
 	users map[string][]string
 }
 
-func (r *RoomService) Join(ctx context.Context, in *pb.JoinInput) (out *pb.RoomModel, err error) {
+func (r *RoomService) JoinRoom(ctx context.Context, in *pb.JoinRoomInput) (out *pb.RoomModel, err error) {
 	conn := stmp.SelectConn(ctx)
 	// user remote address as the user name
 	user := conn.RemoteAddr().String()
@@ -33,7 +33,7 @@ func (r *RoomService) Join(ctx context.Context, in *pb.JoinInput) (out *pb.RoomM
 	if !room.Has(conn) {
 		defer func() {
 			r.mu.RLock()
-			r.reb.JoinToSet(context.Background(), &pb.JoinEvent{User: user}, r.rooms[in.Name], conn)
+			r.reb.UserJoinToSet(context.Background(), &pb.UserJoinEvent{User: user}, r.rooms[in.Name], conn)
 			r.mu.RUnlock()
 		}()
 		room.Add(conn)
@@ -44,7 +44,7 @@ func (r *RoomService) Join(ctx context.Context, in *pb.JoinInput) (out *pb.RoomM
 	return
 }
 
-func (r *RoomService) Exit(ctx context.Context, in *pb.ExitInput) (out *empty.Empty, err error) {
+func (r *RoomService) ExitRoom(ctx context.Context, in *pb.ExitRoomInput) (out *empty.Empty, err error) {
 	conn := stmp.SelectConn(ctx)
 	user := conn.RemoteAddr().String()
 	r.mu.Lock()
@@ -52,7 +52,7 @@ func (r *RoomService) Exit(ctx context.Context, in *pb.ExitInput) (out *empty.Em
 	if ok {
 		defer func() {
 			r.mu.RLock()
-			r.reb.ExitToSet(context.Background(), &pb.ExitEvent{User: user}, r.rooms[in.Name], conn)
+			r.reb.UserExitToSet(context.Background(), &pb.UserExitEvent{User: user}, r.rooms[in.Name], conn)
 			r.mu.RUnlock()
 		}()
 		room.Del(conn)

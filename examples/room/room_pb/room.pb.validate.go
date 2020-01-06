@@ -33,9 +33,6 @@ var (
 	_ = types.DynamicAny{}
 )
 
-// define the regex for a UUID once up-front
-var _room_uuidPattern = regexp.MustCompile("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
-
 // Validate checks the field values on UserModel with the rules defined in the
 // proto definition for this message. If any rules are violated, an error is returned.
 func (m *UserModel) Validate() error {
@@ -113,7 +110,12 @@ func (m *LoginInput) Validate() error {
 		return nil
 	}
 
-	// no validation rules for Name
+	if l := len(m.GetName()); l < 3 || l > 31 {
+		return LoginInputValidationError{
+			field:  "Name",
+			reason: "value length must be between 3 and 31 bytes, inclusive",
+		}
+	}
 
 	return nil
 }
@@ -179,9 +181,19 @@ func (m *ListInput) Validate() error {
 		return nil
 	}
 
-	// no validation rules for Limit
+	if val := m.GetLimit(); val < 0 || val > 100 {
+		return ListInputValidationError{
+			field:  "Limit",
+			reason: "value must be inside range [0, 100]",
+		}
+	}
 
-	// no validation rules for Offset
+	if m.GetOffset() < 0 {
+		return ListInputValidationError{
+			field:  "Offset",
+			reason: "value must be greater than or equal to 0",
+		}
+	}
 
 	return nil
 }
@@ -409,27 +421,7 @@ func (m *RoomModel) Validate() error {
 
 	// no validation rules for Name
 
-	for key, val := range m.GetUsers() {
-		_ = val
-
-		// no validation rules for Users[key]
-
-		{
-			tmp := val
-
-			if v, ok := interface{}(tmp).(interface{ Validate() error }); ok {
-
-				if err := v.Validate(); err != nil {
-					return RoomModelValidationError{
-						field:  fmt.Sprintf("Users[%v]", key),
-						reason: "embedded message failed validation",
-						cause:  err,
-					}
-				}
-			}
-		}
-
-	}
+	// no validation rules for Users
 
 	for idx, item := range m.GetMessages() {
 		_, _ = idx, item
@@ -516,7 +508,12 @@ func (m *CreateRoomInput) Validate() error {
 		return nil
 	}
 
-	// no validation rules for Name
+	if l := len(m.GetName()); l < 3 || l > 31 {
+		return CreateRoomInputValidationError{
+			field:  "Name",
+			reason: "value length must be between 3 and 31 bytes, inclusive",
+		}
+	}
 
 	return nil
 }
@@ -670,7 +667,12 @@ func (m *JoinRoomInput) Validate() error {
 		return nil
 	}
 
-	// no validation rules for Room
+	if l := len(m.GetRoom()); l < 3 || l > 31 {
+		return JoinRoomInputValidationError{
+			field:  "Room",
+			reason: "value length must be between 3 and 31 bytes, inclusive",
+		}
+	}
 
 	return nil
 }
@@ -737,7 +739,12 @@ func (m *ExitRoomInput) Validate() error {
 		return nil
 	}
 
-	// no validation rules for Room
+	if l := len(m.GetRoom()); l < 3 || l > 31 {
+		return ExitRoomInputValidationError{
+			field:  "Room",
+			reason: "value length must be between 3 and 31 bytes, inclusive",
+		}
+	}
 
 	return nil
 }
@@ -804,9 +811,19 @@ func (m *SendMessageInput) Validate() error {
 		return nil
 	}
 
-	// no validation rules for Room
+	if l := len(m.GetRoom()); l < 3 || l > 31 {
+		return SendMessageInputValidationError{
+			field:  "Room",
+			reason: "value length must be between 3 and 31 bytes, inclusive",
+		}
+	}
 
-	// no validation rules for Content
+	if l := len(m.GetContent()); l < 1 || l > 140 {
+		return SendMessageInputValidationError{
+			field:  "Content",
+			reason: "value length must be between 1 and 140 bytes, inclusive",
+		}
+	}
 
 	return nil
 }

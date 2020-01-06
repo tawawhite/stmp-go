@@ -103,6 +103,7 @@ message SendMessageInput {
 
 service RoomService {
     option (stmp.service) = 0x12;
+    option (stmp.kind).service = true;
     rpc CreateRoom (CreateRoomInput) returns (RoomModel) {
         option (stmp.method) = 0x01;
     }
@@ -131,6 +132,7 @@ message UserExitEvent {
 
 service RoomEvents {
     option (stmp.service) = 0x13;
+    option (stmp.kind).events = true;
     rpc UserEnter (UserEnterEvent) returns (google.protobuf.Empty) {
         option (stmp.method) = 0x01;
     }

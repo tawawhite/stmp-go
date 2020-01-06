@@ -36,60 +36,28 @@ initNamespace(stmp, "stmp.examples.room", (ns) => {
     Login(ctx, input, output) { throw new Error("not implemented") }
   };
 
-  ns.UserServiceListener = class UserServiceListener {
-    static register(c, inst) {
-      c.register(inst, "stmp.examples.room.UserService.ListUser", inst.HandleListUserOfUserService);
-      c.register(inst, "stmp.examples.room.UserService.Login", inst.HandleLoginOfUserService);
-    }
-
-    static unregister(c, inst) {
-      c.unregister(inst, "stmp.examples.room.UserService.ListUser");
-      c.unregister(inst, "stmp.examples.room.UserService.Login");
-    }
-
-    HandleListUserOfUserService(ctx, input, output) { }
-    HandleLoginOfUserService(ctx, input, output) { }
-  };
-
-  ns.UserServiceBroadcaster = class UserServiceBroadcaster {
-   static ListUser(input, conn, options) { return conn.invoke("stmp.examples.room.UserService.ListUser", input, options) }
-   static ListUserToSet(input, conns, excludes) { const pm = new PayloadMap(input); for (const conn of conns) (!excludes || excludes.indexOf(conn) < 0) && conn.call("stmp.examples.room.UserService.ListUser", pm.get(conn), notifyOptions) }
-   static ListUserToAll(input, srv, filter) { return srv.broadcast("stmp.examples.room.UserService.ListUser", input, filter) }
-   static Login(input, conn, options) { return conn.invoke("stmp.examples.room.UserService.Login", input, options) }
-   static LoginToSet(input, conns, excludes) { const pm = new PayloadMap(input); for (const conn of conns) (!excludes || excludes.indexOf(conn) < 0) && conn.call("stmp.examples.room.UserService.Login", pm.get(conn), notifyOptions) }
-   static LoginToAll(input, srv, filter) { return srv.broadcast("stmp.examples.room.UserService.Login", input, filter) }
-  };
-  
   ns.UserServiceClient = class UserServiceClient {
     constructor(client) { this.client = client }
     ListUser(input, options) { return this.client.invoke("stmp.examples.room.UserService.ListUser", input, options) }
     Login(input, options) { return this.client.invoke("stmp.examples.room.UserService.Login", input, options) }
   };
 
+
+
+
   registerMethodAction("stmp.examples.room.UserEvents.StatusUpdated", "1101", pb.stmp.examples.room.UserModel, pb.google.protobuf.Empty);
 
-  ns.UserEventsServer = class UserEventsServer {
-    static register(srv, inst) {
-      srv.register(inst, "stmp.examples.room.UserEvents.StatusUpdated", inst.StatusUpdated);
-    }
-
-    static unregister(srv, inst) {
-      srv.unregister(inst, "stmp.examples.room.UserEvents.StatusUpdated");
-    }
-
-    StatusUpdated(ctx, input, output) { throw new Error("not implemented") }
-  };
 
   ns.UserEventsListener = class UserEventsListener {
     static register(c, inst) {
-      c.register(inst, "stmp.examples.room.UserEvents.StatusUpdated", inst.HandleStatusUpdatedOfUserEvents);
+      c.register(inst, "stmp.examples.room.UserEvents.StatusUpdated", inst.HandleStatusUpdated);
     }
 
     static unregister(c, inst) {
       c.unregister(inst, "stmp.examples.room.UserEvents.StatusUpdated");
     }
 
-    HandleStatusUpdatedOfUserEvents(ctx, input, output) { }
+    HandleStatusUpdated(ctx, input, output) { }
   };
 
   ns.UserEventsBroadcaster = class UserEventsBroadcaster {
@@ -97,11 +65,8 @@ initNamespace(stmp, "stmp.examples.room", (ns) => {
    static StatusUpdatedToSet(input, conns, excludes) { const pm = new PayloadMap(input); for (const conn of conns) (!excludes || excludes.indexOf(conn) < 0) && conn.call("stmp.examples.room.UserEvents.StatusUpdated", pm.get(conn), notifyOptions) }
    static StatusUpdatedToAll(input, srv, filter) { return srv.broadcast("stmp.examples.room.UserEvents.StatusUpdated", input, filter) }
   };
-  
-  ns.UserEventsClient = class UserEventsClient {
-    constructor(client) { this.client = client }
-    StatusUpdated(input, options) { return this.client.invoke("stmp.examples.room.UserEvents.StatusUpdated", input, options) }
-  };
+
+
 
   registerMethodAction("stmp.examples.room.RoomService.CreateRoom", "1201", pb.stmp.examples.room.CreateRoomInput, pb.stmp.examples.room.RoomModel);
   registerMethodAction("stmp.examples.room.RoomService.ListRoom", "1202", pb.stmp.examples.room.ListInput, pb.stmp.examples.room.ListRoomOutput);
@@ -133,48 +98,6 @@ initNamespace(stmp, "stmp.examples.room", (ns) => {
     SendMessage(ctx, input, output) { throw new Error("not implemented") }
   };
 
-  ns.RoomServiceListener = class RoomServiceListener {
-    static register(c, inst) {
-      c.register(inst, "stmp.examples.room.RoomService.CreateRoom", inst.HandleCreateRoomOfRoomService);
-      c.register(inst, "stmp.examples.room.RoomService.ListRoom", inst.HandleListRoomOfRoomService);
-      c.register(inst, "stmp.examples.room.RoomService.JoinRoom", inst.HandleJoinRoomOfRoomService);
-      c.register(inst, "stmp.examples.room.RoomService.ExitRoom", inst.HandleExitRoomOfRoomService);
-      c.register(inst, "stmp.examples.room.RoomService.SendMessage", inst.HandleSendMessageOfRoomService);
-    }
-
-    static unregister(c, inst) {
-      c.unregister(inst, "stmp.examples.room.RoomService.CreateRoom");
-      c.unregister(inst, "stmp.examples.room.RoomService.ListRoom");
-      c.unregister(inst, "stmp.examples.room.RoomService.JoinRoom");
-      c.unregister(inst, "stmp.examples.room.RoomService.ExitRoom");
-      c.unregister(inst, "stmp.examples.room.RoomService.SendMessage");
-    }
-
-    HandleCreateRoomOfRoomService(ctx, input, output) { }
-    HandleListRoomOfRoomService(ctx, input, output) { }
-    HandleJoinRoomOfRoomService(ctx, input, output) { }
-    HandleExitRoomOfRoomService(ctx, input, output) { }
-    HandleSendMessageOfRoomService(ctx, input, output) { }
-  };
-
-  ns.RoomServiceBroadcaster = class RoomServiceBroadcaster {
-   static CreateRoom(input, conn, options) { return conn.invoke("stmp.examples.room.RoomService.CreateRoom", input, options) }
-   static CreateRoomToSet(input, conns, excludes) { const pm = new PayloadMap(input); for (const conn of conns) (!excludes || excludes.indexOf(conn) < 0) && conn.call("stmp.examples.room.RoomService.CreateRoom", pm.get(conn), notifyOptions) }
-   static CreateRoomToAll(input, srv, filter) { return srv.broadcast("stmp.examples.room.RoomService.CreateRoom", input, filter) }
-   static ListRoom(input, conn, options) { return conn.invoke("stmp.examples.room.RoomService.ListRoom", input, options) }
-   static ListRoomToSet(input, conns, excludes) { const pm = new PayloadMap(input); for (const conn of conns) (!excludes || excludes.indexOf(conn) < 0) && conn.call("stmp.examples.room.RoomService.ListRoom", pm.get(conn), notifyOptions) }
-   static ListRoomToAll(input, srv, filter) { return srv.broadcast("stmp.examples.room.RoomService.ListRoom", input, filter) }
-   static JoinRoom(input, conn, options) { return conn.invoke("stmp.examples.room.RoomService.JoinRoom", input, options) }
-   static JoinRoomToSet(input, conns, excludes) { const pm = new PayloadMap(input); for (const conn of conns) (!excludes || excludes.indexOf(conn) < 0) && conn.call("stmp.examples.room.RoomService.JoinRoom", pm.get(conn), notifyOptions) }
-   static JoinRoomToAll(input, srv, filter) { return srv.broadcast("stmp.examples.room.RoomService.JoinRoom", input, filter) }
-   static ExitRoom(input, conn, options) { return conn.invoke("stmp.examples.room.RoomService.ExitRoom", input, options) }
-   static ExitRoomToSet(input, conns, excludes) { const pm = new PayloadMap(input); for (const conn of conns) (!excludes || excludes.indexOf(conn) < 0) && conn.call("stmp.examples.room.RoomService.ExitRoom", pm.get(conn), notifyOptions) }
-   static ExitRoomToAll(input, srv, filter) { return srv.broadcast("stmp.examples.room.RoomService.ExitRoom", input, filter) }
-   static SendMessage(input, conn, options) { return conn.invoke("stmp.examples.room.RoomService.SendMessage", input, options) }
-   static SendMessageToSet(input, conns, excludes) { const pm = new PayloadMap(input); for (const conn of conns) (!excludes || excludes.indexOf(conn) < 0) && conn.call("stmp.examples.room.RoomService.SendMessage", pm.get(conn), notifyOptions) }
-   static SendMessageToAll(input, srv, filter) { return srv.broadcast("stmp.examples.room.RoomService.SendMessage", input, filter) }
-  };
-  
   ns.RoomServiceClient = class RoomServiceClient {
     constructor(client) { this.client = client }
     CreateRoom(input, options) { return this.client.invoke("stmp.examples.room.RoomService.CreateRoom", input, options) }
@@ -184,33 +107,19 @@ initNamespace(stmp, "stmp.examples.room", (ns) => {
     SendMessage(input, options) { return this.client.invoke("stmp.examples.room.RoomService.SendMessage", input, options) }
   };
 
+
+
+
   registerMethodAction("stmp.examples.room.RoomEvents.UserEnter", "1301", pb.stmp.examples.room.UserEnterEvent, pb.google.protobuf.Empty);
   registerMethodAction("stmp.examples.room.RoomEvents.UserExit", "1302", pb.stmp.examples.room.UserExitEvent, pb.google.protobuf.Empty);
   registerMethodAction("stmp.examples.room.RoomEvents.NewMessage", "1303", pb.stmp.examples.room.ChatMessageModel, pb.google.protobuf.Empty);
 
-  ns.RoomEventsServer = class RoomEventsServer {
-    static register(srv, inst) {
-      srv.register(inst, "stmp.examples.room.RoomEvents.UserEnter", inst.UserEnter);
-      srv.register(inst, "stmp.examples.room.RoomEvents.UserExit", inst.UserExit);
-      srv.register(inst, "stmp.examples.room.RoomEvents.NewMessage", inst.NewMessage);
-    }
-
-    static unregister(srv, inst) {
-      srv.unregister(inst, "stmp.examples.room.RoomEvents.UserEnter");
-      srv.unregister(inst, "stmp.examples.room.RoomEvents.UserExit");
-      srv.unregister(inst, "stmp.examples.room.RoomEvents.NewMessage");
-    }
-
-    UserEnter(ctx, input, output) { throw new Error("not implemented") }
-    UserExit(ctx, input, output) { throw new Error("not implemented") }
-    NewMessage(ctx, input, output) { throw new Error("not implemented") }
-  };
 
   ns.RoomEventsListener = class RoomEventsListener {
     static register(c, inst) {
-      c.register(inst, "stmp.examples.room.RoomEvents.UserEnter", inst.HandleUserEnterOfRoomEvents);
-      c.register(inst, "stmp.examples.room.RoomEvents.UserExit", inst.HandleUserExitOfRoomEvents);
-      c.register(inst, "stmp.examples.room.RoomEvents.NewMessage", inst.HandleNewMessageOfRoomEvents);
+      c.register(inst, "stmp.examples.room.RoomEvents.UserEnter", inst.HandleUserEnter);
+      c.register(inst, "stmp.examples.room.RoomEvents.UserExit", inst.HandleUserExit);
+      c.register(inst, "stmp.examples.room.RoomEvents.NewMessage", inst.HandleNewMessage);
     }
 
     static unregister(c, inst) {
@@ -219,9 +128,9 @@ initNamespace(stmp, "stmp.examples.room", (ns) => {
       c.unregister(inst, "stmp.examples.room.RoomEvents.NewMessage");
     }
 
-    HandleUserEnterOfRoomEvents(ctx, input, output) { }
-    HandleUserExitOfRoomEvents(ctx, input, output) { }
-    HandleNewMessageOfRoomEvents(ctx, input, output) { }
+    HandleUserEnter(ctx, input, output) { }
+    HandleUserExit(ctx, input, output) { }
+    HandleNewMessage(ctx, input, output) { }
   };
 
   ns.RoomEventsBroadcaster = class RoomEventsBroadcaster {
@@ -235,11 +144,6 @@ initNamespace(stmp, "stmp.examples.room", (ns) => {
    static NewMessageToSet(input, conns, excludes) { const pm = new PayloadMap(input); for (const conn of conns) (!excludes || excludes.indexOf(conn) < 0) && conn.call("stmp.examples.room.RoomEvents.NewMessage", pm.get(conn), notifyOptions) }
    static NewMessageToAll(input, srv, filter) { return srv.broadcast("stmp.examples.room.RoomEvents.NewMessage", input, filter) }
   };
-  
-  ns.RoomEventsClient = class RoomEventsClient {
-    constructor(client) { this.client = client }
-    UserEnter(input, options) { return this.client.invoke("stmp.examples.room.RoomEvents.UserEnter", input, options) }
-    UserExit(input, options) { return this.client.invoke("stmp.examples.room.RoomEvents.UserExit", input, options) }
-    NewMessage(input, options) { return this.client.invoke("stmp.examples.room.RoomEvents.NewMessage", input, options) }
-  };
+
+
 });

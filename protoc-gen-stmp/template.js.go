@@ -10,7 +10,7 @@ type JsRenderData struct {
 	RootNamespace string
 	Module        string
 	TopNamespaces map[string]struct{}
-	Namespaces    map[string][]*RenderService
+	Namespaces    map[string][]*ServiceOptions
 }
 
 var templateJs *template.Template
@@ -43,7 +43,7 @@ function initNamespace(root, ns, factory) {
 
 {{range $i2, $method := $service.Methods}}  registerMethodAction("{{$method.FullMethod}}", "{{$method.ActionHex}}", pb.{{$method.Input}}, pb.{{$method.Output}});
 {{end}}
-  ns.{{$service.ServiceName}}Server = class {{$service.ServiceName}}Server {
+{{if $service.IsService}}  ns.{{$service.ServiceName}}Server = class {{$service.ServiceName}}Server {
     static register(srv, inst) {
 {{range $i2, $method := $service.Methods}}      srv.register(inst, "{{$method.FullMethod}}", inst.{{$method.MethodName}});
 {{end}}    }
@@ -55,29 +55,31 @@ function initNamespace(root, ns, factory) {
 {{range $i2, $method := $service.Methods}}    {{$method.MethodName}}(ctx, input, output) { throw new Error("not implemented") }
 {{end}}  };
 
-  ns.{{$service.ServiceName}}Listener = class {{$service.ServiceName}}Listener {
+  ns.{{$service.ServiceName}}Client = class {{$service.ServiceName}}Client {
+    constructor(client) { this.client = client }
+{{range $i2, $method := $service.Methods}}    {{$method.MethodName}}(input, options) { return this.client.invoke("{{$method.FullMethod}}", input, options) }
+{{end}}  };
+{{end}}
+{{if $service.IsEvents}}  ns.{{$service.ServiceName}}Listener = class {{$service.ServiceName}}Listener {
     static register(c, inst) {
-{{range $i2, $method := $service.Methods}}      c.register(inst, "{{$method.FullMethod}}", inst.Handle{{$method.MethodName}}Of{{$service.ServiceName}});
+{{range $i2, $method := $service.Methods}}      c.register(inst, "{{$method.FullMethod}}", inst.Handle{{$method.MethodName}});
 {{end}}    }
 
     static unregister(c, inst) {
 {{range $i2, $method := $service.Methods}}      c.unregister(inst, "{{$method.FullMethod}}");
 {{end}}    }
 
-{{range $i2, $method := $service.Methods}}    Handle{{$method.MethodName}}Of{{$service.ServiceName}}(ctx, input, output) { }
-{{end}}  };
+{{range $i2, $method := $service.Methods}}    Handle{{$method.MethodName}}(ctx, input, output) { }
+{{end}}{{/* listener.method */}}  };
 
   ns.{{$service.ServiceName}}Broadcaster = class {{$service.ServiceName}}Broadcaster {
 {{range $i2, $method := $service.Methods}}   static {{$method.MethodName}}(input, conn, options) { return conn.invoke("{{$method.FullMethod}}", input, options) }
    static {{$method.MethodName}}ToSet(input, conns, excludes) { const pm = new PayloadMap(input); for (const conn of conns) (!excludes || excludes.indexOf(conn) < 0) && conn.call("{{$method.FullMethod}}", pm.get(conn), notifyOptions) }
    static {{$method.MethodName}}ToAll(input, srv, filter) { return srv.broadcast("{{$method.FullMethod}}", input, filter) }
-{{end}}  };
-  
-  ns.{{$service.ServiceName}}Client = class {{$service.ServiceName}}Client {
-    constructor(client) { this.client = client }
-{{range $i2, $method := $service.Methods}}    {{$method.MethodName}}(input, options) { return this.client.invoke("{{$method.FullMethod}}", input, options) }
-{{end}}  };{{end}}
-});{{end}}
+{{end}}{{/* broadcaster.methods */}}  };
+{{end}}{{/* isEvents */}}
+{{end}}{{/* range service */}}
+});{{end}}{{/* range ns */}}
 `)
 	if err != nil {
 		panic(err)
@@ -90,35 +92,48 @@ import { CallOptions, Connection, ConnFilter, Context, Server, Client } from "st
 export default {{.RootNamespace}};
 
 declare namespace {{.RootNamespace}} {
-{{range $ns, $services := .Namespaces}}  namespace {{$ns}} {
-{{range $i1, $service := $services}}
-
+  {{range $ns, $services := .Namespaces}}
+  namespace {{$ns}} {
+    {{range $i1, $service := $services}}
+    {{if $service.IsService}}
     class {{$service.ServiceName}}Server {
       static register(srv: Server, inst: {{$service.ServiceName}}Server): void
       static unregister(srv: Server, inst: {{$service.ServiceName}}Server): void
-{{range $i1, $method := $service.Methods}}      {{$method.MethodName}}(ctx: Context, input: pb.{{$method.Input}}, output: pb.{{$method.Output}}): void | Promise<void>
-{{end}}    }
-
-    class {{$service.ServiceName}}Listener {
-      static register(c: Client, inst: {{$service.ServiceName}}Listener): void
-      static unregister(c: Client, inst: {{$service.ServiceName}}Listener): void
-{{range $i1, $method := $service.Methods}}      Handle{{$method.MethodName}}Of{{$service.ServiceName}}(ctx: Context, input: pb.{{$method.Input}}, output: pb.{{$method.Output}}): void | Promise<void>
-{{end}}    }
-
-    class {{$service.ServiceName}}Broadcaster {
-      constructor()
-{{range $i1, $method := $service.Methods}}     static {{$method.MethodName}}(input: pb.{{$method.IInput}}, conn: Connection, options?: Partial<CallOptions>): Promise<pb.{{$method.Output}}>
-     static {{$method.MethodName}}ToSet(input: pb.{{$method.IInput}}, conns: Set<Connection>, excludes?: Connection[]): void
-     static {{$method.MethodName}}ToAll(input: pb.{{$method.IInput}}, srv: Server, filter?: ConnFilter): void
-{{end}}    }
+      {{range $i1, $method := $service.Methods}}
+      {{$method.MethodName}}(ctx: Context, input: pb.{{$method.Input}}, output: pb.{{$method.Output}}): void | Promise<void>
+      {{end}}
+    }
 
     class {{$service.ServiceName}}Client {
       private client: Client;
       constructor(client: Client)
-{{range $i1, $method := $service.Methods}}      {{$method.MethodName}}(data: pb.{{$method.IInput}}, options?: Partial<CallOptions>): Promise<pb.{{$method.Output}}>
-{{end}}    }{{end}}
+      {{range $i1, $method := $service.Methods}}
+      {{$method.MethodName}}(data: pb.{{$method.IInput}}, options?: Partial<CallOptions>): Promise<pb.{{$method.Output}}>
+      {{end}}
+    }
+    {{end}}
+    {{if $service.IsEvents}}
+    class {{$service.ServiceName}}Listener {
+      static register(c: Client, inst: {{$service.ServiceName}}Listener): void
+      static unregister(c: Client, inst: {{$service.ServiceName}}Listener): void
+      {{range $i1, $method := $service.Methods}}
+      Handle{{$method.MethodName}}(ctx: Context, input: pb.{{$method.Input}}, output: pb.{{$method.Output}}): void | Promise<void>
+      {{end}}
+    }
+
+    class {{$service.ServiceName}}Broadcaster {
+      {{range $i1, $method := $service.Methods}}
+      static {{$method.MethodName}}(input: pb.{{$method.IInput}}, conn: Connection, options?: Partial<CallOptions>): Promise<pb.{{$method.Output}}>
+      static {{$method.MethodName}}ToSet(input: pb.{{$method.IInput}}, conns: Set<Connection>, excludes?: Connection[]): void
+      static {{$method.MethodName}}ToAll(input: pb.{{$method.IInput}}, srv: Server, filter?: ConnFilter): void
+      {{end}}
+      constructor()
+    }
+    {{end}}
+    {{end}}
   }
-{{end}}}
+  {{end}}
+}
 `)
 	if err != nil {
 		panic(err)

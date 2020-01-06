@@ -14,6 +14,20 @@ extend google.protobuf.ServiceOptions {
     // the value from 0x00 to 0x0f is reserved for register dynamic methods(without service or method option)
     // dynamic actions is not implemented
     uint64 service = 0x554501;
+
+    ServiceKind kind = 0x554502;
+}
+
+// the service kind
+// if service is true, will generate server api, such as STMPRegisterXxxServer
+// if events is true, will generate events api, such as STMPRegisterXxxListener, STMPXxxBroadcaster
+// if both not set, will detect by service name suffix
+// if ends with Service, will treat as service
+// else if ends with Events, will treat as events
+// else both will be true default
+message ServiceKind {
+    bool service = 1;
+    bool events = 2;
 }
 
 extend google.protobuf.MethodOptions {

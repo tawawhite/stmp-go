@@ -24,19 +24,43 @@ type RoomScene struct {
 	users []string
 }
 
-func (r *RoomScene) HandleJoinOfRoomEvents(ctx context.Context, in *pb.JoinEvent) (out *empty.Empty, err error) {
-	panic("implement me")
+func (r *RoomScene) HandleUserJoin(ctx context.Context, in *pb.UserJoinEvent) (out *empty.Empty, err error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.room == nil {
+		return
+	}
+	log.Printf("New user %s. entered.", in.User)
+	r.users = append(r.users, in.User)
+	log.Printf("%s users: %s.", *r.room, strings.Join(r.users, ", "))
+	r.PrintTip()
+	return
 }
 
-func (r *RoomScene) HandleExitOfRoomEvents(ctx context.Context, in *pb.ExitEvent) (out *empty.Empty, err error) {
-	panic("implement me")
+func (r *RoomScene) HandleUserExit(ctx context.Context, in *pb.UserExitEvent) (out *empty.Empty, err error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.room == nil {
+		return
+	}
+	log.Printf("User %s exited.", in.User)
+	for pos, u := range r.users {
+		if u == in.User {
+			r.users[pos] = r.users[len(r.users)-1]
+			r.users = r.users[:len(r.users)-1]
+			break
+		}
+	}
+	log.Printf("%s users: %s.", *r.room, strings.Join(r.users, ", "))
+	r.PrintTip()
+	return
 }
 
 func (r *RoomScene) PrintTip() {
 	if r.room == nil {
-		log.Print("Please enter a room name to join or create: ")
+		log.Print("Enter a room name to join: ")
 	} else {
-		log.Printf("Please enter ^D to exit %s\n", *r.room)
+		log.Printf("Enter ^D to exit %s.", *r.room)
 	}
 }
 
@@ -49,16 +73,16 @@ func (r *RoomScene) Run() {
 			r.mu.Unlock()
 			_, err := fmt.Scanln(&roomInput)
 			if err != nil {
-				log.Printf("Read input error: %s\n", err)
+				log.Printf("Read input error: %s.", err)
 				continue
 			}
 			if strings.TrimSpace(roomInput) != "" {
-				out, err := r.rsc.Join(context.Background(), &pb.JoinInput{Name: roomInput})
+				out, err := r.rsc.JoinRoom(context.Background(), &pb.JoinRoomInput{Name: roomInput})
 				if err != nil {
-					log.Printf("Join room %s error: %s\n", roomInput, err)
+					log.Printf("Join room %s error: %s.", roomInput, err)
 				} else {
-					log.Printf("Welcome to room: %s\n", out.Name)
-					log.Printf("Users in this room: %s\n", strings.Join(out.Users, ", "))
+					log.Printf("Welcome to room: %s.", out.Name)
+					log.Printf("Users in this room: %s.", strings.Join(out.Users, ", "))
 					r.mu.Lock()
 					r.room = &out.Name
 					r.users = out.Users
@@ -74,11 +98,11 @@ func (r *RoomScene) Run() {
 		<-exitSignal
 		r.mu.Lock()
 		if r.room != nil {
-			_, err := r.rsc.Exit(context.Background(), &pb.ExitInput{Name: *r.room})
+			_, err := r.rsc.ExitRoom(context.Background(), &pb.ExitRoomInput{Name: *r.room})
 			if err != nil {
-				log.Printf("Exit %s error: %s\n", *r.room, err)
+				log.Printf("Exit %s error: %s.", *r.room, err)
 			} else {
-				log.Printf("Exit %s done\n", *r.room)
+				log.Printf("Exit %s.", *r.room)
 				r.PrintTip()
 				r.room = nil
 				r.users = nil

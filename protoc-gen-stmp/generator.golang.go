@@ -3,11 +3,8 @@
 package main
 
 import (
-	"github.com/acrazing/stmp-go/stmp"
-	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/protoc-gen-go/descriptor"
 	"github.com/golang/protobuf/protoc-gen-go/plugin"
-	"github.com/twmb/murmur3"
 	"path"
 	"strconv"
 	"strings"
@@ -52,34 +49,13 @@ func (g *generator) golangFile(filename string) (res *plugin_go.CodeGeneratorRes
 	data.Package = pkg
 	data.Deps = ds.bases
 	builder := new(strings.Builder)
-	var action uint64
-	var stmpService uint64
-	var stmpMethod uint64
 	for _, s := range req.GetService() {
-		service := new(RenderService)
+		service := g.parseService(s)
 		data.Services = append(data.Services, service)
-		service.ServiceName = upFirst(s.GetName())
-		serviceOption, err := proto.GetExtension(s.GetOptions(), stmp.E_Service)
-		if err == nil && serviceOption != nil {
-			stmpService = *(serviceOption.(*uint64))
-		}
 		for _, m := range s.GetMethod() {
-			method := new(RenderMethod)
-			service.Methods = append(service.Methods, method)
-			method.MethodName = upFirst(m.GetName())
-			method.FullMethod = req.GetPackage() + "." + service.ServiceName + "." + method.MethodName
-			methodOption, err := proto.GetExtension(m.GetOptions(), stmp.E_Method)
-			if err == nil && serviceOption != nil {
-				stmpMethod = *(methodOption.(*uint64))
-			}
-			if serviceOption != nil && methodOption != nil {
-				action = stmpService<<8 | stmpMethod
-			} else {
-				action = uint64(murmur3.Sum32([]byte(method.FullMethod))) | (1 << 31)
-			}
-			method.ActionHex = strings.ToUpper(strconv.FormatUint(action, 16))
-			method.Input = ds.Resolve(m.GetInputType())
-			method.Output = ds.Resolve(m.GetOutputType())
+			method := g.parseMethod(req, m, service)
+			method.Input = ds.Resolve(method.Input)
+			method.Output = ds.Resolve(method.Output)
 		}
 	}
 	err = templateGolang.Execute(builder, data)
@@ -111,8 +87,6 @@ func newDepSet(g *generator, dir string) *GoDepSet {
 // google.protobuf.Empty -> empty.Empty
 // foo.bar.Empty -> empty2.Empty
 func (s *GoDepSet) Resolve(typ string) string {
-	// trim prefix .
-	typ = typ[1:]
 	file, _ := s.g.lookupType(typ)
 	if file == nil {
 		s.g.fail("cannot find file for type " + typ)

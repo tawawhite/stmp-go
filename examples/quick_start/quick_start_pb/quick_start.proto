@@ -14,28 +14,28 @@ message RoomModel {
     repeated string users = 2;
 }
 
-message JoinInput {
+message JoinRoomInput {
     string name = 1;
 }
 
-message ExitInput {
+message ExitRoomInput {
     string name = 1;
 }
 
 service RoomService {
-    rpc Join(JoinInput) returns (RoomModel) {}
-    rpc Exit(ExitInput) returns (google.protobuf.Empty) {}
+    rpc JoinRoom(JoinRoomInput) returns (RoomModel) {}
+    rpc ExitRoom(ExitRoomInput) returns (google.protobuf.Empty) {}
 }
 
-message JoinEvent {
+message UserJoinEvent {
     string user = 1;
 }
 
-message ExitEvent {
+message UserExitEvent {
     string user = 1;
 }
 
 service RoomEvents {
-    rpc Join(JoinEvent) returns (google.protobuf.Empty) {}
-    rpc Exit(ExitEvent) returns (google.protobuf.Empty) {}
+    rpc UserJoin(UserJoinEvent) returns (google.protobuf.Empty) {}
+    rpc UserExit(UserExitEvent) returns (google.protobuf.Empty) {}
 }

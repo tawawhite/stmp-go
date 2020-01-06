@@ -5,12 +5,16 @@ package main
 
 import (
 	"errors"
+	"github.com/acrazing/stmp-go/stmp"
+	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/protoc-gen-go/descriptor"
 	"github.com/golang/protobuf/protoc-gen-go/plugin"
+	"github.com/twmb/murmur3"
 	"log"
 	"os"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -211,16 +215,65 @@ func upFirst(str string) string {
 	return str
 }
 
-type RenderMethod struct {
+type MethodOptions struct {
+	Id         *uint64
 	MethodName string
 	FullMethod string
+	Action     uint64
 	ActionHex  string
 	IInput     string
 	Input      string
 	Output     string
 }
 
-type RenderService struct {
+type ServiceOptions struct {
+	Id          *uint64
 	ServiceName string
-	Methods     []*RenderMethod
+	IsService   bool
+	IsEvents    bool
+	Methods     []*MethodOptions
+}
+
+func (g *generator) parseService(s *descriptor.ServiceDescriptorProto) *ServiceOptions {
+	service := new(ServiceOptions)
+	service.ServiceName = upFirst(s.GetName())
+	serviceOption, err := proto.GetExtension(s.GetOptions(), stmp.E_Service)
+	if err == nil && serviceOption != nil {
+		service.Id = serviceOption.(*uint64)
+	}
+	kindOption, err := proto.GetExtension(s.GetOptions(), stmp.E_Kind)
+	if err == nil && kindOption != nil {
+		service.IsService = kindOption.(*stmp.ServiceKind).Service
+		service.IsEvents = kindOption.(*stmp.ServiceKind).Events
+	} else if strings.HasSuffix(service.ServiceName, "Service") {
+		service.IsService = true
+	} else if strings.HasSuffix(service.ServiceName, "Events") {
+		service.IsEvents = true
+	} else {
+		service.IsService = true
+		service.IsEvents = true
+	}
+	return service
+}
+
+func (g *generator) parseMethod(req *descriptor.FileDescriptorProto, m *descriptor.MethodDescriptorProto, service *ServiceOptions) *MethodOptions {
+	method := new(MethodOptions)
+	method.MethodName = upFirst(m.GetName())
+	method.FullMethod = req.GetPackage() + "." + service.ServiceName + "." + method.MethodName
+	methodOption, err := proto.GetExtension(m.GetOptions(), stmp.E_Method)
+	if err == nil && methodOption != nil {
+		method.Id = methodOption.(*uint64)
+	}
+	if method.Id != nil && service.Id != nil {
+		method.Action = *service.Id<<8 | *method.Id
+	} else {
+		method.Action = uint64(murmur3.Sum32([]byte(method.FullMethod))) | (1 << 31)
+	}
+	method.ActionHex = strings.ToUpper(strconv.FormatUint(method.Action, 16))
+	method.Input = m.GetInputType()[1:]
+	method.Output = m.GetOutputType()[1:]
+	sep := strings.LastIndexByte(method.Input, '.')
+	method.IInput = method.Input[0:sep] + ".I" + method.Input[sep+1:]
+	service.Methods = append(service.Methods, method)
+	return method
 }

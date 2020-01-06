@@ -4,11 +4,7 @@ package main
 
 import (
 	"bytes"
-	"github.com/acrazing/stmp-go/stmp"
-	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/protoc-gen-go/plugin"
-	"github.com/twmb/murmur3"
-	"strconv"
 	"strings"
 )
 
@@ -20,12 +16,9 @@ func (g *generator) js() []*plugin_go.CodeGeneratorResponse_File {
 		RootNamespace: g.options.jsroot,
 		Module:        g.options.jsmodule,
 		TopNamespaces: map[string]struct{}{},
-		Namespaces:    map[string][]*RenderService{},
+		Namespaces:    map[string][]*ServiceOptions{},
 	}
 
-	var action uint64
-	var stmpService uint64
-	var stmpMethod uint64
 	for _, filename := range g.request.GetFileToGenerate() {
 		req := g.lookupFile(filename)
 		ns := req.GetPackage()
@@ -35,32 +28,10 @@ func (g *generator) js() []*plugin_go.CodeGeneratorResponse_File {
 		}
 		data.TopNamespaces[ns[:sep]] = struct{}{}
 		for _, s := range req.Service {
-			service := new(RenderService)
+			service := g.parseService(s)
 			data.Namespaces[ns] = append(data.Namespaces[ns], service)
-			service.ServiceName = upFirst(s.GetName())
-			serviceOption, err := proto.GetExtension(s.GetOptions(), stmp.E_Service)
-			if err == nil && serviceOption != nil {
-				stmpService = *(serviceOption.(*uint64))
-			}
 			for _, m := range s.GetMethod() {
-				method := new(RenderMethod)
-				service.Methods = append(service.Methods, method)
-				method.MethodName = upFirst(m.GetName())
-				method.FullMethod = req.GetPackage() + "." + service.ServiceName + "." + method.MethodName
-				methodOption, err := proto.GetExtension(m.GetOptions(), stmp.E_Method)
-				if err == nil && serviceOption != nil {
-					stmpMethod = *(methodOption.(*uint64))
-				}
-				if serviceOption != nil && methodOption != nil {
-					action = stmpService<<8 | stmpMethod
-				} else {
-					action = uint64(murmur3.Sum32([]byte(method.FullMethod))) | (1 << 31)
-				}
-				method.ActionHex = strings.ToUpper(strconv.FormatUint(action, 16))
-				method.Input = m.GetInputType()[1:]
-				method.Output = m.GetOutputType()[1:]
-				dot := strings.LastIndexByte(method.Input, '.')
-				method.IInput = method.Input[:dot+1] + "I" + method.Input[dot+1:]
+				g.parseMethod(req, m, service)
 			}
 		}
 	}
