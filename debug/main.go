@@ -123,6 +123,41 @@ var cmds = map[string]func(flag *flagSet){
 		var ifc io.ReadWriteCloser
 		log.Printf("Sizeof single interface: 16=%d.", unsafe.Sizeof(ifc))
 	},
+	"debugCloseCh": func(flag *flagSet) {
+		ch := make(chan int)
+		go func() {
+			time.Sleep(time.Second)
+			close(ch)
+		}()
+		ch <- 1
+	},
+	"debugReadClosed": func(flag *flagSet) {
+		srv, _ := net.Listen("tcp", "127.0.0.1:9991")
+		go func() {
+			for {
+				conn, _ := srv.Accept()
+				go func() {
+					buf := make([]byte, 5)
+					for {
+						_, err := conn.Read(buf)
+						if err != nil {
+							// EOF
+							log.Printf("read error: %s.", err.Error())
+							break
+						}
+					}
+				}()
+			}
+		}()
+		time.Sleep(time.Second)
+		conn, _ := net.Dial("tcp", "127.0.0.1:9991")
+		_, err := conn.Write([]byte("12345"))
+		if err != nil {
+			log.Printf("write error: %s.", err)
+		}
+		conn.Close()
+		time.Sleep(time.Second)
+	},
 }
 
 func castMapInterface(in interface{}) interface{} {

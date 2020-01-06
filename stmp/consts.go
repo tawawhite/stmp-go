@@ -80,16 +80,14 @@ const (
 	StatusUnmarshalError             Status = 0x07
 	StatusMarshalError               Status = 0x08
 	StatusCancelled                  Status = 0x09
+	StatusConnectionClosed           Status = 0x0A
 	StatusBadRequest                 Status = 0x20
 	StatusUnauthorized               Status = 0x21
 	StatusNotFound                   Status = 0x22
 	StatusRequestTimeout             Status = 0x23
 	StatusRequestEntityTooLarge      Status = 0x24
 	StatusTooManyRequests            Status = 0x25
-	StatusClientClosed               Status = 0x26
-	StatusClientCancelled            Status = 0x27
 	StatusInternalServerError        Status = 0x40
-	StatusServerShutdown             Status = 0x41
 )
 
 var MapStatus = map[Status]string{
@@ -109,10 +107,7 @@ var MapStatus = map[Status]string{
 	StatusRequestTimeout:             "Request timeout",
 	StatusRequestEntityTooLarge:      "Request entity too large",
 	StatusTooManyRequests:            "Too many requests",
-	StatusClientClosed:               "Client closed",
-	StatusClientCancelled:            "Client cancelled",
 	StatusInternalServerError:        "Internal server error",
-	StatusServerShutdown:             "Server shutdown",
 }
 
 type StatusError interface {

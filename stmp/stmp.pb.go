@@ -27,7 +27,7 @@ const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
 // if both not set, will detect by service name suffix
 // if ends with Service, will treat as service
 // else if ends with Events, will treat as events
-// else will emit a compile error
+// else both will be true default
 type ServiceKind struct {
 	Service              bool     `protobuf:"varint,1,opt,name=service,proto3" json:"service,omitempty"`
 	Events               bool     `protobuf:"varint,2,opt,name=events,proto3" json:"events,omitempty"`
