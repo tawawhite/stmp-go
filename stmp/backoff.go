@@ -6,7 +6,11 @@ import (
 )
 
 type Backoff interface {
-	Next() (time.Duration, bool)
+	// the next wait time
+	// if should stop, the second value should be false
+	// else it should be true
+	Next() (wait time.Duration, ok bool)
+	// reset the count to 0
 	Reset()
 }
 

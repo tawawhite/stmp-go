@@ -8,6 +8,7 @@ import (
 
 var mapEncodingCodec = map[string]EncodingCodec{}
 
+// register a new compression algorithm
 func RegisterEncodingCodec(codecs ...EncodingCodec) {
 	for _, codec := range codecs {
 		mapEncodingCodec[codec.Name()] = codec

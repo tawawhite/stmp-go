@@ -75,28 +75,28 @@ func (h Header) Unmarshal(data []byte) error {
 	var end int
 	var key string
 	var value string
-	for {
+	for len(data) > 0 {
 		sep = bytes.IndexByte(data, ':')
 		if sep < 0 {
 			return errors.New("miss ':' in header")
 		}
 		key = unescapeHeadKey(string(data[:sep]))
-		end = bytes.IndexByte(data[sep+1:], '\n')
+		data = data[sep+1:]
+		end = bytes.IndexByte(data, '\n')
 		if end == -1 {
-			value = unescapeHeadValue(string(data[sep+1:]))
+			value = unescapeHeadValue(string(data))
+			data = nil
 		} else {
-			value = unescapeHeadValue(string(data[sep+1 : end]))
+			value = unescapeHeadValue(string(data[:end]))
+			data = data[end+1:]
 		}
 		if len(h[key]) > 0 {
 			h[key] = append(h[key], value)
 		} else {
 			h[key] = []string{value}
 		}
-		if end == -1 || end == len(data) {
-			return nil
-		}
-		data = data[end+1:]
 	}
+	return nil
 }
 
 func NewHeader() Header {

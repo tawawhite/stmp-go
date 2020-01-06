@@ -7,60 +7,60 @@ import (
 	"github.com/xtaci/kcp-go"
 	"go.uber.org/zap"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"sync"
 	"time"
 )
 
-type serverOptions struct {
+type ServerOptions struct {
 	*ConnOptions
-	logAccess     []string
-	compressLevel int
-	authenticate  func(c *Conn) error
+	logAccess    []string
+	authenticate func(c *Conn) error
 }
 
-func (o *serverOptions) WithLogger(logger *zap.Logger) *serverOptions {
+func (o *ServerOptions) WithLogger(logger *zap.Logger) *ServerOptions {
 	o.ConnOptions.WithLogger(logger)
 	return o
 }
 
-func (o *serverOptions) WithRouter(r *Router) *serverOptions {
+func (o *ServerOptions) WithRouter(r *Router) *ServerOptions {
 	o.ConnOptions.WithRouter(r)
 	return o
 }
 
-func (o *serverOptions) WithWriteQueueLimit(max int) *serverOptions {
+func (o *ServerOptions) WithCompress(level int) *ServerOptions {
+	o.ConnOptions.WithCompress(level)
+	return o
+}
+
+func (o *ServerOptions) WithWriteQueueLimit(max int) *ServerOptions {
 	o.ConnOptions.WithWriteQueueLimit(max)
 	return o
 }
 
-func (o *serverOptions) WithPacketSizeLimit(max uint64) *serverOptions {
+func (o *ServerOptions) WithPacketSizeLimit(max uint64) *ServerOptions {
 	o.ConnOptions.WithPacketSizeLimit(max)
 	return o
 }
 
-func (o *serverOptions) WithTimeout(handshake, read, write time.Duration) *serverOptions {
+func (o *ServerOptions) WithTimeout(handshake, read, write time.Duration) *ServerOptions {
 	o.ConnOptions.WithTimeout(handshake, read, write)
 	return o
 }
 
-func (o *serverOptions) WithLogAccess(fields ...string) *serverOptions {
+func (o *ServerOptions) WithLogAccess(fields ...string) *ServerOptions {
 	o.logAccess = fields
 	return o
 }
 
-func (o *serverOptions) WithCompress(level int) *serverOptions {
-	o.compressLevel = level
-	return o
-}
-
-func (o *serverOptions) WithAuthenticate(fn func(c *Conn) error) *serverOptions {
+func (o *ServerOptions) WithAuthenticate(fn func(c *Conn) error) *ServerOptions {
 	o.authenticate = fn
 	return o
 }
 
-func (o *serverOptions) applyDefault() *serverOptions {
+func (o *ServerOptions) applyDefault() *ServerOptions {
 	no := o
 	if no == nil {
 		no = NewServerOptions()
@@ -69,25 +69,24 @@ func (o *serverOptions) applyDefault() *serverOptions {
 	return no
 }
 
-func NewServerOptions() *serverOptions {
-	return &serverOptions{
-		ConnOptions:   NewConnOptions(),
-		logAccess:     []string{"host", "user-agent", "referer", AcceptContentType},
-		compressLevel: 6,
-		authenticate:  func(c *Conn) error { return nil },
+func NewServerOptions() *ServerOptions {
+	return &ServerOptions{
+		ConnOptions:  NewConnOptions(),
+		logAccess:    []string{"host", "user-agent", "referer", AcceptContentType},
+		authenticate: func(c *Conn) error { return nil },
 	}
 }
 
 type Server struct {
 	*Router
-	opts      *serverOptions
+	opts      *ServerOptions
 	mu        sync.RWMutex
 	listeners map[io.Closer]struct{}
 	conns     ConnSet
 	done      chan error
 }
 
-func NewServer(opts *serverOptions) *Server {
+func NewServer(opts *ServerOptions) *Server {
 	opts = opts.applyDefault()
 	return &Server{
 		Router:    opts.router,
@@ -197,8 +196,7 @@ func (s *Server) prepare(c *Conn) (err error) {
 func (s *Server) HandleConn(nc net.Conn) (err error) {
 	c := s.newConn(nc)
 	closeSent := false
-	var r io.ReadCloser
-	var w EncodingWriter
+	var ec EncodingCodec
 	ch := NewClientHandshake(0, 0, c.ClientHeader, "")
 	sh := NewServerHandshake(StatusOk, c.ServerHeader, "")
 	defer func() {
@@ -221,7 +219,7 @@ func (s *Server) HandleConn(nc net.Conn) (err error) {
 	if err = s.prepare(c); err != nil {
 		return
 	}
-	if r, w, err = c.initEncoding(s.opts.compressLevel); err != nil {
+	if ec, err = c.initEncoding(); err != nil {
 		return
 	}
 	closeSent = true
@@ -233,9 +231,9 @@ func (s *Server) HandleConn(nc net.Conn) (err error) {
 	s.mu.Lock()
 	s.conns.Add(c)
 	s.mu.Unlock()
-	go c.binaryWriteChannel(w)
+	go c.binaryWriteChannel(ec)
 	go func() {
-		c.binaryReadChannel(r)
+		c.binaryReadChannel(ec)
 		// TODO close connection
 	}()
 	return

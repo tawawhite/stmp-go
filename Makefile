@@ -58,3 +58,9 @@ run-quick-start-client:
 	CompileDaemon -build "go build -o ./out/quick_start_client ./examples/quick_start/quick_start_client" \
 		--exclude-dir node_modules --exclude-dir vendor --exclude-dir .git --exclude-dir .idea \
 		-command "./out/quick_start_client"
+
+quick-start-server:
+	go build -o ./out/quick_start_server ./examples/quick_start/quick_start_server
+
+quick-start-client:
+	go build -o ./out/quick_start_client ./examples/quick_start/quick_start_client

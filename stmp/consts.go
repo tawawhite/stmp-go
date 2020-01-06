@@ -88,6 +88,7 @@ const (
 	StatusRequestEntityTooLarge      Status = 0x24
 	StatusTooManyRequests            Status = 0x25
 	StatusInternalServerError        Status = 0x40
+	StatusServerShutdown             Status = 0x41
 )
 
 var MapStatus = map[Status]string{
@@ -108,8 +109,10 @@ var MapStatus = map[Status]string{
 	StatusRequestEntityTooLarge:      "Request entity too large",
 	StatusTooManyRequests:            "Too many requests",
 	StatusInternalServerError:        "Internal server error",
+	StatusServerShutdown:             "Server shutdown",
 }
 
+// a status error
 type StatusError interface {
 	Error() string
 	Spread() (Status, []byte)
@@ -171,9 +174,9 @@ func NewStatusError(code Status, data interface{}) StatusError {
 	return se
 }
 
+// get status error or create it
 func DetectError(err error, rollbackStatus Status) StatusError {
 	if se, ok := err.(StatusError); ok {
-		log.Printf("detect err, err is nil: %t, se is nil: %t, err: %s.", err == nil, se == nil, err.Error())
 		return se
 	}
 	if sc, ok := err.(Status); ok {

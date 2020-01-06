@@ -7,8 +7,8 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/xtaci/kcp-go"
 	"go.uber.org/zap"
-	"io"
 	"io/ioutil"
+	"log"
 	"net"
 	"net/url"
 	"strings"
@@ -17,11 +17,10 @@ import (
 
 type DialOptions struct {
 	*ConnOptions
-	header        Header
-	compressLevel int
-	serverName    string
-	insecure      bool
-	reconnect     Backoff
+	header     Header
+	serverName string
+	insecure   bool
+	reconnect  Backoff
 }
 
 // set logger for client, default is zap.NewProduction()
@@ -73,9 +72,13 @@ func (o *DialOptions) WithPacketFormat(format string) *DialOptions {
 // algorithm with EncodingCodec interface, and register it with RegisterEncodingCodec
 // (both server and client side need to register it)
 // only supports tcp/kcp connections, websocket cannot use this
-func (o *DialOptions) WithEncoding(name string, level int) *DialOptions {
+func (o *DialOptions) WithEncoding(name string) *DialOptions {
 	o.header.Set(AcceptEncoding, name)
-	o.compressLevel = level
+	return o
+}
+
+func (o *DialOptions) WithCompress(level int) *DialOptions {
+	o.ConnOptions.WithCompress(level)
 	return o
 }
 
@@ -122,9 +125,6 @@ func (o *DialOptions) ApplyDefault(addr string) *DialOptions {
 		encoding := no.header.Get(AcceptEncoding)
 		if GetEncodingCodec(encoding) == nil {
 			panic("invalid encoding: " + encoding + ", please register it first")
-		}
-		if no.compressLevel == 0 {
-			no.compressLevel = 6
 		}
 	}
 	format := no.header.Get(AcceptPacketFormat)
@@ -220,21 +220,19 @@ func (c *ClientConn) Handshake() (err error) {
 	if err != nil {
 		return
 	}
+	log.Println("client handshake sent")
 	sh := NewServerHandshake(0, c.ServerHeader, "")
 	if err = sh.Read(c, c.opts.maxPacketSize); err != nil {
 		return NewStatusError(StatusNetworkError, err)
 	}
-	var r io.ReadCloser
-	var w EncodingWriter
-	r, w, err = c.initEncoding(c.opts.compressLevel)
+	var ec EncodingCodec
+	ec, err = c.initEncoding()
 	if err != nil {
 		return
 	}
-	go c.binaryWriteChannel(w)
+	go c.binaryReadChannel(ec)
 	go func() {
-		err := c.binaryReadChannel(r)
-		c.opts.logger.Error("read error, reconnecting...", zap.Error(err))
-		// TODO reconnect
+		c.binaryWriteChannel(ec)
 	}()
 	return
 }
@@ -273,15 +271,15 @@ func (c *ClientConn) WebSocketHandshake(wc *websocket.Conn) (err error) {
 	// ws do not process encoding
 	c.Media = GetMediaCodec(c.ServerHeader.Get(DetermineContentType))
 	if c.ServerHeader.Get(DeterminePacketFormat) == "text" {
-		c.websocketTextWriteChannel(wc)
+		go c.websocketTextReadChannel(wc)
 		go func() {
-			go c.websocketTextReadChannel(wc)
+			c.websocketTextWriteChannel(wc)
 			// TODO reconnection
 		}()
 	} else {
-		go c.websocketBinaryWriteChannel(wc)
+		go c.websocketBinaryReadChannel(wc)
 		go func() {
-			c.websocketBinaryReadChannel(wc)
+			c.websocketBinaryWriteChannel(wc)
 			// TODO reconnection
 		}()
 	}

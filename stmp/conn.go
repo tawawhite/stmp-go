@@ -76,6 +76,7 @@ type ConnOptions struct {
 	router           *Router
 	maxPacketSize    uint64
 	writeQueueSize   int
+	compressLevel    int
 }
 
 // set custom logger, default is zap.NewProduction()
@@ -87,6 +88,11 @@ func (o *ConnOptions) WithLogger(logger *zap.Logger) *ConnOptions {
 // set custom router
 func (o *ConnOptions) WithRouter(r *Router) *ConnOptions {
 	o.router = r
+	return o
+}
+
+func (o *ConnOptions) WithCompress(level int) *ConnOptions {
+	o.compressLevel = level
 	return o
 }
 
@@ -140,6 +146,7 @@ func NewConnOptions() *ConnOptions {
 		// 16 mb
 		maxPacketSize:  1 << 24,
 		writeQueueSize: 8,
+		compressLevel:  6,
 	}
 }
 
@@ -191,7 +198,7 @@ func NewConn(nc net.Conn, opts *ConnOptions) *Conn {
 	}
 }
 
-// Private: invoke a method arbitrary
+// invoke a method a marshaled payload
 func (c *Conn) Call(ctx context.Context, method string, payload []byte, opts *CallOptions) (out interface{}, err error) {
 	defer func() {
 		if e := recover(); e != nil {
@@ -250,7 +257,7 @@ func (c *Conn) Call(ctx context.Context, method string, payload []byte, opts *Ca
 	return
 }
 
-// Private: invoke a method arbitrary, this method will marshal the input to payload bytes with conn's codec.
+// invoke a method with raw input, will marshal it with conn's media codec
 func (c *Conn) Invoke(ctx context.Context, method string, in interface{}, opts *CallOptions) (interface{}, error) {
 	var payload []byte
 	if in != nil {
@@ -309,10 +316,20 @@ func (c *Conn) dispatchPacket(p *Packet) {
 	}
 }
 
-func (c *Conn) binaryReadChannel(r io.ReadCloser) {
+func (c *Conn) binaryReadChannel(ec EncodingCodec) {
 	p := new(Packet)
 	buf := make([]byte, maxStreamHeadSize, maxStreamHeadSize)
 	var err error
+	var r io.ReadCloser
+	if ec == nil {
+		r = plainEncoding{c}
+	} else {
+		r, err = ec.Reader(c)
+		if err != nil {
+			c.close(StatusProtocolError, "init encoding reader error: %s"+err.Error())
+			return
+		}
+	}
 	for {
 		c.Conn.SetReadDeadline(time.Now().Add(c.opts.readTimeout))
 		err = p.Read(r, buf)
@@ -325,9 +342,21 @@ func (c *Conn) binaryReadChannel(r io.ReadCloser) {
 	r.Close()
 }
 
-func (c *Conn) binaryWriteChannel(w EncodingWriter) {
-	var e *writeEvent
+func (c *Conn) binaryWriteChannel(ec EncodingCodec) {
 	var err error
+	var w EncodingWriter
+	if ec == nil {
+		w = plainEncoding{c}
+	} else {
+		w, err = ec.Writer(c, c.opts.compressLevel)
+		if err != nil {
+			c.terminate()
+			c.Close()
+			close(c.writeChan)
+			return
+		}
+	}
+	var e *writeEvent
 	buf := make([]byte, maxStreamHeadSize, maxStreamHeadSize)
 	ticker := time.NewTicker(c.opts.readTimeout)
 	for {
@@ -559,7 +588,7 @@ func (c *Conn) negotiate() error {
 		if inputLength == len(encodingInput) {
 			break
 		}
-		mediaInput = mediaInput[inputLength:]
+		encodingInput = encodingInput[inputLength:]
 	}
 	packetFormat := c.ClientHeader.Get(DeterminePacketFormat)
 	if packetFormat != "" {
@@ -568,29 +597,12 @@ func (c *Conn) negotiate() error {
 	return nil
 }
 
-func (c *Conn) initEncoding(compressLevel int) (r io.ReadCloser, w EncodingWriter, err error) {
+func (c *Conn) initEncoding() (ec EncodingCodec, err error) {
 	c.Media = GetMediaCodec(c.ServerHeader.Get(DetermineContentType))
 	if c.Media == nil {
 		err = NewStatusError(StatusUnsupportedContentType, "cannot find codec: "+c.ServerHeader.Get(DetermineContentType)+", please register it first")
 		return
 	}
-	ec := GetEncodingCodec(c.ServerHeader.Get(DetermineEncoding))
-	if ec == nil {
-		rw := plainEncoding{Conn: c.Conn}
-		r = rw
-		w = rw
-		return
-	} else {
-		r, err = ec.Reader(c.Conn)
-		if err != nil {
-			return
-		}
-		w, err = ec.Writer(c.Conn, compressLevel)
-		if err != nil {
-			r.Close()
-			r = nil
-			return
-		}
-		return
-	}
+	ec = GetEncodingCodec(c.ServerHeader.Get(DetermineEncoding))
+	return
 }

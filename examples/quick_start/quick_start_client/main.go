@@ -9,7 +9,6 @@ import (
 	"log"
 	"strings"
 	"sync"
-	"time"
 )
 
 type RoomScene struct {
@@ -110,12 +109,11 @@ func NewRoomScene(rsc pb.STMPRoomServiceClient, conn *stmp.ClientConn) *RoomScen
 }
 
 func main() {
-	time.Sleep(time.Second)
 	logger, err := zap.NewDevelopment()
 	if err != nil {
 		log.Fatalf("init logger error: %s", err)
 	}
-	conn, err := stmp.DialTCP("127.0.0.1:5001", stmp.NewDialOptions().WithLogger(logger))
+	conn, err := stmp.DialTCP("127.0.0.1:5001", stmp.NewDialOptions().WithLogger(logger).WithEncoding("gzip"))
 	if err != nil {
 		log.Fatalf("dial error: %s", err)
 	}
