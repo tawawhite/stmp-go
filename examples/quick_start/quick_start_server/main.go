@@ -5,6 +5,7 @@ import (
 	pb "github.com/acrazing/stmp-go/examples/quick_start/quick_start_pb"
 	"github.com/acrazing/stmp-go/stmp"
 	"github.com/golang/protobuf/ptypes/empty"
+	"go.uber.org/zap"
 	"log"
 	"sync"
 )
@@ -75,13 +76,17 @@ func NewRoomServiceServer() pb.STMPRoomServiceServer {
 }
 
 func main() {
-	srv := stmp.NewServer(nil)
+	logger, err := zap.NewDevelopment()
+	if err != nil {
+		log.Fatalf("init logger error: %s", err)
+	}
+	srv := stmp.NewServer(stmp.NewServerOptions().WithLogger(logger))
 	pb.STMPRegisterRoomServiceServer(srv, NewRoomServiceServer())
 	go srv.ListenAndServeTCP("127.0.0.1:5001")
 	log.Println("server is listening at tcp://127.0.0.1:5001")
 	go srv.ListenAndServeWebSocket("127.0.0.1:5002", "/quick_start")
 	log.Println("server is listening at  ws://127.0.0.1:5002/quick_start")
-	err := srv.Wait()
+	err = srv.Wait()
 	if err != nil {
 		log.Fatalf("server listen error: %s", err)
 	}

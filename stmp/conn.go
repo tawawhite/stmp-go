@@ -233,7 +233,7 @@ func (c *Conn) Call(ctx context.Context, method string, payload []byte, opts *Ca
 	if p.Payload == nil {
 		return
 	}
-	out = ms.actions[action].output()
+	out = ms.actions[action].Output()
 	err = c.Media.Unmarshal(p.Payload, out)
 	return
 }
@@ -420,23 +420,55 @@ func (c *Conn) handleClose(status Status, message string) {
 	// TODO close connection
 }
 
+// TODO with context
+func (c *Conn) logPacket(mid uint16, action uint64, status Status, res []byte, err error) {
+	fields := []zap.Field{
+		zap.String("addr", c.RemoteAddr().String()),
+		zap.String("server", c.LocalAddr().String()),
+		zap.String("Mid", hexFormatUint64(uint64(mid))),
+		zap.String("Status", hexFormatUint64(uint64(status))),
+	}
+	method := ms.actions[action]
+	if method == nil {
+		fields = append(fields, zap.String("Action", hexFormatUint64(action)))
+	} else {
+		fields = append(fields, zap.String("Method", method.Method), zap.String("Action", method.ActionHex))
+	}
+	if status != StatusOk {
+		fields = append(fields, zap.String("Reason", status.Error()+": "+string(res)))
+	}
+	if err != nil {
+		fields = append(fields, zap.String("Fail", err.Error()))
+	}
+	if status == StatusOk {
+		c.opts.logger.Debug("packet", fields...)
+	} else {
+		c.opts.logger.Warn("packet error", fields...)
+	}
+}
+
 func (c *Conn) handleNotify(action uint64, payload []byte) {
 	ctx := WithConn(context.Background(), c)
-	c.opts.router.dispatch(ctx, action, payload, c.Media)
+	status, res := c.opts.router.dispatch(ctx, action, payload, c.Media)
+	c.logPacket(0, action, status, res, nil)
 }
 
 func (c *Conn) handleRequest(mid uint16, action uint64, payload []byte) {
 	ctx := WithConn(context.Background(), c)
-	status, payload := c.opts.router.dispatch(ctx, action, payload, c.Media)
-	we := &writeEvent{p: &Packet{
-		Fin:     true,
-		Kind:    MessageKindResponse,
-		Mid:     mid,
-		Action:  action,
-		Status:  status,
-		Payload: payload,
-	}}
+	status, res := c.opts.router.dispatch(ctx, action, payload, c.Media)
+	we := &writeEvent{
+		p: &Packet{
+			Fin:     true,
+			Kind:    MessageKindResponse,
+			Mid:     mid,
+			Action:  action,
+			Status:  status,
+			Payload: res,
+		},
+		r: make(chan error, 1),
+	}
 	c.writeChan <- we
+	c.logPacket(mid, action, status, res, <-we.r)
 }
 
 func (c *Conn) handleResponse(mid uint16, status Status, payload []byte) {

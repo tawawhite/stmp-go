@@ -3,15 +3,18 @@ package stmp
 import (
 	"context"
 	"github.com/twmb/murmur3"
+	"reflect"
 	"strconv"
+	"strings"
 	"sync"
 )
 
 type MethodMetadata struct {
-	method string
-	action uint64
-	input  ModelFactory
-	output ModelFactory
+	Method    string
+	Action    uint64
+	ActionHex string
+	Input     ModelFactory
+	Output    ModelFactory
 }
 
 type methodStore = struct {
@@ -29,14 +32,15 @@ func RegisterMethodAction(method string, action uint64, input ModelFactory, outp
 		action, _ = murmur3.Sum128([]byte(method))
 		action |= 1 << 63
 	}
-	if ms.actions[action] != nil && ms.actions[action].method != method {
-		panic("duplicated Action " + strconv.FormatUint(action, 16) + "for method " + ms.actions[action].method + " and " + method)
+	if ms.actions[action] != nil && ms.actions[action].Method != method {
+		panic("duplicated Action " + strconv.FormatUint(action, 16) + "for method " + ms.actions[action].Method + " and " + method)
 	}
 	ms.actions[action] = &MethodMetadata{
-		method: method,
-		action: action,
-		input:  input,
-		output: output,
+		Method:    method,
+		Action:    action,
+		ActionHex: strings.ToUpper(strconv.FormatUint(action, 16)),
+		Input:     input,
+		Output:    output,
 	}
 	ms.methods[method] = action
 }
@@ -147,7 +151,7 @@ func (r *Router) dispatch(ctx context.Context, action uint64, payload []byte, co
 	if method == nil || !ok {
 		return StatusNotFound.Spread()
 	}
-	in := method.input()
+	in := method.Input()
 	if payload != nil {
 		err = codec.Unmarshal(payload, in)
 		if err != nil {
@@ -162,9 +166,12 @@ func (r *Router) dispatch(ctx context.Context, action uint64, payload []byte, co
 		}
 	}
 	if out != nil {
-		ret, err = codec.Marshal(out)
-		if err != nil {
-			return DetectError(err, StatusInternalServerError).Spread()
+		value := reflect.ValueOf(out)
+		if value.Kind() == reflect.Ptr && !value.IsNil() {
+			ret, err = codec.Marshal(out)
+			if err != nil {
+				return DetectError(err, StatusInternalServerError).Spread()
+			}
 		}
 	}
 	return StatusOk, ret

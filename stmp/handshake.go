@@ -129,11 +129,11 @@ func (h *handshake) MarshalText() []byte {
 	title := make([]byte, 6)
 	copy(title, "STMP")
 	if h.Status > 0xF {
-		title[4] = digits[h.Status>>4]
-		title[5] = digits[h.Status&0xF]
+		title[4] = hexDigits[h.Status>>4]
+		title[5] = hexDigits[h.Status&0xF]
 		title = title[:6]
 	} else {
-		title[4] = digits[h.Status]
+		title[4] = hexDigits[h.Status]
 		title = title[:5]
 	}
 	header := h.Header.Marshal()
@@ -173,7 +173,7 @@ func (h *handshake) UnmarshalText(data []byte) error {
 		sep = len(data)
 	}
 	var err error
-	h.Status, err = parseHexStatus(data[:sep])
+	h.Status, err = hexParseStatus(data[:sep])
 	if err != nil {
 		return NewStatusError(StatusProtocolError, "invalid status: "+err.Error())
 	}

@@ -57,89 +57,107 @@ func readUint16(r io.Reader, b2 []byte) (v uint16, err error) {
 	return
 }
 
-var digits = [36]byte{}
-var chunks = [256]byte{}
+var hexDigits = [36]byte{}
+var hexChunks = [256]byte{}
 var hexOffsets = [16]byte{0, 4, 8, 12, 16, 1}
+var hexCaches [256]string
 
 func init() {
 	for i := 0; i < 256; i++ {
-		chunks[i] = 255
+		hexChunks[i] = 255
 	}
 	var i byte
 	for i = '0'; i <= '9'; i++ {
-		digits[i-'0'] = i
-		chunks[i] = i - '0'
+		hexDigits[i-'0'] = i
+		hexChunks[i] = i - '0'
 	}
 	for i = 'A'; i <= 'Z'; i++ {
-		digits[i-'A'+10] = i
-		chunks[i] = i - 'A' + 10
+		hexDigits[i-'A'+10] = i
+		hexChunks[i] = i - 'A' + 10
 	}
 	for i = 'a'; i < 'z'; i++ {
-		chunks[i] = i - 'a' + 10
+		hexChunks[i] = i - 'a' + 10
 	}
 	for i = 0; i < 16; i++ {
 		hexOffsets[i] = i * 4
+		hexCaches[i] = string(hexDigits[i])
+	}
+	for i := 0x10; i < 0x100; i++ {
+		hexCaches[i] = string(hexDigits[i>>4]) + string(hexDigits[i&0xF])
 	}
 }
 
-func appendHex(u uint64, buf []byte) int {
+func hexAppend(u uint64, buf []byte) int {
 	i := len(buf)
 	for u > 15 {
 		i--
-		buf[i] = digits[u&0xF]
+		buf[i] = hexDigits[u&0xF]
 		u >>= 4
 	}
 	// u < base
 	i--
-	buf[i] = digits[u]
+	buf[i] = hexDigits[u]
 	copy(buf, buf[i:])
 	return len(buf) - i
 }
 
-func parseHexStatus(buf []byte) (s Status, err error) {
+func hexFormatUint64(u uint64) string {
+	buf := make([]byte, 8, 8)
+	i := 8
+	for u > 15 {
+		i--
+		buf[i] = hexDigits[u&0xF]
+		u >>= 4
+	}
+	i--
+	buf[i] = hexDigits[u]
+	return string(buf[i:])
+}
+
+func hexParseStatus(buf []byte) (s Status, err error) {
 	m := len(buf)
 	if m > 2 || m == 0 {
 		err = errors.New("out of range")
 		return
 	}
 	for i, c := range buf {
-		if chunks[c] > 15 {
+		if hexChunks[c] > 15 {
 			err = errors.New("invalid bit: " + string(c))
 			return
 		}
-		s |= Status(uint16(chunks[c]) << hexOffsets[m-i-1])
+		s |= Status(uint16(hexChunks[c]) << hexOffsets[m-i-1])
 	}
 	return
 }
 
-func parseHexUint16(buf []byte) (n uint16, err error) {
+func hexParseUint16(buf []byte) (n uint16, err error) {
 	m := len(buf)
 	if m > 4 || m == 0 {
 		err = errors.New("out of range")
 		return
 	}
 	for i, c := range buf {
-		if chunks[c] > 15 {
+		if hexChunks[c] > 15 {
 			err = errors.New("invalid bit: " + string(c))
 			return
 		}
-		n |= uint16(chunks[c]) << hexOffsets[m-i-1]
+		n |= uint16(hexChunks[c]) << hexOffsets[m-i-1]
 	}
 	return n, nil
 }
 
-func parseHexUint64(buf []byte) (n uint64, err error) {
+func hexParseUint64(buf []byte) (n uint64, err error) {
 	m := len(buf)
 	if m == 0 || m > 16 {
 		err = errors.New("out of range")
 		return
 	}
 	for i, c := range buf {
-		if chunks[c] > 15 {
+		if hexChunks[c] > 15 {
 			err = errors.New("invalid bit: " + string(c))
 			return
 		}
-		n |= uint64(chunks[c]) << hexOffsets[m-i-1]
+		n |= uint64(hexChunks[c]) << hexOffsets[m-i-1]
 	}
 	return n, nil
 }

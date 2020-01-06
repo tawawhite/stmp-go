@@ -5,6 +5,7 @@ import (
 	"fmt"
 	pb "github.com/acrazing/stmp-go/examples/quick_start/quick_start_pb"
 	"github.com/acrazing/stmp-go/stmp"
+	"go.uber.org/zap"
 	"log"
 	"strings"
 	"sync"
@@ -110,7 +111,11 @@ func NewRoomScene(rsc pb.STMPRoomServiceClient, conn *stmp.ClientConn) *RoomScen
 
 func main() {
 	time.Sleep(time.Second)
-	conn, err := stmp.DialTCP("127.0.0.1:5001", nil)
+	logger, err := zap.NewDevelopment()
+	if err != nil {
+		log.Fatalf("init logger error: %s", err)
+	}
+	conn, err := stmp.DialTCP("127.0.0.1:5001", stmp.NewDialOptions().WithLogger(logger))
 	if err != nil {
 		log.Fatalf("dial error: %s", err)
 	}

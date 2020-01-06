@@ -76,22 +76,22 @@ func NewMsgpackCodec() MediaCodec {
 
 type protobufCodec struct{}
 
-func (p protobufCodec) Name() string {
+func (protobufCodec) Name() string {
 	return "application/protobuf"
 }
 
-func (p protobufCodec) Marshal(v interface{}) ([]byte, error) {
-	if pv, ok := v.(proto.Marshaler); ok {
-		return pv.Marshal()
+func (protobufCodec) Marshal(v interface{}) ([]byte, error) {
+	if pb, ok := v.(proto.Message); ok {
+		return proto.Marshal(pb)
 	}
-	return nil, errors.New("invalid protobuf message")
+	return nil, errors.New("invalid protobuf message to encode")
 }
 
-func (p protobufCodec) Unmarshal(data []byte, v interface{}) error {
-	if pv, ok := v.(proto.Unmarshaler); ok {
-		return pv.Unmarshal(data)
+func (protobufCodec) Unmarshal(data []byte, v interface{}) error {
+	if pb, ok := v.(proto.Message); ok {
+		return proto.Unmarshal(data, pb)
 	}
-	return errors.New("invalid protobuf message")
+	return errors.New("invalid protobuf message to decode")
 }
 
 // create protobuf codec

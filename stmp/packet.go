@@ -196,15 +196,15 @@ func (p *Packet) MarshalText(buf []byte) []byte {
 	buf[n] = mapKindText[p.Kind]
 	n += 1
 	if hasMid(p.Kind) {
-		n += appendHex(uint64(p.Mid), buf[n:])
+		n += hexAppend(uint64(p.Mid), buf[n:])
 		buf[n] = ':'
 		n += 1
 	}
 	if hasAction(p.Kind) {
-		n += appendHex(p.Action, buf[n:])
+		n += hexAppend(p.Action, buf[n:])
 	}
 	if hasStatus(p.Kind) {
-		n += appendHex(uint64(p.Status), buf[n:])
+		n += hexAppend(uint64(p.Status), buf[n:])
 	}
 	if !shouldHeadOnly(p.Kind) && len(p.Payload) > 0 {
 		buf[n] = '\n'
@@ -238,7 +238,7 @@ func (p *Packet) UnmarshalText(data []byte) (err error) {
 		if i == -1 {
 			return invalidPacketMid
 		}
-		if p.Mid, err = parseHexUint16(data[:i]); err != nil {
+		if p.Mid, err = hexParseUint16(data[:i]); err != nil {
 			err = errors.New(invalidPacketMid.Error() + ": " + err.Error())
 			return
 		}
@@ -249,7 +249,7 @@ func (p *Packet) UnmarshalText(data []byte) (err error) {
 		if i == -1 {
 			i = len(data)
 		}
-		if p.Action, err = parseHexUint64(data[:i]); err != nil {
+		if p.Action, err = hexParseUint64(data[:i]); err != nil {
 			err = errors.New(invalidPacketAction.Error() + ": " + err.Error())
 			return
 		}

@@ -290,8 +290,8 @@ func (s *Server) HandleWebsocketConn(wc *websocket.Conn, req *http.Request) (err
 		err = NewStatusError(StatusProtocolError, "invalid protocol version: "+rawVersion)
 		return
 	}
-	c.Major = chunks[rawVersion[0]]
-	c.Minor = chunks[rawVersion[2]]
+	c.Major = hexChunks[rawVersion[0]]
+	c.Minor = hexChunks[rawVersion[2]]
 
 	if err = s.prepare(c); err != nil {
 		return
