@@ -5,6 +5,8 @@ import (
 	"errors"
 	"io"
 	"math/bits"
+	"reflect"
+	"strconv"
 	"strings"
 )
 
@@ -28,6 +30,8 @@ func uvarintSize(x uint64) (n int) {
 	return (bits.Len64(x|1) + 6) / 7
 }
 
+var overflow = errors.New("overflow")
+
 func readUvarint(r io.Reader, b1 []byte) (uint64, error) {
 	var x uint64
 	var s uint
@@ -39,7 +43,7 @@ func readUvarint(r io.Reader, b1 []byte) (uint64, error) {
 		b := b1[0]
 		if b < 0x80 {
 			if i > 9 || i == 9 && b > 1 {
-				return x, errors.New("uint64 overflow")
+				return x, overflow
 			}
 			return x | uint64(b)<<s, nil
 		}
@@ -114,10 +118,14 @@ func hexFormatUint64(u uint64) string {
 	return string(buf[i:])
 }
 
+func hexFormatProtocolVersion(major byte, minor byte) string {
+	return string(hexDigits[major]) + "." + string(hexDigits[minor])
+}
+
 func hexParseStatus(buf []byte) (s Status, err error) {
 	m := len(buf)
 	if m > 2 || m == 0 {
-		err = errors.New("out of range")
+		err = errors.New("length " + strconv.Itoa(m) + " out of range (0, 2]")
 		return
 	}
 	for i, c := range buf {
@@ -133,7 +141,7 @@ func hexParseStatus(buf []byte) (s Status, err error) {
 func hexParseUint16(buf []byte) (n uint16, err error) {
 	m := len(buf)
 	if m > 4 || m == 0 {
-		err = errors.New("out of range")
+		err = errors.New("length " + strconv.Itoa(m) + " out of range (0, 4]")
 		return
 	}
 	for i, c := range buf {
@@ -149,7 +157,7 @@ func hexParseUint16(buf []byte) (n uint16, err error) {
 func hexParseUint64(buf []byte) (n uint64, err error) {
 	m := len(buf)
 	if m == 0 || m > 16 {
-		err = errors.New("out of range")
+		err = errors.New("length " + strconv.Itoa(m) + " out of range (0, 16]")
 		return
 	}
 	for i, c := range buf {
@@ -160,4 +168,17 @@ func hexParseUint64(buf []byte) (n uint64, err error) {
 		n |= uint64(hexChunks[c]) << hexOffsets[m-i-1]
 	}
 	return n, nil
+}
+
+func isNil(i interface{}) bool {
+	if i == nil {
+		return true
+	}
+	v := reflect.ValueOf(i)
+	switch v.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Map, reflect.Ptr, reflect.UnsafePointer, reflect.Interface, reflect.Slice:
+		return v.IsNil()
+	default:
+		return false
+	}
 }

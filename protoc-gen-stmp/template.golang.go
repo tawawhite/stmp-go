@@ -45,7 +45,7 @@ type STMP{{$service.ServiceName}}Client interface {
 {{end}}}
 
 type stmp{{$service.ServiceName}}Client struct {
-	c *stmp.ClientConn
+	c *stmp.Client
 }
 {{range $index, $method := $service.Methods}}
 func (s *stmp{{$service.ServiceName}}Client) {{$method.MethodName}}(ctx context.Context, in *{{$method.Input}}, opts ...*stmp.CallOptions) (*{{$method.Output}}, error) {
@@ -53,7 +53,7 @@ func (s *stmp{{$service.ServiceName}}Client) {{$method.MethodName}}(ctx context.
 	if out == nil { return (*{{$method.Output}})(nil), err } else { return out.(*{{$method.Output}}), err }
 }
 {{end}}
-func STMPNew{{$service.ServiceName}}Client(c *stmp.ClientConn) STMP{{$service.ServiceName}}Client {
+func STMPNew{{$service.ServiceName}}Client(c *stmp.Client) STMP{{$service.ServiceName}}Client {
 	return &stmp{{$service.ServiceName}}Client{c: c}
 }
 {{end}}
@@ -62,14 +62,14 @@ type STMP{{$service.ServiceName}}Listener interface {
 {{range $index, $method := $service.Methods}}	Handle{{$method.MethodName}}(ctx context.Context, in *{{$method.Input}})
 {{end}}}
 
-func STMPRegister{{$service.ServiceName}}Listener(cc *stmp.ClientConn, s STMP{{$service.ServiceName}}Listener) {
+func STMPRegister{{$service.ServiceName}}Listener(cc *stmp.Client, s STMP{{$service.ServiceName}}Listener) {
 {{range $index, $method := $service.Methods}}	cc.Register(s, "{{$method.FullMethod}}", func(ctx context.Context, in interface{}, inst interface{}) (interface{}, error) {
 		inst.(STMP{{$service.ServiceName}}Listener).Handle{{$method.MethodName}}(ctx, in.(*{{$method.Input}}))
 		return nil, nil
 	})
 {{end}}}
 
-func STMPUnregister{{$service.ServiceName}}Listener(cc *stmp.ClientConn, s STMP{{$service.ServiceName}}Listener) {
+func STMPUnregister{{$service.ServiceName}}Listener(cc *stmp.Client, s STMP{{$service.ServiceName}}Listener) {
 {{range $index, $method := $service.Methods}}	cc.Unregister(s, "{{$method.FullMethod}}")
 {{end}}}
 

@@ -35,7 +35,7 @@ type STMPRoomServiceClient interface {
 }
 
 type stmpRoomServiceClient struct {
-	c *stmp.ClientConn
+	c *stmp.Client
 }
 
 func (s *stmpRoomServiceClient) JoinRoom(ctx context.Context, in *JoinRoomInput, opts ...*stmp.CallOptions) (*RoomModel, error) {
@@ -48,7 +48,7 @@ func (s *stmpRoomServiceClient) ExitRoom(ctx context.Context, in *ExitRoomInput,
 	if out == nil { return (*empty.Empty)(nil), err } else { return out.(*empty.Empty), err }
 }
 
-func STMPNewRoomServiceClient(c *stmp.ClientConn) STMPRoomServiceClient {
+func STMPNewRoomServiceClient(c *stmp.Client) STMPRoomServiceClient {
 	return &stmpRoomServiceClient{c: c}
 }
 
@@ -64,7 +64,7 @@ type STMPRoomEventsListener interface {
 	HandleUserExit(ctx context.Context, in *UserExitEvent)
 }
 
-func STMPRegisterRoomEventsListener(cc *stmp.ClientConn, s STMPRoomEventsListener) {
+func STMPRegisterRoomEventsListener(cc *stmp.Client, s STMPRoomEventsListener) {
 	cc.Register(s, "stmp.examples.quick_start.RoomEvents.UserJoin", func(ctx context.Context, in interface{}, inst interface{}) (interface{}, error) {
 		inst.(STMPRoomEventsListener).HandleUserJoin(ctx, in.(*UserJoinEvent))
 		return nil, nil
@@ -75,7 +75,7 @@ func STMPRegisterRoomEventsListener(cc *stmp.ClientConn, s STMPRoomEventsListene
 	})
 }
 
-func STMPUnregisterRoomEventsListener(cc *stmp.ClientConn, s STMPRoomEventsListener) {
+func STMPUnregisterRoomEventsListener(cc *stmp.Client, s STMPRoomEventsListener) {
 	cc.Unregister(s, "stmp.examples.quick_start.RoomEvents.UserJoin")
 	cc.Unregister(s, "stmp.examples.quick_start.RoomEvents.UserExit")
 }

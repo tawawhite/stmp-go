@@ -3,13 +3,16 @@ package stmp
 import (
 	"context"
 	"github.com/twmb/murmur3"
-	"reflect"
 	"strconv"
 	"strings"
 	"sync"
 )
 
-type MethodMetadata struct {
+// the model factory should create instance of input/output, it is used for protoc-gen-stmp
+type ModelFactory func() interface{}
+
+// method information, for middleware and interceptors
+type Method struct {
 	Method    string
 	Action    uint64
 	ActionHex string
@@ -19,14 +22,15 @@ type MethodMetadata struct {
 
 type methodStore = struct {
 	methods map[string]uint64
-	actions map[uint64]*MethodMetadata
+	actions map[uint64]*Method
 }
 
 var ms = methodStore{
 	methods: map[string]uint64{},
-	actions: map[uint64]*MethodMetadata{},
+	actions: map[uint64]*Method{},
 }
 
+// register a method, this is used for protoc-gen-stmp
 func RegisterMethodAction(method string, action uint64, input ModelFactory, output ModelFactory) {
 	if action == 0 {
 		action, _ = murmur3.Sum128([]byte(method))
@@ -35,7 +39,7 @@ func RegisterMethodAction(method string, action uint64, input ModelFactory, outp
 	if ms.actions[action] != nil && ms.actions[action].Method != method {
 		panic("duplicated Action " + strconv.FormatUint(action, 16) + "for method " + ms.actions[action].Method + " and " + method)
 	}
-	ms.actions[action] = &MethodMetadata{
+	ms.actions[action] = &Method{
 		Method:    method,
 		Action:    action,
 		ActionHex: strings.ToUpper(strconv.FormatUint(action, 16)),
@@ -45,11 +49,19 @@ func RegisterMethodAction(method string, action uint64, input ModelFactory, outp
 	ms.methods[method] = action
 }
 
-type MiddlewareFunc func(inCtx context.Context, method *MethodMetadata, in []byte) (outCtx context.Context, err error)
-type InterceptFunc func(inCtx context.Context, method *MethodMetadata, in []byte) (outCtx context.Context, done bool, out []byte, err error)
+// middleware, which will not intercept the request, just update the context, or do arbitrary check
+// if the err is not nil, will intercept the request.
+type MiddlewareFunc func(inCtx context.Context) (outCtx context.Context, err error)
+
+// the arbitrary interceptor
+//
+// if done is true, means the request is intercepted, then if the err is nil, the out will be treated as
+// the output content, and status is OK.
+// if err is not nil, the request will always be intercepted.
+type InterceptFunc func(inCtx context.Context) (outCtx context.Context, done bool, out []byte, err error)
+
+// the handler for protoc-gen-stmp to register specific action handler
 type HandlerFunc func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error)
-type CloseHandlerFunc func(conn *Conn, status Status, message string)
-type ModelFactory func() interface{}
 
 type handlerOptions struct {
 	fn   HandlerFunc
@@ -57,39 +69,47 @@ type handlerOptions struct {
 }
 
 type Router struct {
-	mu           sync.RWMutex
+	sync.RWMutex
 	middlewares  []MiddlewareFunc
 	interceptors []InterceptFunc
 	handlers     map[uint64][]handlerOptions
+	host         interface{}
 }
 
-func NewRouter() *Router {
+// create a new router
+//
+// the host could be *Server or *Client, which is use for dispatch action to hold it in context
+func NewRouter(host interface{}) *Router {
 	return &Router{
 		middlewares:  []MiddlewareFunc{},
 		interceptors: []InterceptFunc{},
 		handlers:     map[uint64][]handlerOptions{},
+		host:         host,
 	}
 }
 
 // add bypass handler, the handler will not intercept the request
 // unless the handler returns error
 func (r *Router) Middleware(handlers ...MiddlewareFunc) {
-	r.mu.Lock()
+	r.Lock()
 	r.middlewares = append(r.middlewares, handlers...)
-	r.mu.Unlock()
+	r.Unlock()
 }
 
 // intercept will intercept request, if done == true, will not pass
 // the request to next handlers
 func (r *Router) Intercept(handlers ...InterceptFunc) {
-	r.mu.Lock()
+	r.Lock()
 	r.interceptors = append(r.interceptors, handlers...)
-	r.mu.Unlock()
+	r.Unlock()
 }
 
-// Action bound handler
+// register handler for specified action
+//
+// the inst is the server/client instance, which is use for unregister check equals, for func is not comparable in go.
+// if registered multiple handler for same action, the last one's response will be used as the final response.
 func (r *Router) Register(inst interface{}, method string, fn HandlerFunc) {
-	r.mu.Lock()
+	r.Lock()
 	action, ok := ms.methods[method]
 	if !ok {
 		panic("method " + method + " is not registered")
@@ -104,11 +124,12 @@ func (r *Router) Register(inst interface{}, method string, fn HandlerFunc) {
 		}
 		r.handlers[action] = append(r.handlers[action], handlerOptions{fn: fn, inst: inst})
 	}
-	r.mu.Unlock()
+	r.Unlock()
 }
 
+// unregister handler
 func (r *Router) Unregister(inst interface{}, method string) {
-	r.mu.Lock()
+	r.Lock()
 	action, ok := ms.methods[method]
 	if !ok {
 		panic("method " + method + " is not registered")
@@ -124,40 +145,47 @@ func (r *Router) Unregister(inst interface{}, method string) {
 			break
 		}
 	}
-	r.mu.Unlock()
+	r.Unlock()
 }
 
 // dispatch a request to handlers
-func (r *Router) dispatch(ctx context.Context, action uint64, payload []byte, codec MediaCodec) (status Status, ret []byte) {
-	method := ms.actions[action]
-	var err error
+func (r *Router) dispatch(c *Conn, p *Packet) (status Status, ret []byte) {
+	m := ms.actions[p.Action]
+	ctx := withStmp(context.Background(), p, c, m, r)
 	for _, f := range r.middlewares {
-		ctx, err = f(ctx, method, payload)
+		newCtx, err := f(ctx)
 		if err != nil {
 			return DetectError(err, StatusInternalServerError).Spread()
 		}
+		if newCtx != nil {
+			ctx = newCtx
+		}
 	}
-	var done bool
 	for _, f := range r.interceptors {
-		ctx, done, ret, err = f(ctx, method, payload)
+		newCtx, done, ret, err := f(ctx)
 		if err != nil {
 			return DetectError(err, StatusInternalServerError).Spread()
 		}
 		if done {
 			return StatusOk, ret
 		}
+		if newCtx != nil {
+			ctx = newCtx
+		}
 	}
-	h, ok := r.handlers[action]
-	if method == nil || !ok {
+	h, ok := r.handlers[p.Action]
+	if m == nil || !ok {
 		return StatusNotFound.Spread()
 	}
-	in := method.Input()
-	if payload != nil {
-		err = codec.Unmarshal(payload, in)
+	// thinking: should this be nil when input payload is nil?
+	in := m.Input()
+	if p.Payload != nil {
+		err := c.Media.Unmarshal(p.Payload, in)
 		if err != nil {
 			return DetectError(err, StatusBadRequest).Spread()
 		}
 	}
+	var err error
 	var out interface{}
 	for _, hc := range h {
 		out, err = hc.fn(ctx, in, hc.inst)
@@ -165,13 +193,10 @@ func (r *Router) dispatch(ctx context.Context, action uint64, payload []byte, co
 			return DetectError(err, StatusInternalServerError).Spread()
 		}
 	}
-	if out != nil {
-		value := reflect.ValueOf(out)
-		if value.Kind() == reflect.Ptr && !value.IsNil() {
-			ret, err = codec.Marshal(out)
-			if err != nil {
-				return DetectError(err, StatusInternalServerError).Spread()
-			}
+	if !isNil(out) {
+		ret, err = c.Media.Marshal(out)
+		if err != nil {
+			return DetectError(err, StatusInternalServerError).Spread()
 		}
 	}
 	return StatusOk, ret

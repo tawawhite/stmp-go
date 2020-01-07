@@ -7,8 +7,8 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/xtaci/kcp-go"
 	"go.uber.org/zap"
+	"google.golang.org/grpc"
 	"io/ioutil"
-	"log"
 	"net"
 	"net/url"
 	"strings"
@@ -18,9 +18,15 @@ import (
 type DialOptions struct {
 	*ConnOptions
 	header     Header
-	serverName string
-	insecure   bool
 	reconnect  Backoff
+	addr       string
+	tlsConfig  *tls.Config
+	certFile   string
+	skipVerify bool
+	insecure   bool
+	resolver   *net.Resolver
+	major      byte
+	minor      byte
 }
 
 // set logger for client, default is zap.NewProduction()
@@ -89,15 +95,38 @@ func (o *DialOptions) WithContentType(typ string) *DialOptions {
 	return o
 }
 
-// set the server name for tls connection, this is required for SNI
-func (o *DialOptions) WithServerName(name string) *DialOptions {
-	o.serverName = name
+// use custom cert file to make tls connection
+// if skipVerify is false, the dial addr must be a host:port rather than ip:port
+func (o *DialOptions) WithCert(certFile string, skipVerify bool) *DialOptions {
+	o.certFile = certFile
+	o.skipVerify = skipVerify
 	return o
 }
 
-// do not check the certificate for tls connection
+// set custom tls config, if this is set, certFile and skipVerify will be omitted
+func (o *DialOptions) WithTLSConfig(config *tls.Config) *DialOptions {
+	o.tlsConfig = config
+	return o
+}
+
+// do not use tls
 func (o *DialOptions) WithInsecure() *DialOptions {
 	o.insecure = true
+	return o
+}
+
+func (o *DialOptions) WithProtocolVersion(major byte, minor byte) *DialOptions {
+	if major != 1 && minor != 0 {
+		panic("unsupported stmp protocol version: " + hexFormatProtocolVersion(major, minor))
+	}
+	o.major = major
+	o.minor = minor
+	return o
+}
+
+// set custom resolver if addr is host:port
+func (o *DialOptions) WithResolver(r *net.Resolver) *DialOptions {
+	o.resolver = r
 	return o
 }
 
@@ -112,7 +141,7 @@ func (o *DialOptions) WithReconnect(backoff Backoff) *DialOptions {
 // apply default configuration, you do not to call this when call DialXXX(addr, opts)
 // only when you want to create ClientConn by call NewClientConn(net.Conn, opts)
 // you should call this.
-func (o *DialOptions) ApplyDefault(addr string) *DialOptions {
+func (o *DialOptions) ApplyDefault() *DialOptions {
 	no := o
 	if no == nil {
 		no = NewDialOptions()
@@ -142,41 +171,11 @@ func (o *DialOptions) ApplyDefault(addr string) *DialOptions {
 	if GetMediaCodec(contentType) == nil {
 		panic("invalid content-type: " + contentType + ", please register it first")
 	}
-	if no.serverName == "" && strings.Contains(addr, "://") {
-		URL, err := url.Parse(addr)
-		if err != nil {
-			panic(err)
-		}
-		host := URL.Hostname()
-		ip := net.ParseIP(host)
-		if ip == nil {
-			no.serverName = host
-		}
-	}
 	return no
 }
 
-// create dial options
-func NewDialOptions() *DialOptions {
-	return &DialOptions{
-		ConnOptions: NewConnOptions(),
-		header:      NewHeader(),
-		reconnect:   NewBackoff(time.Second, 200*time.Millisecond, 20, 7),
-	}
-}
-
-// client conn
-type ClientConn struct {
-	*Router
-	*Conn
-	opts *DialOptions
-}
-
 // load tls client certificate from file system
-func loadTLSClientConfig(certFile string, opts *DialOptions) (*tls.Config, error) {
-	if opts.serverName == "" && !opts.insecure {
-		return nil, errors.New("serverName is required for tls connection")
-	}
+func LoadTLSClientCert(certFile string) (*x509.CertPool, error) {
 	b, err := ioutil.ReadFile(certFile)
 	if err != nil {
 		return nil, err
@@ -185,30 +184,37 @@ func loadTLSClientConfig(certFile string, opts *DialOptions) (*tls.Config, error
 	if !cp.AppendCertsFromPEM(b) {
 		return nil, errors.New("tls failed to append certificates")
 	}
-	return &tls.Config{
-		RootCAs:            cp,
-		ServerName:         opts.serverName,
-		InsecureSkipVerify: opts.insecure,
-	}, nil
+	return cp, nil
 }
 
-// create a client conn, the opts must not be nil, and should called ApplyDefault()
-func NewClientConn(nc net.Conn, opts *DialOptions) *ClientConn {
-	cc := &ClientConn{
-		Router: opts.router,
-		Conn:   NewConn(nc, opts.ConnOptions),
-		opts:   opts,
+// create dial options
+func NewDialOptions() *DialOptions {
+	return &DialOptions{
+		ConnOptions: NewConnOptions(),
+		header:      NewHeader(),
+		reconnect:   NewBackoff(time.Second, 200*time.Millisecond, 20, 7),
+		major:       1,
+		minor:       0,
 	}
-	cc.ClientHeader = opts.header
-	cc.ServerHeader = NewHeader()
-	return cc
 }
 
-// send & accept handshake packet, and run the read/write channel,
-// use net.Conn as the transport.
-// if status is not StatusOk, or do not receive the correct handshake response,
-// will emit an error, the error should be StatusError
-func (c *ClientConn) Handshake() (err error) {
+// client conn
+type Client struct {
+	*Router
+	*Conn
+	opts *DialOptions
+}
+
+func NewClientConn(nc net.Conn, opts *DialOptions) *Client {
+	return &Client{
+		Router: opts.router,
+		opts:   opts,
+		Conn:   NewConn(nc, opts.ConnOptions),
+	}
+}
+
+// handshake, works include: send handshake request, wait handshake response, check status, check
+func (c *Client) Handshake() (err error) {
 	defer func() {
 		if err != nil {
 			c.Close()
@@ -220,28 +226,25 @@ func (c *ClientConn) Handshake() (err error) {
 	if err != nil {
 		return
 	}
-	log.Println("client handshake sent")
 	sh := NewServerHandshake(0, c.ServerHeader, "")
 	if err = sh.Read(c, c.opts.maxPacketSize); err != nil {
 		return NewStatusError(StatusNetworkError, err)
 	}
-	var ec EncodingCodec
-	ec, err = c.initEncoding()
-	if err != nil {
-		return
+	if sh.Status != StatusOk {
+		err = NewStatusError(sh.Status, sh.Message)
+	} else {
+		err = c.initEncoding()
 	}
-	go c.binaryReadChannel(ec)
-	go func() {
-		c.binaryWriteChannel(ec)
-	}()
 	return
 }
 
-// send & accept handshake packet, and run the read/write channel
-// use websocket.Conn as the transport.
-// if status is not StatusOk, or do not receive the correct handshake response,
-// will emit an error, the error should be StatusError
-func (c *ClientConn) WebSocketHandshake(wc *websocket.Conn) (err error) {
+// start read & write channel
+func (c *Client) Serve(nc net.Conn) error {
+	return nil
+}
+
+// send and wait for handshake response
+func (c *Client) HandshakeWebsocket(wc *websocket.Conn) (err error) {
 	defer func() {
 		if err != nil {
 			wc.Close()
@@ -266,28 +269,24 @@ func (c *ClientConn) WebSocketHandshake(wc *websocket.Conn) (err error) {
 		return
 	}
 	if h.Status != StatusOk {
-		return NewStatusError(h.Status, h.Message)
-	}
-	// ws do not process encoding
-	c.Media = GetMediaCodec(c.ServerHeader.Get(DetermineContentType))
-	if c.ServerHeader.Get(DeterminePacketFormat) == "text" {
-		go c.websocketTextReadChannel(wc)
-		go func() {
-			c.websocketTextWriteChannel(wc)
-			// TODO reconnection
-		}()
+		err = NewStatusError(h.Status, h.Message)
 	} else {
-		go c.websocketBinaryReadChannel(wc)
-		go func() {
-			c.websocketBinaryWriteChannel(wc)
-			// TODO reconnection
-		}()
+		err = c.initEncoding()
 	}
 	return
 }
 
+// start websocket read & write channel
+func (c *Client) ServeWebsocket() {
+
+}
+
+func (c *Client) DialTCP() {
+}
+
 // create a tcp connection and auto handshake with addr and opts
-func DialTCP(addr string, opts *DialOptions) (*ClientConn, error) {
+func DialTCP(addr string, opts *DialOptions) (*Client, error) {
+	grpc.Dial()
 	opts = opts.ApplyDefault(addr)
 	nc, err := net.Dial("tcp", addr)
 	if err != nil {
@@ -298,7 +297,7 @@ func DialTCP(addr string, opts *DialOptions) (*ClientConn, error) {
 }
 
 // create a tls tcp connection and auto handshake with addr and opts
-func DialTCPWithTLS(addr, certFile string, opts *DialOptions) (*ClientConn, error) {
+func DialTCPWithTLS(addr, certFile string, opts *DialOptions) (*Client, error) {
 	opts = opts.ApplyDefault(addr)
 	tc, err := loadTLSClientConfig(certFile, opts)
 	if err != nil {
@@ -313,7 +312,7 @@ func DialTCPWithTLS(addr, certFile string, opts *DialOptions) (*ClientConn, erro
 }
 
 // create a kcp connection and auto handshake with addr and opts
-func DialKCP(addr string, opts *DialOptions) (*ClientConn, error) {
+func DialKCP(addr string, opts *DialOptions) (*Client, error) {
 	opts = opts.ApplyDefault(addr)
 	nc, err := kcp.Dial(addr)
 	if err != nil {
@@ -324,7 +323,7 @@ func DialKCP(addr string, opts *DialOptions) (*ClientConn, error) {
 }
 
 // create a tls kcp connection and auto handshake with addr and opts
-func DialKCPWithTLS(addr, certFile string, opts *DialOptions) (*ClientConn, error) {
+func DialKCPWithTLS(addr, certFile string, opts *DialOptions) (*Client, error) {
 	opts = opts.ApplyDefault(addr)
 	tc, err := loadTLSClientConfig(certFile, opts)
 	if err != nil {
@@ -343,15 +342,14 @@ func DialKCPWithTLS(addr, certFile string, opts *DialOptions) (*ClientConn, erro
 }
 
 // create a websocket connection and auto handshake with urlstr and opts
-func DialWebSocket(urlstr string, opts *DialOptions) (*ClientConn, error) {
-	opts = opts.ApplyDefault(urlstr)
-	if len(opts.header) > 0 {
-		headStr := url.Values(opts.header).Encode()
-		if strings.IndexByte(urlstr, '?') > 0 {
-			urlstr += "&" + headStr
-		} else {
-			urlstr += "?" + headStr
-		}
+func DialWebsocket(urlstr string, opts *DialOptions) (*Client, error) {
+	opts = opts.ApplyDefault()
+	opts.WithHeader(DetermineStmpVersion, hexFormatProtocolVersion(opts.major, opts.minor))
+	headStr := url.Values(opts.header).Encode()
+	if strings.IndexByte(urlstr, '?') > 0 {
+		urlstr += "&" + headStr
+	} else {
+		urlstr += "?" + headStr
 	}
 	dialer := websocket.Dialer{HandshakeTimeout: opts.handshakeTimeout}
 	wc, _, err := dialer.Dial(urlstr, nil)
@@ -359,5 +357,5 @@ func DialWebSocket(urlstr string, opts *DialOptions) (*ClientConn, error) {
 		return nil, err
 	}
 	cc := NewClientConn(wc.UnderlyingConn(), opts)
-	return cc, cc.WebSocketHandshake(wc)
+	return cc, cc.HandshakeWebsocket(wc)
 }

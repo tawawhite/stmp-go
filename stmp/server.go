@@ -59,20 +59,22 @@ func (o *ServerOptions) WithAuthenticate(fn func(c *Conn) error) *ServerOptions 
 	return o
 }
 
-func (o *ServerOptions) applyDefault() *ServerOptions {
+func (o *ServerOptions) ApplyDefault() *ServerOptions {
 	no := o
 	if no == nil {
 		no = NewServerOptions()
 	}
 	no.ConnOptions = no.ConnOptions.ApplyDefault()
+	if no.authenticate == nil {
+		no.authenticate = func(c *Conn) error { return nil }
+	}
 	return no
 }
 
 func NewServerOptions() *ServerOptions {
 	return &ServerOptions{
-		ConnOptions:  NewConnOptions(),
-		logAccess:    []string{"host", "user-agent", "referer", AcceptContentType},
-		authenticate: func(c *Conn) error { return nil },
+		ConnOptions: NewConnOptions(),
+		logAccess:   []string{"host", "user-agent", "referer", AcceptContentType},
 	}
 }
 
@@ -86,7 +88,7 @@ type Server struct {
 }
 
 func NewServer(opts *ServerOptions) *Server {
-	opts = opts.applyDefault()
+	opts = opts.ApplyDefault()
 	return &Server{
 		Router:    opts.router,
 		opts:      opts,
@@ -140,15 +142,14 @@ func (s *Server) CloseConn(c *Conn, status Status, message string) error {
 	return err
 }
 
-func (s *Server) logAccess(c *Conn, event string, sh *handshake, err error) {
+func (s *Server) logAccess(c *Conn, sh *Handshake, err error) {
 	if s.opts.logAccess == nil {
 		return
 	}
 	fields := []zap.Field{
-		zap.String("event", event),
 		zap.String("addr", c.RemoteAddr().String()),
 		zap.String("server", c.LocalAddr().String()),
-		zap.Uint8("status", uint8(sh.Status)),
+		zap.String("status", hexFormatUint64(uint64(sh.Status))),
 		zap.String("message", sh.Message),
 	}
 	if err != nil {
@@ -172,12 +173,16 @@ func (s *Server) logAccess(c *Conn, event string, sh *handshake, err error) {
 			}
 		}
 	}
-	s.opts.logger.Info("access", fields...)
+	if sh.Status != StatusOk {
+		s.opts.logger.Warn("access", fields...)
+	} else {
+		s.opts.logger.Info("access", fields...)
+	}
 }
 
 func (s *Server) prepare(c *Conn) (err error) {
 	if c.Major != 1 || c.Minor != 0 {
-		err = NewStatusError(StatusUnsupportedProtocolVersion, "")
+		err = NewStatusError(StatusBadRequest, "unsupported protocol version: "+hexFormatProtocolVersion(c.Major, c.Minor))
 		return
 	}
 	err = c.negotiate()
@@ -195,7 +200,6 @@ func (s *Server) prepare(c *Conn) (err error) {
 func (s *Server) HandleConn(nc net.Conn) (err error) {
 	c := s.newConn(nc)
 	closeSent := false
-	var ec EncodingCodec
 	ch := NewClientHandshake(0, 0, c.ClientHeader, "")
 	sh := NewServerHandshake(StatusOk, c.ServerHeader, "")
 	defer func() {
@@ -209,7 +213,7 @@ func (s *Server) HandleConn(nc net.Conn) (err error) {
 		} else if err != nil {
 			nc.Close()
 		}
-		s.logAccess(c, "connect", sh, err)
+		s.logAccess(c, sh, err)
 	}()
 	nc.SetReadDeadline(time.Now().Add(s.opts.handshakeTimeout))
 	if err = ch.Read(nc, s.opts.maxPacketSize); err != nil {
@@ -218,7 +222,7 @@ func (s *Server) HandleConn(nc net.Conn) (err error) {
 	if err = s.prepare(c); err != nil {
 		return
 	}
-	if ec, err = c.initEncoding(); err != nil {
+	if err = c.initEncoding(); err != nil {
 		return
 	}
 	closeSent = true
@@ -230,15 +234,14 @@ func (s *Server) HandleConn(nc net.Conn) (err error) {
 	s.mu.Lock()
 	s.conns.Add(c)
 	s.mu.Unlock()
-	go c.binaryWriteChannel(ec)
+	go c.read()
 	go func() {
-		c.binaryReadChannel(ec)
-		// TODO close connection
+		go c.write()
 	}()
 	return
 }
 
-func (s *Server) writeWebsocketHandshake(wc *websocket.Conn, c *Conn, sh *handshake) error {
+func (s *Server) writeWebsocketHandshake(wc *websocket.Conn, c *Conn, sh *Handshake) error {
 	var data []byte
 	format := c.ServerHeader.Get(DeterminePacketFormat)
 	var typ int
@@ -270,7 +273,7 @@ func (s *Server) HandleWebsocketConn(wc *websocket.Conn, req *http.Request) (err
 				} else if err != nil {
 					wc.Close()
 				}
-				s.logAccess(c, "connect", sh, err)
+				s.logAccess(c, sh, err)
 			}()
 		}
 	}()
@@ -303,14 +306,14 @@ func (s *Server) HandleWebsocketConn(wc *websocket.Conn, req *http.Request) (err
 	s.conns.Add(c)
 	s.mu.Unlock()
 	if c.ServerHeader.Get(DeterminePacketFormat) == "text" {
-		go c.websocketTextWriteChannel(wc)
+		go c.writeTextWebsocket(wc)
 		go func() {
-			c.websocketTextReadChannel(wc)
+			c.readTextWebsocket(wc)
 		}()
 	} else {
-		go c.websocketBinaryWriteChannel(wc)
+		go c.writeWebsocket(wc)
 		go func() {
-			c.websocketBinaryReadChannel(wc)
+			c.readWebsocket(wc)
 		}()
 	}
 	return
@@ -435,7 +438,7 @@ func (s *Server) newWsServer(addr, path string) *http.Server {
 	return hs
 }
 
-func (s *Server) ListenAndServeWebSocket(addr, path string) {
+func (s *Server) ListenAndServeWebsocket(addr, path string) {
 	hs := s.newWsServer(addr, path)
 	err := hs.ListenAndServe()
 	if err != nil {
@@ -443,7 +446,7 @@ func (s *Server) ListenAndServeWebSocket(addr, path string) {
 	}
 }
 
-func (s *Server) ListenAndServeWebSocketWithTLS(addr, path, certFile, keyFile string) {
+func (s *Server) ListenAndServeWebsocketWithTLS(addr, path, certFile, keyFile string) {
 	hs := s.newWsServer(addr, path)
 	err := hs.ListenAndServeTLS(certFile, keyFile)
 	if err != nil {

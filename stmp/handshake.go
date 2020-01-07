@@ -12,7 +12,7 @@ const (
 	HandshakeKindClient byte = 0x02
 )
 
-type handshake struct {
+type Handshake struct {
 	Kind    byte
 	Major   byte
 	Minor   byte
@@ -21,11 +21,11 @@ type handshake struct {
 	Message string
 }
 
-func NewServerHandshake(status Status, header Header, message string) *handshake {
+func NewServerHandshake(status Status, header Header, message string) *Handshake {
 	if header == nil {
 		header = NewHeader()
 	}
-	return &handshake{
+	return &Handshake{
 		Kind:    HandshakeKindServer,
 		Status:  status,
 		Header:  header,
@@ -33,11 +33,11 @@ func NewServerHandshake(status Status, header Header, message string) *handshake
 	}
 }
 
-func NewClientHandshake(major, minor byte, header Header, message string) *handshake {
+func NewClientHandshake(major, minor byte, header Header, message string) *Handshake {
 	if header == nil {
 		header = NewHeader()
 	}
-	return &handshake{
+	return &Handshake{
 		Kind:    HandshakeKindClient,
 		Major:   major,
 		Minor:   minor,
@@ -46,7 +46,7 @@ func NewClientHandshake(major, minor byte, header Header, message string) *hands
 	}
 }
 
-func (h *handshake) MarshalHead() (title []byte, header []byte) {
+func (h *Handshake) MarshalHead() (title []byte, header []byte) {
 	header = h.Header.Marshal()
 	title = make([]byte, 15, 15)
 	copy(title, "STMP")
@@ -64,7 +64,7 @@ func (h *handshake) MarshalHead() (title []byte, header []byte) {
 	return title[:i+5], header
 }
 
-func (h *handshake) Read(r io.Reader, limit uint64) error {
+func (h *Handshake) Read(r io.Reader, limit uint64) error {
 	title := make([]byte, 5)
 	if _, err := r.Read(title); err != nil {
 		return NewStatusError(StatusNetworkError, "read title: "+err.Error())
@@ -104,7 +104,7 @@ func (h *handshake) Read(r io.Reader, limit uint64) error {
 	return nil
 }
 
-func (h *handshake) Write(r io.Writer) error {
+func (h *Handshake) Write(r io.Writer) error {
 	title, header := h.MarshalHead()
 	if _, err := r.Write(title); err != nil {
 		return err
@@ -125,7 +125,7 @@ func (h *handshake) Write(r io.Writer) error {
 }
 
 // server only
-func (h *handshake) MarshalText() []byte {
+func (h *Handshake) MarshalText() []byte {
 	title := make([]byte, 6)
 	copy(title, "STMP")
 	if h.Status > 0xF {
@@ -148,7 +148,7 @@ func (h *handshake) MarshalText() []byte {
 	return title
 }
 
-func (h *handshake) MarshalBinary() []byte {
+func (h *Handshake) MarshalBinary() []byte {
 	title := []byte{'S', 'T', 'M', 'P', byte(h.Status)}
 	header := h.Header.Marshal()
 	if len(header) > 0 {
@@ -163,7 +163,7 @@ func (h *handshake) MarshalBinary() []byte {
 }
 
 // client only
-func (h *handshake) UnmarshalText(data []byte) error {
+func (h *Handshake) UnmarshalText(data []byte) error {
 	if len(data) < 4 || !bytes.Equal(data[:4], []byte("STMP")) {
 		return NewStatusError(StatusProtocolError, "invalid magic: "+string(data[0:min(4, len(data))]))
 	}
@@ -198,7 +198,7 @@ func (h *handshake) UnmarshalText(data []byte) error {
 }
 
 // client only
-func (h *handshake) UnmarshalBinary(data []byte) error {
+func (h *Handshake) UnmarshalBinary(data []byte) error {
 	if len(data) < 4 || !bytes.Equal(data[:4], []byte("STMP")) {
 		return NewStatusError(StatusProtocolError, "invalid magic: "+string(data[0:min(4, len(data))]))
 	}

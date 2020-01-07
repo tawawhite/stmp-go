@@ -14,7 +14,7 @@ import (
 type RoomScene struct {
 	mu    sync.Mutex
 	rsc   pb.STMPRoomServiceClient
-	conn  *stmp.ClientConn
+	conn  *stmp.Client
 	room  *string
 	users []string
 }
@@ -99,7 +99,7 @@ func (r *RoomScene) Run() {
 	}
 }
 
-func NewRoomScene(rsc pb.STMPRoomServiceClient, conn *stmp.ClientConn) *RoomScene {
+func NewRoomScene(rsc pb.STMPRoomServiceClient, conn *stmp.Client) *RoomScene {
 	return &RoomScene{
 		rsc:   rsc,
 		conn:  conn,

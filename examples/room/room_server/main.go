@@ -42,7 +42,7 @@ func main() {
 
 	go srv.ListenAndServeTCP("127.0.0.1:5001")
 	log.Info("room server is listening at tcp://127.0.0.1:5001")
-	go srv.ListenAndServeWebSocket("127.0.0.1:5002", "/ws")
+	go srv.ListenAndServeWebsocket("127.0.0.1:5002", "/ws")
 	log.Info("room server is listening at ws://127.0.0.1:5002/ws")
 	go func() {
 		killSignal := make(chan os.Signal, 1)

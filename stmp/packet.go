@@ -3,12 +3,11 @@ package stmp
 import (
 	"bytes"
 	"encoding/binary"
-	"errors"
 	"io"
+	"strconv"
 )
 
 type Packet struct {
-	Fin     bool
 	Kind    byte
 	Mid     uint16
 	Action  uint64
@@ -16,31 +15,31 @@ type Packet struct {
 	Payload []byte
 }
 
+func NewClosePacket(status Status, message string) *Packet {
+	return &Packet{Kind: MessageKindClose, Status: status, Payload: []byte(message)}
+}
+
 var (
-	invalidReservedHeadBits = errors.New("invalid reserved head bits")
-	invalidHeadFlags        = errors.New("invalid head flags")
-	invalidMessageKind      = errors.New("invalid message Kind")
-	invalidPacketHead       = errors.New("invalid Packet head")
-	invalidPacketMid        = errors.New("invalid Packet Mid")
-	invalidPacketAction     = errors.New("invalid Packet Action")
-	invalidPacketStatus     = errors.New("invalid Packet Status")
-	invalidPacketPayload    = errors.New("invalid Packet Payload")
+	invalidReservedHeadBits = NewStatusError(StatusProtocolError, "invalid reserved head bits")
+	invalidHeadFlags        = NewStatusError(StatusProtocolError, "invalid head flags")
+	invalidMessageKind      = NewStatusError(StatusProtocolError, "invalid message kind")
+	invalidPacketHead       = NewStatusError(StatusProtocolError, "invalid packet head")
+	invalidPacketMid        = NewStatusError(StatusProtocolError, "invalid packet mid")
+	invalidPacketAction     = NewStatusError(StatusProtocolError, "invalid packet action")
+	invalidPacketStatus     = NewStatusError(StatusProtocolError, "invalid packet status")
+	invalidPacketPayload    = NewStatusError(StatusProtocolError, "invalid packet payload")
 )
 
 var emptyBytes = make([]byte, 0, 0)
 
-func (p *Packet) UnmarshalHead(h byte) error {
+func (p *Packet) UnmarshalHead(h byte) StatusError {
 	if h&0b111 != 0 {
 		return invalidReservedHeadBits
 	}
-	p.Fin = h&0x80 != 0
 	p.Kind = (h >> 4) & 0b111
 	head := h&0b1000 != 0
 	if !isValidKind(p.Kind) {
 		return invalidMessageKind
-	}
-	if shouldAlwaysFinal(p.Kind) && !p.Fin {
-		return invalidHeadFlags
 	}
 	if shouldHeadOnly(p.Kind) && !head {
 		return invalidHeadFlags
@@ -55,10 +54,7 @@ func (p *Packet) UnmarshalHead(h byte) error {
 
 func (p *Packet) MarshalHead(buf []byte, ps bool) []byte {
 	n := 1
-	buf[0] = p.Kind << offsetKind
-	if shouldAlwaysFinal(p.Kind) || p.Fin {
-		buf[0] |= maskFin
-	}
+	buf[0] = maskFin | (p.Kind << offsetKind)
 	if shouldHeadOnly(p.Kind) || len(p.Payload) == 0 {
 		buf[0] |= maskHead
 	}
@@ -79,17 +75,21 @@ func (p *Packet) MarshalHead(buf []byte, ps bool) []byte {
 	return buf[:n]
 }
 
-func (p *Packet) Write(w EncodingWriter, buf []byte) (err error) {
+func (p *Packet) Write(w EncodingWriter, buf []byte) StatusError {
+	var err error
 	buf = p.MarshalHead(buf, true)
 	if _, err = w.Write(buf); err != nil {
-		return
+		return NewStatusError(StatusNetworkError, "write packet error: "+err.Error())
 	}
 	if !shouldHeadOnly(p.Kind) && len(p.Payload) > 0 {
 		if _, err = w.Write(p.Payload); err != nil {
-			return
+			return NewStatusError(StatusNetworkError, "write packet payload error: "+err.Error())
 		}
 	}
-	return w.Flush()
+	if err = w.Flush(); err != nil {
+		return NewStatusError(StatusNetworkError, "flush packet error: "+err.Error())
+	}
+	return nil
 }
 
 // PING/PONG: <HEAD> -> 1
@@ -98,42 +98,45 @@ func (p *Packet) Write(w EncodingWriter, buf []byte) (err error) {
 // RESPONSE: <HEAD><MID><STATUS><PS><P> 	-> 22
 // CLOSE: <HEAD><STATUS><PS><P>				-> 12
 
-const maxStreamHeadSize = 23
-const maxBinaryHeadSize = 13
-const maxTextHeadSize = 21
-
-func (p *Packet) Read(r io.ReadCloser, buf []byte) (err error) {
+func (p *Packet) Read(r io.ReadCloser, buf []byte, maxPacketSize uint64) StatusError {
+	var err error
+	var se StatusError
 	if _, err = r.Read(buf[:1]); err != nil {
-		return
+		return NewStatusError(StatusNetworkError, "read packet header: "+err.Error())
 	}
-	if err = p.UnmarshalHead(buf[0]); err != nil {
-		return
+	if se = p.UnmarshalHead(buf[0]); se != nil {
+		return se
 	}
 	if hasMid(p.Kind) {
 		if p.Mid, err = readUint16(r, buf[:2]); err != nil {
-			return
+			return NewStatusError(StatusNetworkError, "read packet mid: "+err.Error())
 		}
 	}
 	if hasAction(p.Kind) {
 		if p.Action, err = readUvarint(r, buf[:1]); err != nil {
-			return
+			return NewStatusError(StatusNetworkError, "read packet action: "+err.Error())
 		}
 	}
 	if hasStatus(p.Kind) {
 		if _, err = r.Read(buf[:1]); err != nil {
-			return
+			return NewStatusError(StatusNetworkError, "read packet status: "+err.Error())
 		}
 		p.Status = Status(buf[0])
 	}
 	if p.Payload != nil {
 		var ps uint64
 		if ps, err = readUvarint(r, buf[:1]); err != nil {
-			return
+			return NewStatusError(StatusNetworkError, "read packet payload size: "+err.Error())
+		}
+		if ps > maxPacketSize {
+			return NewStatusError(StatusRequestEntityTooLarge, "packet size "+strconv.FormatUint(ps, 10)+" is large than "+strconv.FormatUint(maxPacketSize, 10))
 		}
 		p.Payload = make([]byte, ps)
-		_, err = r.Read(p.Payload)
+		if _, err = r.Read(p.Payload); err != nil {
+			return NewStatusError(StatusNetworkError, "read packet payload: "+err.Error())
+		}
 	}
-	return
+	return nil
 }
 
 func (p *Packet) MarshalBinary(buf []byte) []byte {
@@ -144,12 +147,12 @@ func (p *Packet) MarshalBinary(buf []byte) []byte {
 	return data
 }
 
-func (p *Packet) UnmarshalBinary(data []byte) (err error) {
+func (p *Packet) UnmarshalBinary(data []byte) StatusError {
 	if len(data) < 1 {
 		return invalidPacketHead
 	}
-	if err = p.UnmarshalHead(data[0]); err != nil {
-		return
+	if se := p.UnmarshalHead(data[0]); se != nil {
+		return se
 	}
 	var n int
 	data = data[1:]
@@ -223,7 +226,8 @@ func min(x, y int) int {
 	return y
 }
 
-func (p *Packet) UnmarshalText(data []byte) (err error) {
+func (p *Packet) UnmarshalText(data []byte) StatusError {
+	var err error
 	if len(data) == 0 {
 		return invalidPacketHead
 	}
@@ -239,8 +243,7 @@ func (p *Packet) UnmarshalText(data []byte) (err error) {
 			return invalidPacketMid
 		}
 		if p.Mid, err = hexParseUint16(data[:i]); err != nil {
-			err = errors.New(invalidPacketMid.Error() + ": " + err.Error())
-			return
+			return NewStatusError(StatusProtocolError, "invalid mid: "+err.Error())
 		}
 		data = data[i+1:]
 	}
@@ -250,8 +253,7 @@ func (p *Packet) UnmarshalText(data []byte) (err error) {
 			i = len(data)
 		}
 		if p.Action, err = hexParseUint64(data[:i]); err != nil {
-			err = errors.New(invalidPacketAction.Error() + ": " + err.Error())
-			return
+			return NewStatusError(StatusProtocolError, "invalid action: "+err.Error())
 		}
 		data = data[i:]
 	}
@@ -266,5 +268,5 @@ func (p *Packet) UnmarshalText(data []byte) (err error) {
 		return invalidPacketPayload
 	}
 	p.Payload = data[1:]
-	return
+	return nil
 }

@@ -35,7 +35,7 @@ type STMPUserServiceClient interface {
 }
 
 type stmpUserServiceClient struct {
-	c *stmp.ClientConn
+	c *stmp.Client
 }
 
 func (s *stmpUserServiceClient) ListUser(ctx context.Context, in *ListInput, opts ...*stmp.CallOptions) (*ListUserOutput, error) {
@@ -48,7 +48,7 @@ func (s *stmpUserServiceClient) Login(ctx context.Context, in *LoginInput, opts 
 	if out == nil { return (*UserModel)(nil), err } else { return out.(*UserModel), err }
 }
 
-func STMPNewUserServiceClient(c *stmp.ClientConn) STMPUserServiceClient {
+func STMPNewUserServiceClient(c *stmp.Client) STMPUserServiceClient {
 	return &stmpUserServiceClient{c: c}
 }
 
@@ -62,14 +62,14 @@ type STMPUserEventsListener interface {
 	HandleStatusUpdated(ctx context.Context, in *UserModel)
 }
 
-func STMPRegisterUserEventsListener(cc *stmp.ClientConn, s STMPUserEventsListener) {
+func STMPRegisterUserEventsListener(cc *stmp.Client, s STMPUserEventsListener) {
 	cc.Register(s, "stmp.examples.room.UserEvents.StatusUpdated", func(ctx context.Context, in interface{}, inst interface{}) (interface{}, error) {
 		inst.(STMPUserEventsListener).HandleStatusUpdated(ctx, in.(*UserModel))
 		return nil, nil
 	})
 }
 
-func STMPUnregisterUserEventsListener(cc *stmp.ClientConn, s STMPUserEventsListener) {
+func STMPUnregisterUserEventsListener(cc *stmp.Client, s STMPUserEventsListener) {
 	cc.Unregister(s, "stmp.examples.room.UserEvents.StatusUpdated")
 }
 
@@ -163,7 +163,7 @@ type STMPRoomServiceClient interface {
 }
 
 type stmpRoomServiceClient struct {
-	c *stmp.ClientConn
+	c *stmp.Client
 }
 
 func (s *stmpRoomServiceClient) CreateRoom(ctx context.Context, in *CreateRoomInput, opts ...*stmp.CallOptions) (*RoomModel, error) {
@@ -191,7 +191,7 @@ func (s *stmpRoomServiceClient) SendMessage(ctx context.Context, in *SendMessage
 	if out == nil { return (*empty.Empty)(nil), err } else { return out.(*empty.Empty), err }
 }
 
-func STMPNewRoomServiceClient(c *stmp.ClientConn) STMPRoomServiceClient {
+func STMPNewRoomServiceClient(c *stmp.Client) STMPRoomServiceClient {
 	return &stmpRoomServiceClient{c: c}
 }
 
@@ -209,7 +209,7 @@ type STMPRoomEventsListener interface {
 	HandleNewMessage(ctx context.Context, in *ChatMessageModel)
 }
 
-func STMPRegisterRoomEventsListener(cc *stmp.ClientConn, s STMPRoomEventsListener) {
+func STMPRegisterRoomEventsListener(cc *stmp.Client, s STMPRoomEventsListener) {
 	cc.Register(s, "stmp.examples.room.RoomEvents.UserEnter", func(ctx context.Context, in interface{}, inst interface{}) (interface{}, error) {
 		inst.(STMPRoomEventsListener).HandleUserEnter(ctx, in.(*UserEnterEvent))
 		return nil, nil
@@ -224,7 +224,7 @@ func STMPRegisterRoomEventsListener(cc *stmp.ClientConn, s STMPRoomEventsListene
 	})
 }
 
-func STMPUnregisterRoomEventsListener(cc *stmp.ClientConn, s STMPRoomEventsListener) {
+func STMPUnregisterRoomEventsListener(cc *stmp.Client, s STMPRoomEventsListener) {
 	cc.Unregister(s, "stmp.examples.room.RoomEvents.UserEnter")
 	cc.Unregister(s, "stmp.examples.room.RoomEvents.UserExit")
 	cc.Unregister(s, "stmp.examples.room.RoomEvents.NewMessage")

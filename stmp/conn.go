@@ -2,18 +2,12 @@ package stmp
 
 import (
 	"context"
-	"errors"
 	"github.com/gorilla/websocket"
 	"go.uber.org/zap"
 	"io"
 	"net"
-	"sync"
 	"sync/atomic"
 	"time"
-)
-
-var (
-	ErrClosedAlready = errors.New("connection closed already")
 )
 
 // the options to make a call
@@ -85,12 +79,6 @@ func (o *ConnOptions) WithLogger(logger *zap.Logger) *ConnOptions {
 	return o
 }
 
-// set custom router
-func (o *ConnOptions) WithRouter(r *Router) *ConnOptions {
-	o.router = r
-	return o
-}
-
 func (o *ConnOptions) WithCompress(level int) *ConnOptions {
 	o.compressLevel = level
 	return o
@@ -122,9 +110,6 @@ func (o *ConnOptions) ApplyDefault() *ConnOptions {
 	if no == nil {
 		no = NewConnOptions()
 	}
-	if no.router == nil {
-		no.router = NewRouter()
-	}
 	if no.logger == nil {
 		var err error
 		no.logger, err = zap.NewProduction()
@@ -150,27 +135,33 @@ func NewConnOptions() *ConnOptions {
 	}
 }
 
+// send write signal to write bump
+//
+// if p is ClosePacket, r is nil, means receive close event from another peer, else means the close event
+// is sent by self peer, it may occur when read error, or user call close method.
+//
+// else the r could be nil or not, if is not nil, the write err will send to it.
 type writeEvent struct {
 	p *Packet
-	r chan error
+	r chan StatusError
 }
 
-var writePingEvent = &writeEvent{p: &Packet{Kind: MessageKindPing}}
+var writePingEvent = writeEvent{p: &Packet{Kind: MessageKindPing}}
 
 // the struct will only keep the required fields for the connection to save space at server side
 type Conn struct {
 	net.Conn
+	State
 	opts *ConnOptions
-	mu   sync.Mutex
 	mid  *uint32
 
-	writeChan chan *writeEvent
+	// the packets to send
+	writeChan chan writeEvent
 
 	// lock for write requests
 	// pending requests, waiting for response
 	requests map[uint16]chan *Packet
 
-	closed bool
 	// the stmp major version
 	Major byte
 	// the stmp minor version
@@ -190,56 +181,68 @@ func NewConn(nc net.Conn, opts *ConnOptions) *Conn {
 	return &Conn{
 		Conn:      nc,
 		opts:      opts,
-		Major:     1,
-		Minor:     0,
 		mid:       new(uint32),
-		writeChan: make(chan *writeEvent, opts.writeQueueSize),
-		requests:  map[uint16]chan *Packet{},
+		writeChan: make(chan writeEvent, opts.writeQueueSize),
+		requests:  make(map[uint16]chan *Packet),
+	}
+}
+
+// create a new *Conn with state copied
+func (c *Conn) clone() *Conn {
+	c.Lock()
+	defer c.Unlock()
+	return &Conn{
+		State:        c.State,
+		Conn:         nil,
+		opts:         c.opts,
+		mid:          c.mid,
+		writeChan:    make(chan writeEvent, c.opts.writeQueueSize),
+		requests:     make(map[uint16]chan *Packet),
+		Major:        c.Major,
+		Minor:        c.Minor,
+		Media:        nil,
+		ClientHeader: nil,
+		ServerHeader: nil,
 	}
 }
 
 // invoke a method a marshaled payload
 func (c *Conn) Call(ctx context.Context, method string, payload []byte, opts *CallOptions) (out interface{}, err error) {
-	defer func() {
-		if e := recover(); e != nil {
-			err = ErrClosedAlready
-		}
-	}()
-	action := ms.methods[method]
-	p := &Packet{Fin: true, Kind: MessageKindRequest, Action: action, Payload: payload}
-	we := &writeEvent{p: p}
+	action, ok := ms.methods[method]
+	if !ok {
+		err = NewStatusError(StatusBadRequest, "method "+method+" is not registered")
+		return
+	}
+	p := &Packet{Action: action, Payload: payload}
 	var r chan *Packet
 	if opts.useNotify {
 		p.Kind = MessageKindNotify
 	} else {
-		we.r = make(chan error, 1)
-		r = make(chan *Packet, 1)
 		p.Mid = uint16(atomic.AddUint32(c.mid, 1))
-		c.mu.Lock()
+		r = make(chan *Packet, 1)
+		c.Lock()
 		c.requests[p.Mid] = r
-		c.mu.Unlock()
+		c.Unlock()
 	}
-	c.writeChan <- we
+	err = c.send(ctx, p, true)
 	if r == nil {
 		return
 	}
-	select {
-	case err = <-we.r:
-	case <-ctx.Done():
-		err = NewStatusError(StatusCancelled, ctx.Err())
-		return
-	}
+	// send error
 	if err != nil {
-		c.mu.Lock()
+		c.Lock()
 		delete(c.requests, p.Mid)
-		c.mu.Unlock()
-		err = NewStatusError(StatusNetworkError, err)
+		c.Unlock()
 		return
 	}
+	// wait response
 	select {
 	case p = <-r:
 	case <-ctx.Done():
-		err = NewStatusError(StatusCancelled, ctx.Err())
+		err = NewStatusError(StatusRequestTimeout, "wait response error: "+ctx.Err().Error())
+		c.Lock()
+		delete(c.requests, p.Mid)
+		c.Unlock()
 		return
 	}
 	if opts.keepPacket != nil {
@@ -254,87 +257,89 @@ func (c *Conn) Call(ctx context.Context, method string, payload []byte, opts *Ca
 	}
 	out = ms.actions[action].Output()
 	err = c.Media.Unmarshal(p.Payload, out)
+	if err != nil {
+		out = nil
+		err = DetectError(err, StatusUnknown)
+	}
 	return
 }
 
 // invoke a method with raw input, will marshal it with conn's media codec
 func (c *Conn) Invoke(ctx context.Context, method string, in interface{}, opts *CallOptions) (interface{}, error) {
 	var payload []byte
-	if in != nil {
+	if !isNil(in) {
 		var err error
 		payload, err = c.Media.Marshal(in)
 		if err != nil {
-			return nil, NewStatusError(StatusMarshalError, err.Error())
+			return nil, NewStatusError(StatusBadRequest, err)
 		}
 	}
 	return c.Call(ctx, method, payload, opts)
 }
 
-func (c *Conn) terminate() {
-	c.mu.Lock()
+func (c *Conn) terminate(p *Packet, err StatusError) {
+	c.Lock()
 	for mid, p := range c.requests {
-		p <- &Packet{Kind: MessageKindClose, Status: StatusConnectionClosed}
+		p <- &Packet{Kind: MessageKindResponse, Status: StatusNetworkError}
 		delete(c.requests, mid)
 	}
-	c.mu.Unlock()
+	c.Unlock()
 }
 
-// close connection manually, this should be manipulated by Server or ClientConn
-func (c *Conn) close(status Status, message string) (err error) {
-	c.mu.Lock()
+func (c *Conn) send(ctx context.Context, p *Packet, wait bool) (se StatusError) {
 	defer func() {
-		c.mu.Unlock()
-		if e := recover(); e != nil {
-			err = ErrClosedAlready
+		if recover() != nil {
+			se = NewStatusError(StatusNetworkError, "connection closed already")
 		}
 	}()
-	if c.closed {
-		err = ErrClosedAlready
+	we := writeEvent{p: p}
+	if wait {
+		we.r = make(chan StatusError, 1)
+	}
+	select {
+	case c.writeChan <- we:
+	case <-ctx.Done():
+		se = NewStatusError(StatusRequestTimeout, "pending timeout: "+ctx.Err().Error())
 		return
 	}
-	c.closed = true
-	we := &writeEvent{p: &Packet{Status: status, Payload: []byte(message)}, r: make(chan error)}
-	c.writeChan <- we
-	err = <-we.r
+	if wait {
+		select {
+		case se = <-we.r:
+			return
+		case <-ctx.Done():
+			se = NewStatusError(StatusRequestTimeout, "wait timeout: "+ctx.Err().Error())
+		}
+	}
 	return
 }
 
-func (c *Conn) dispatchPacket(p *Packet) {
-	switch p.Kind {
-	case MessageKindPing:
-		c.handlePing()
-	case MessageKindPong:
-		c.handlePong()
-	case MessageKindRequest:
-		go c.handleRequest(p.Mid, p.Action, p.Payload)
-	case MessageKindNotify:
-		go c.handleNotify(p.Action, p.Payload)
-	case MessageKindResponse:
-		c.handleResponse(p.Mid, p.Status, p.Payload)
-	case MessageKindClose:
-		c.handleClose(p.Status, string(p.Payload))
-	}
+// close the connection manually
+func (c *Conn) Close(status Status, message string) (err error) {
+	return c.send(context.Background(), &Packet{Kind: MessageKindClose, Status: status, Payload: []byte(message)}, true)
 }
 
-func (c *Conn) binaryReadChannel(ec EncodingCodec) {
+const maxStreamHeadSize = 23
+
+func (c *Conn) read() {
 	p := new(Packet)
 	buf := make([]byte, maxStreamHeadSize, maxStreamHeadSize)
 	var err error
 	var r io.ReadCloser
+	ec := GetEncodingCodec(c.ServerHeader.Get(DetermineEncoding))
 	if ec == nil {
-		r = plainEncoding{c}
+		r = plainEncoding{Conn: c.Conn}
 	} else {
 		r, err = ec.Reader(c)
 		if err != nil {
-			c.close(StatusProtocolError, "init encoding reader error: %s"+err.Error())
+			c.send(context.Background(), NewClosePacket(StatusProtocolError, "init encoding reader error: "+err.Error()), false)
 			return
 		}
 	}
 	for {
 		c.Conn.SetReadDeadline(time.Now().Add(c.opts.readTimeout))
-		err = p.Read(r, buf)
-		if err != nil {
-			c.close(StatusNetworkError, "read packet error: "+err.Error())
+		se := p.Read(r, buf, c.opts.maxPacketSize)
+		if se != nil {
+			c.send(context.Background(), NewClosePacket(se.Code(), se.Message()), false)
 			break
 		}
 		c.dispatchPacket(p)
@@ -342,21 +347,22 @@ func (c *Conn) binaryReadChannel(ec EncodingCodec) {
 	r.Close()
 }
 
-func (c *Conn) binaryWriteChannel(ec EncodingCodec) {
+func (c *Conn) write() {
 	var err error
 	var w EncodingWriter
+	ec := GetEncodingCodec(c.ServerHeader.Get(DetermineEncoding))
 	if ec == nil {
-		w = plainEncoding{c}
+		w = plainEncoding{Conn: c.Conn}
 	} else {
 		w, err = ec.Writer(c, c.opts.compressLevel)
 		if err != nil {
-			c.terminate()
-			c.Close()
-			close(c.writeChan)
+			c.Conn.Close()
+			c.terminate(nil, NewStatusError(StatusProtocolError, "init encoding writer error: "+err.Error()))
 			return
 		}
 	}
-	var e *writeEvent
+	var se StatusError
+	var e writeEvent
 	buf := make([]byte, maxStreamHeadSize, maxStreamHeadSize)
 	ticker := time.NewTicker(c.opts.readTimeout)
 	for {
@@ -366,47 +372,60 @@ func (c *Conn) binaryWriteChannel(ec EncodingCodec) {
 		case e = <-c.writeChan:
 		}
 		c.Conn.SetWriteDeadline(time.Now().Add(c.opts.writeTimeout))
-		err = e.p.Write(w, buf)
+		se = e.p.Write(w, buf)
 		if e.r != nil {
-			e.r <- err
+			e.r <- se
 		}
-		if err != nil {
+		// if write error occurs, will stop any write immediately, for client side cannot split packet
+		// if write more packet.
+		if se != nil {
 			break
 		}
-		if e.p.Kind == MessageKindClose {
+		if e.p.Kind == MessageKindClose && e.r != nil {
+			// use close manually, which means reader is reading
+			for {
+				ce := <-c.writeChan
+				if ce.p.Kind == MessageKindClose && ce.r == nil {
+					// receive passive close event, maybe sent by remote peer, or read error from local peer
+					// the channel will done
+					break
+				} else if ce.r != nil {
+					ce.r <- NewStatusError(StatusNetworkError, "connection is closing")
+				}
+			}
+		} else if e.p.Kind == MessageKindClose {
 			break
 		}
 	}
-	c.terminate()
 	w.Close()
-	c.Close()
 	ticker.Stop()
-	close(c.writeChan)
+	c.terminate(e.p, se)
 }
 
-func (c *Conn) websocketBinaryReadChannel(wc *websocket.Conn) {
+func (c *Conn) readWebsocket(wc *websocket.Conn) {
 	p := new(Packet)
 	var err error
 	var data []byte
 	for {
 		wc.SetReadDeadline(time.Now().Add(c.opts.readTimeout))
-		_, data, err = wc.ReadMessage()
-		if err != nil {
-			c.close(StatusNetworkError, "read packet error: "+err.Error())
+		if _, data, err = wc.ReadMessage(); err != nil {
+			c.send(context.Background(), NewClosePacket(StatusNetworkError, "read packet error: "+err.Error()), false)
 			break
 		}
-		err = p.UnmarshalBinary(data)
-		if err != nil {
-			c.close(StatusProtocolError, "invalid packet: "+err.Error())
+		if se := p.UnmarshalBinary(data); se != nil {
+			c.send(context.Background(), NewClosePacket(se.Code(), se.Message()), false)
 			break
 		}
 		c.dispatchPacket(p)
 	}
 }
 
-func (c *Conn) websocketBinaryWriteChannel(wc *websocket.Conn) {
-	var e *writeEvent
+const maxBinaryHeadSize = 13
+
+func (c *Conn) writeWebsocket(wc *websocket.Conn) {
+	var e writeEvent
 	var err error
+	var se StatusError
 	var data []byte
 	buf := make([]byte, maxBinaryHeadSize, maxBinaryHeadSize)
 	ticker := time.NewTicker(c.opts.readTimeout)
@@ -416,49 +435,68 @@ func (c *Conn) websocketBinaryWriteChannel(wc *websocket.Conn) {
 			e = writePingEvent
 		case e = <-c.writeChan:
 		}
+		if e.p.Kind == MessageKindClose && e.r == nil {
+			break
+		}
 		wc.SetWriteDeadline(time.Now().Add(c.opts.writeTimeout))
 		data = e.p.MarshalBinary(buf)
 		err = wc.WriteMessage(websocket.BinaryMessage, data)
-		if e.r != nil {
-			e.r <- err
-		}
 		if err != nil {
+			se = NewStatusError(StatusNetworkError, "write packet error: "+err.Error())
+		}
+		if e.r != nil {
+			e.r <- se
+		}
+		// if write error occurs, will stop any write immediately, for client side cannot split packet
+		// if write more packet.
+		if se != nil {
 			break
 		}
-		if e.p.Kind == MessageKindClose {
-			wc.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, "OK"), time.Time{})
+		if e.p.Kind == MessageKindClose && e.r != nil {
+			// use close manually, which means reader is reading
+			for {
+				ce := <-c.writeChan
+				if ce.p.Kind == MessageKindClose && ce.r == nil {
+					// receive passive close event, maybe sent by remote peer, or read error from local peer
+					// the channel will done
+					break
+				} else if ce.r != nil {
+					ce.r <- NewStatusError(StatusNetworkError, "connection is closing")
+				}
+			}
+		} else if e.p.Kind == MessageKindClose {
 			break
 		}
 	}
-	c.terminate()
-	wc.Close()
+	wc.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, "OK"), time.Time{})
 	ticker.Stop()
-	close(c.writeChan)
+	c.terminate(e.p, se)
 }
 
-func (c *Conn) websocketTextReadChannel(wc *websocket.Conn) {
+func (c *Conn) readTextWebsocket(wc *websocket.Conn) {
 	p := new(Packet)
 	var err error
 	var data []byte
 	for {
 		wc.SetReadDeadline(time.Now().Add(c.opts.readTimeout))
-		_, data, err = wc.ReadMessage()
-		if err != nil {
-			c.close(StatusNetworkError, "read packet error: "+err.Error())
+		if _, data, err = wc.ReadMessage(); err != nil {
+			c.send(context.Background(), NewClosePacket(StatusNetworkError, "read packet error: "+err.Error()), false)
 			break
 		}
-		err = p.UnmarshalText(data)
-		if err != nil {
-			c.close(StatusProtocolError, "invalid packet: "+err.Error())
+		if se := p.UnmarshalText(data); se != nil {
+			c.send(context.Background(), NewClosePacket(se.Code(), se.Message()), false)
 			break
 		}
 		c.dispatchPacket(p)
 	}
 }
 
-func (c *Conn) websocketTextWriteChannel(wc *websocket.Conn) {
-	var e *writeEvent
+const maxTextHeadSize = 21
+
+func (c *Conn) writeTextWebsocket(wc *websocket.Conn) {
+	var e writeEvent
 	var err error
+	var se StatusError
 	var data []byte
 	buf := make([]byte, maxTextHeadSize, maxTextHeadSize)
 	ticker := time.NewTicker(c.opts.readTimeout)
@@ -468,49 +506,82 @@ func (c *Conn) websocketTextWriteChannel(wc *websocket.Conn) {
 			e = writePingEvent
 		case e = <-c.writeChan:
 		}
-		wc.SetWriteDeadline(time.Now().Add(c.opts.writeTimeout))
-		data = e.p.MarshalText(buf)
-		err = wc.WriteMessage(websocket.TextMessage, data)
-		if e.r != nil {
-			e.r <- err
-		}
-		if err != nil {
+		if e.p.Kind == MessageKindClose && e.r == nil {
 			break
 		}
-		if e.p.Kind == MessageKindClose {
-			wc.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, "OK"), time.Time{})
+		wc.SetWriteDeadline(time.Now().Add(c.opts.writeTimeout))
+		data = e.p.MarshalText(buf)
+		err = wc.WriteMessage(websocket.BinaryMessage, data)
+		if err != nil {
+			se = NewStatusError(StatusNetworkError, "write packet error: "+err.Error())
+		}
+		if e.r != nil {
+			e.r <- se
+		}
+		// if write error occurs, will stop any write immediately, for client side cannot split packet
+		// if write more packet.
+		if se != nil {
+			break
+		}
+		if e.p.Kind == MessageKindClose && e.r != nil {
+			// use close manually, which means reader is reading
+			for {
+				ce := <-c.writeChan
+				if ce.p.Kind == MessageKindClose && ce.r == nil {
+					// receive passive close event, maybe sent by remote peer, or read error from local peer
+					// the channel will done
+					break
+				} else if ce.r != nil {
+					ce.r <- NewStatusError(StatusNetworkError, "connection is closing")
+				}
+			}
+		} else if e.p.Kind == MessageKindClose {
 			break
 		}
 	}
-	c.terminate()
-	wc.Close()
+	wc.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, "OK"), time.Time{})
 	ticker.Stop()
-	close(c.writeChan)
+	c.terminate(e.p, se)
+}
+
+func (c *Conn) dispatchPacket(p *Packet) {
+	switch p.Kind {
+	case MessageKindPing:
+		c.handlePing()
+	case MessageKindPong:
+		c.handlePong()
+	case MessageKindRequest, MessageKindNotify:
+		go c.handleRequest(p)
+	case MessageKindResponse:
+		c.handleResponse(p)
+	case MessageKindClose:
+		c.handleClose(p)
+	}
 }
 
 func (c *Conn) handlePing() {
-	c.writeChan <- &writeEvent{p: &Packet{Kind: MessageKindPong}}
+	c.send(context.Background(), &Packet{Kind: MessageKindPong}, false)
 }
 
 func (c *Conn) handlePong() {
 	// do nothing for deadline limited pong message receive rate
 }
 
-func (c *Conn) handleClose(status Status, message string) {
-	// TODO close connection
+func (c *Conn) handleClose(p *Packet) {
+	c.send(context.Background(), p, false)
 }
 
 // TODO with context
-func (c *Conn) logPacket(mid uint16, action uint64, status Status, res []byte, err error) {
+func (c *Conn) logRequest(p *Packet, status Status, res []byte, err error) {
 	fields := []zap.Field{
 		zap.String("addr", c.RemoteAddr().String()),
 		zap.String("server", c.LocalAddr().String()),
-		zap.String("Mid", hexFormatUint64(uint64(mid))),
+		zap.String("Mid", hexFormatUint64(uint64(p.Mid))),
 		zap.String("Status", hexFormatUint64(uint64(status))),
 	}
-	method := ms.actions[action]
+	method := ms.actions[p.Action]
 	if method == nil {
-		fields = append(fields, zap.String("Action", hexFormatUint64(action)))
+		fields = append(fields, zap.String("Action", hexFormatUint64(p.Action)))
 	} else {
 		fields = append(fields, zap.String("Method", method.Method), zap.String("Action", method.ActionHex))
 	}
@@ -527,38 +598,23 @@ func (c *Conn) logPacket(mid uint16, action uint64, status Status, res []byte, e
 	}
 }
 
-func (c *Conn) handleNotify(action uint64, payload []byte) {
-	ctx := WithConn(context.Background(), c)
-	status, res := c.opts.router.dispatch(ctx, action, payload, c.Media)
-	c.logPacket(0, action, status, res, nil)
-}
-
-func (c *Conn) handleRequest(mid uint16, action uint64, payload []byte) {
-	ctx := WithConn(context.Background(), c)
-	status, res := c.opts.router.dispatch(ctx, action, payload, c.Media)
-	we := &writeEvent{
-		p: &Packet{
-			Fin:     true,
-			Kind:    MessageKindResponse,
-			Mid:     mid,
-			Action:  action,
-			Status:  status,
-			Payload: res,
-		},
-		r: make(chan error, 1),
+func (c *Conn) handleRequest(p *Packet) {
+	status, res := c.opts.router.dispatch(c, p)
+	var err error
+	if p.Kind == MessageKindRequest {
+		err = c.send(context.Background(), &Packet{Kind: MessageKindResponse, Payload: res}, true)
 	}
-	c.writeChan <- we
-	c.logPacket(mid, action, status, res, <-we.r)
+	c.logRequest(p, status, res, err)
 }
 
-func (c *Conn) handleResponse(mid uint16, status Status, payload []byte) {
-	c.mu.Lock()
-	q, ok := c.requests[mid]
-	delete(c.requests, mid)
-	c.mu.Unlock()
+func (c *Conn) handleResponse(p *Packet) {
+	c.Lock()
+	q, ok := c.requests[p.Mid]
 	if ok {
-		q <- &Packet{Status: status, Payload: payload}
+		delete(c.requests, p.Mid)
+		q <- p
 	}
+	c.Unlock()
 }
 
 func (c *Conn) negotiate() error {
@@ -575,7 +631,7 @@ func (c *Conn) negotiate() error {
 		mediaInput = mediaInput[inputLength:]
 	}
 	if c.Media == nil {
-		return NewStatusError(StatusUnsupportedContentType, "")
+		return NewStatusError(StatusBadRequest, "no supported content-type in candidates: "+c.ClientHeader.Get(AcceptContentType))
 	}
 	encodingInput := c.ClientHeader.Get(AcceptEncoding)
 	var encoding EncodingCodec
@@ -597,12 +653,18 @@ func (c *Conn) negotiate() error {
 	return nil
 }
 
-func (c *Conn) initEncoding() (ec EncodingCodec, err error) {
-	c.Media = GetMediaCodec(c.ServerHeader.Get(DetermineContentType))
+func (c *Conn) initEncoding() error {
+	contentType := c.ServerHeader.Get(DetermineContentType)
+	c.Media = GetMediaCodec(contentType)
 	if c.Media == nil {
-		err = NewStatusError(StatusUnsupportedContentType, "cannot find codec: "+c.ServerHeader.Get(DetermineContentType)+", please register it first")
-		return
+		return NewStatusError(StatusBadRequest, "unsupported content-type: "+contentType)
 	}
-	ec = GetEncodingCodec(c.ServerHeader.Get(DetermineEncoding))
-	return
+	if c.ServerHeader.Has(DetermineEncoding) {
+		encoding := c.ServerHeader.Get(DetermineEncoding)
+		if GetEncodingCodec(encoding) == nil {
+			// this may never occur
+			return NewStatusError(StatusBadRequest, "unsupported encoding: "+encoding)
+		}
+	}
+	return nil
 }

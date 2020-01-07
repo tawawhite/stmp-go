@@ -17,7 +17,7 @@ extend google.protobuf.ServiceOptions {
 }
 
 // the service kind
-// if service is true, will generate server api, such as STMPRegisterXxxServer
+// if service is true, will generate server api, such as STMPRegisterXxxServer, STMPXxxClient
 // if events is true, will generate events api, such as STMPRegisterXxxListener, STMPXxxBroadcaster
 // if both not set, will detect by service name suffix
 // if ends with Service, will treat as service
@@ -36,7 +36,7 @@ extend google.protobuf.MethodOptions {
     // if both service and method is set, the final action id will be (service << 8) | method
     //
     // if neither service nor method is set, the final action id will be
-    // murmur64(package + "." + service + "." + method) | (1 << 63), use MSB for avoid conflict
+    // murmurhash.Sum32(package + "." + service + "." + method) | (1 << 31), use MSB for avoid conflict
     // with custom action
     //
     // if either service or method is set, the compiler will emit an error

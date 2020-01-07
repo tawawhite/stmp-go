@@ -2,32 +2,39 @@ package stmp
 
 import "context"
 
-type ctxConnKey struct{}
+type ctxStmpValue struct {
+	packet *Packet
+	conn   *Conn
+	method *Method
+	router *Router
+}
 
-func WithConn(ctx context.Context, conn *Conn) context.Context {
-	return context.WithValue(ctx, ctxConnKey{}, conn)
+type ctxStmpKey struct{}
+
+func withStmp(ctx context.Context, p *Packet, c *Conn, m *Method, r *Router) context.Context {
+	return context.WithValue(ctx, ctxStmpKey{}, ctxStmpValue{packet: p, conn: c, method: m, router: r})
+}
+
+func SelectPacket(ctx context.Context) *Packet {
+	return ctx.Value(ctxStmpKey{}).(ctxStmpValue).packet
 }
 
 func SelectConn(ctx context.Context) *Conn {
-	return ctx.Value(ctxConnKey{}).(*Conn)
+	return ctx.Value(ctxStmpKey{}).(ctxStmpValue).conn
 }
 
-type ctxServerKey struct{}
+func SelectMethod(ctx context.Context) *Method {
+	return ctx.Value(ctxStmpKey{}).(ctxStmpValue).method
+}
 
-func WithServer(ctx context.Context, srv *Server) context.Context {
-	return context.WithValue(ctx, ctxServerKey{}, srv)
+func SelectRouter(ctx context.Context) *Router {
+	return ctx.Value(ctxStmpKey{}).(ctxStmpValue).router
 }
 
 func SelectServer(ctx context.Context) *Server {
-	return ctx.Value(ctxServerKey{}).(*Server)
+	return ctx.Value(ctxStmpKey{}).(ctxStmpValue).router.host.(*Server)
 }
 
-type ctxPacketKey struct{}
-
-func WithPacket(ctx context.Context, packet *Packet) context.Context {
-	return context.WithValue(ctx, ctxPacketKey{}, packet)
-}
-
-func SelectPacket(ctx context.Context) uint64 {
-	return ctx.Value(ctxPacketKey{}).(uint64)
+func SelectClient(ctx context.Context) *Client {
+	return ctx.Value(ctxStmpKey{}).(ctxStmpValue).router.host.(*Client)
 }

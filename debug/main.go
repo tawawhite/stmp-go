@@ -1,6 +1,9 @@
 package main
 
 import (
+	"bufio"
+	"context"
+	"crypto/tls"
 	"encoding/json"
 	"flag"
 	_ "github.com/envoyproxy/protoc-gen-validate/validate"
@@ -158,6 +161,87 @@ var cmds = map[string]func(flag *flagSet){
 		conn.Close()
 		time.Sleep(time.Second)
 	},
+	"debugNil": func(flag *flagSet) {
+		type foo struct {
+		}
+		var a *foo
+		log.Printf("*foo isNil: %t, nil==%t.", isNil(a), a == nil)
+		a = nil
+		log.Printf("a = nil, isNil: %t, nil==%t.", isNil(a), a == nil)
+		log.Printf("(*foo)(nil), isNil: %t.", isNil((*foo)(nil)))
+		var b *foo
+		log.Printf("*foo == *foo: %t.", a == b)
+		log.Printf("getMethod(): %t.", isNil(getMethod()))
+		var c interface{}
+		c = (*foo)(nil)
+		log.Printf("assign nil pointer to interface type: false==%t.", isNil(c))
+	},
+	"dialTLS": func(flag *flagSet) {
+		conn, err := tls.Dial("tcp", "github.com", nil)
+		if err != nil {
+			log.Fatalf("tls dial error: %q.", err)
+		}
+		_, err = conn.Write([]byte("GET /welcome HTTP/1.1\r\nHost: github.com\r\nUser-Agent: Google Chrome/78.0\r\nConnection: keep-alive\r\n\r\n"))
+		if err != nil {
+			log.Fatalf("tls write header error: %q.", err)
+		}
+		r := bufio.NewReader(conn)
+		status, err := r.ReadString('\n')
+		if err != nil {
+			log.Fatalf("tls read status line error: %q.", err)
+		}
+		log.Printf("tls status line: %q.", status)
+		nc, err := net.Dial("tcp", "github.com:443")
+		if err != nil {
+			log.Fatalf("net dial error: %q.", err)
+		}
+		tc := tls.Client(nc, &tls.Config{ServerName: "github.com"})
+		_, err = tc.Write([]byte("GET /welcome HTTP/1.1\r\nHost: github.com\r\nUser-Agent: Google Chrome/78.0\r\nConnection: keep-alive\r\n\r\n"))
+		if err != nil {
+			log.Fatalf("net write header error: %q.", err)
+		}
+		r = bufio.NewReader(tc)
+		status, err = r.ReadString('\n')
+		if err != nil {
+			log.Fatalf("net read status line error: %q.", err)
+		}
+		log.Printf("net status line: %q.", status)
+	},
+	"debugReadClosedBuffedChan": func(flag *flagSet) {
+		ch := make(chan int, 2)
+		ch <- 1
+		close(ch)
+		i, ok := <-ch
+		log.Printf("should read 1==%d, true=%t.", i, ok)
+		i, ok = <-ch
+		log.Printf("should read 0==%d, false=%t.", i, ok)
+		ch1 := make(chan int)
+		close(ch1)
+		<-ch1
+		// Result: read on closed channel will not emit error, need ok to detect state
+	},
+	"debugSelectWrite": func(flag *flagSet) {
+		ch := make(chan int)
+		go func() {
+			time.Sleep(time.Second)
+			v := <-ch
+			log.Printf("receive v: %d.", v)
+		}()
+		ctx, _ := context.WithTimeout(context.Background(), time.Millisecond)
+		select {
+		case ch <- 1:
+			log.Printf("ch write 1 done")
+		case <-ctx.Done():
+			log.Printf("timeout: %s.", ctx.Err())
+		}
+		ch <- 2
+		log.Printf("ch write 2 done")
+		time.Sleep(time.Second)
+	},
+}
+
+func isNil(v interface{}) bool {
+	return v == nil
 }
 
 func castMapInterface(in interface{}) interface{} {
@@ -166,6 +250,10 @@ func castMapInterface(in interface{}) interface{} {
 }
 
 type debugMethod struct {
+}
+
+func getMethod() *debugMethod {
+	return nil
 }
 
 type debugMethodWithField struct {
@@ -191,7 +279,7 @@ func main() {
 			os.Exit(0)
 		}
 	}
-	if len(os.Args) < 2 {
+	if len(os.Args) < 2 || cmds[os.Args[1]] == nil {
 		usage()
 		os.Exit(1)
 	}

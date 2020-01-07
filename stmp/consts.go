@@ -13,11 +13,6 @@ const (
 	MessageKindClose    = 0x5
 )
 
-func shouldAlwaysFinal(kind byte) bool {
-	// always true for following is not implemented
-	return true
-}
-
 func shouldHeadOnly(kind byte) bool {
 	return kind == MessageKindPing || kind == MessageKindPong
 }
@@ -69,46 +64,53 @@ var mapKindText = map[byte]byte{
 type Status byte
 
 const (
-	StatusOk                         Status = 0x00
-	StatusNetworkError               Status = 0x01
-	StatusProtocolError              Status = 0x02
-	StatusUnsupportedProtocolVersion Status = 0x03
-	StatusUnsupportedContentType     Status = 0x04
-	StatusUnsupportedFormat          Status = 0x05
-	StatusUnknown                    Status = 0x06
-	StatusUnmarshalError             Status = 0x07
-	StatusMarshalError               Status = 0x08
-	StatusCancelled                  Status = 0x09
-	StatusConnectionClosed           Status = 0x0A
-	StatusBadRequest                 Status = 0x20
-	StatusUnauthorized               Status = 0x21
-	StatusNotFound                   Status = 0x22
-	StatusRequestTimeout             Status = 0x23
-	StatusRequestEntityTooLarge      Status = 0x24
-	StatusTooManyRequests            Status = 0x25
-	StatusInternalServerError        Status = 0x40
-	StatusServerShutdown             Status = 0x41
+	// OK
+	// for handshake, if status is not OK, will close directly
+	StatusOk Status = 0x00
+	// unknown
+	StatusUnknown Status = 0x01
+	// network error
+	// sender write, sender read
+	// receiver read or write error will omit the request
+	// maybe timeout to close
+	StatusNetworkError Status = 0x02
+	// protocol error
+	// for parse packet error
+	StatusProtocolError Status = 0x03
+	// sender error
+	// for handshake, maybe: unsupported packet format, protocol version, content type, encoding
+	// for requests, maybe: sender cannot marshal input, receiver unmarshal input error, handler emit
+	StatusBadRequest Status = 0x20
+	// authenticate error, or handler emit
+	StatusUnauthorized Status = 0x21
+	// action is not registered, or interceptors do not accept, or no registered handlers
+	StatusNotFound Status = 0x22
+	// sender cancelled, which means ctx.Done() returns before receive response
+	StatusRequestTimeout Status = 0x23
+	// packet too large, if is request, will send close with this status
+	StatusRequestEntityTooLarge Status = 0x24
+	// rate limit, not implemented
+	StatusTooManyRequests Status = 0x25
+	// server internal error
+	// marshal output error, handler emit error
+	StatusInternalServerError Status = 0x40
+	// close connection when server close
+	StatusServerShutdown Status = 0x41
 )
 
 var MapStatus = map[Status]string{
-	StatusOk:                         "Ok",
-	StatusNetworkError:               "Network error",
-	StatusProtocolError:              "Protocol error",
-	StatusUnsupportedProtocolVersion: "Unsupported protocol version",
-	StatusUnsupportedContentType:     "Unsupported content type",
-	StatusUnsupportedFormat:          "Unsupported format",
-	StatusUnknown:                    "Unknown",
-	StatusUnmarshalError:             "Unmarshal error",
-	StatusMarshalError:               "Marshal error",
-	StatusCancelled:                  "Cancelled",
-	StatusBadRequest:                 "Bad request",
-	StatusUnauthorized:               "Unauthorized",
-	StatusNotFound:                   "Not found",
-	StatusRequestTimeout:             "Request timeout",
-	StatusRequestEntityTooLarge:      "Request entity too large",
-	StatusTooManyRequests:            "Too many requests",
-	StatusInternalServerError:        "Internal server error",
-	StatusServerShutdown:             "Server shutdown",
+	StatusOk:                    "Ok",
+	StatusNetworkError:          "NetworkError",
+	StatusProtocolError:         "ProtocolError",
+	StatusUnknown:               "Unknown",
+	StatusBadRequest:            "BadRequest",
+	StatusUnauthorized:          "Unauthorized",
+	StatusNotFound:              "NotFound",
+	StatusRequestTimeout:        "RequestTimeout",
+	StatusRequestEntityTooLarge: "RequestEntityTooLarge",
+	StatusTooManyRequests:       "TooManyRequests",
+	StatusInternalServerError:   "InternalServerError",
+	StatusServerShutdown:        "ServerShutdown",
 }
 
 // a status error
@@ -173,15 +175,15 @@ func NewStatusError(code Status, data interface{}) StatusError {
 	return se
 }
 
-// get status error or create it
-func DetectError(err error, rollbackStatus Status) StatusError {
+// Detect handler emitted error
+//
+// If the err is StatusError, will use it directly
+// else will use the fallback as the status
+func DetectError(err error, fallback Status) StatusError {
 	if se, ok := err.(StatusError); ok {
 		return se
 	}
-	if sc, ok := err.(Status); ok {
-		return NewStatusError(sc, "")
-	}
-	return NewStatusError(rollbackStatus, err.Error())
+	return NewStatusError(fallback, err.Error())
 }
 
 const (

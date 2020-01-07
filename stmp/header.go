@@ -57,6 +57,12 @@ func (h Header) Del(key string) {
 	delete(h, strings.ToLower(key))
 }
 
+func (h Header) Clear() {
+	for k := range h {
+		delete(h, k)
+	}
+}
+
 func (h Header) Marshal() []byte {
 	if len(h) == 0 {
 		return nil
