@@ -179,30 +179,12 @@ type Conn struct {
 // create a conn from net.Conn and options
 func NewConn(nc net.Conn, opts *ConnOptions) *Conn {
 	return &Conn{
+		State:     NewState(),
 		Conn:      nc,
 		opts:      opts,
 		mid:       new(uint32),
 		writeChan: make(chan writeEvent, opts.writeQueueSize),
 		requests:  make(map[uint16]chan *Packet),
-	}
-}
-
-// create a new *Conn with state copied
-func (c *Conn) clone() *Conn {
-	c.Lock()
-	defer c.Unlock()
-	return &Conn{
-		State:        c.State,
-		Conn:         nil,
-		opts:         c.opts,
-		mid:          c.mid,
-		writeChan:    make(chan writeEvent, c.opts.writeQueueSize),
-		requests:     make(map[uint16]chan *Packet),
-		Major:        c.Major,
-		Minor:        c.Minor,
-		Media:        nil,
-		ClientHeader: nil,
-		ServerHeader: nil,
 	}
 }
 
@@ -277,13 +259,25 @@ func (c *Conn) Invoke(ctx context.Context, method string, in interface{}, opts *
 	return c.Call(ctx, method, payload, opts)
 }
 
-func (c *Conn) terminate(p *Packet, err StatusError) {
+func (c *Conn) terminate() {
+	res := &Packet{Kind: MessageKindResponse, Status: StatusNetworkError, Payload: []byte("connection closed")}
 	c.Lock()
-	for mid, p := range c.requests {
-		p <- &Packet{Kind: MessageKindResponse, Status: StatusNetworkError}
-		delete(c.requests, mid)
+	for _, p := range c.requests {
+		p <- res
 	}
+	c.requests = make(map[uint16]chan *Packet, 0)
 	c.Unlock()
+	close(c.writeChan)
+	c.Conn.Close()
+	for {
+		e, ok := <-c.writeChan
+		if !ok {
+			break
+		}
+		if e.r != nil {
+			e.r <- NewStatusError(StatusNetworkError, "connection closed")
+		}
+	}
 }
 
 func (c *Conn) send(ctx context.Context, p *Packet, wait bool) (se StatusError) {
@@ -315,7 +309,7 @@ func (c *Conn) send(ctx context.Context, p *Packet, wait bool) (se StatusError) 
 
 // close the connection manually
 func (c *Conn) Close(status Status, message string) (err error) {
-	return c.send(context.Background(), &Packet{Kind: MessageKindClose, Status: status, Payload: []byte(message)}, true)
+	return c.send(context.Background(), NewClosePacket(status, message), true)
 }
 
 const maxStreamHeadSize = 23
@@ -347,7 +341,8 @@ func (c *Conn) read() {
 	r.Close()
 }
 
-func (c *Conn) write() {
+// response value never be nil, if close normal, it will be status ok
+func (c *Conn) write() StatusError {
 	var err error
 	var w EncodingWriter
 	ec := GetEncodingCodec(c.ServerHeader.Get(DetermineEncoding))
@@ -357,8 +352,7 @@ func (c *Conn) write() {
 		w, err = ec.Writer(c, c.opts.compressLevel)
 		if err != nil {
 			c.Conn.Close()
-			c.terminate(nil, NewStatusError(StatusProtocolError, "init encoding writer error: "+err.Error()))
-			return
+			return NewStatusError(StatusProtocolError, "init encoding writer error: "+err.Error())
 		}
 	}
 	var se StatusError
@@ -394,12 +388,14 @@ func (c *Conn) write() {
 				}
 			}
 		} else if e.p.Kind == MessageKindClose {
+			se = NewStatusError(e.p.Status, string(e.p.Payload))
 			break
 		}
 	}
 	w.Close()
 	ticker.Stop()
-	c.terminate(e.p, se)
+	c.terminate()
+	return se
 }
 
 func (c *Conn) readWebsocket(wc *websocket.Conn) {
@@ -422,7 +418,7 @@ func (c *Conn) readWebsocket(wc *websocket.Conn) {
 
 const maxBinaryHeadSize = 13
 
-func (c *Conn) writeWebsocket(wc *websocket.Conn) {
+func (c *Conn) writeWebsocket(wc *websocket.Conn) StatusError {
 	var e writeEvent
 	var err error
 	var se StatusError
@@ -465,12 +461,14 @@ func (c *Conn) writeWebsocket(wc *websocket.Conn) {
 				}
 			}
 		} else if e.p.Kind == MessageKindClose {
+			se = NewStatusError(e.p.Status, string(e.p.Payload))
 			break
 		}
 	}
 	wc.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, "OK"), time.Time{})
 	ticker.Stop()
-	c.terminate(e.p, se)
+	c.terminate()
+	return se
 }
 
 func (c *Conn) readTextWebsocket(wc *websocket.Conn) {
@@ -493,7 +491,7 @@ func (c *Conn) readTextWebsocket(wc *websocket.Conn) {
 
 const maxTextHeadSize = 21
 
-func (c *Conn) writeTextWebsocket(wc *websocket.Conn) {
+func (c *Conn) writeTextWebsocket(wc *websocket.Conn) StatusError {
 	var e writeEvent
 	var err error
 	var se StatusError
@@ -536,12 +534,14 @@ func (c *Conn) writeTextWebsocket(wc *websocket.Conn) {
 				}
 			}
 		} else if e.p.Kind == MessageKindClose {
+			se = NewStatusError(e.p.Status, string(e.p.Payload))
 			break
 		}
 	}
 	wc.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, "OK"), time.Time{})
 	ticker.Stop()
-	c.terminate(e.p, se)
+	c.terminate()
+	return se
 }
 
 func (c *Conn) dispatchPacket(p *Packet) {
