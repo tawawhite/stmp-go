@@ -657,7 +657,7 @@ func (c *Conn) negotiate() error {
 	return nil
 }
 
-func (c *Conn) initEncoding() error {
+func (c *Conn) initEncoding() StatusError {
 	contentType := c.ServerHeader.Get(DetermineContentType)
 	c.Media = GetMediaCodec(contentType)
 	if c.Media == nil {

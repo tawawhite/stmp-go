@@ -77,27 +77,29 @@ type CloseHandler func(conn *Conn, status Status, message string)
 
 type Server struct {
 	*Router
-	opts          *ServerOptions
-	mu            sync.RWMutex
-	listeners     map[io.Closer]struct{}
-	connections   ConnSet
-	closeHandlers []CloseHandler
-	done          chan error
+	opts      *ServerOptions
+	mu        sync.RWMutex
+	listeners map[io.Closer]struct{}
+	conns     ConnSet
+	closes    []CloseHandler
+	done      chan error
 }
 
 func NewServer(opts *ServerOptions) *Server {
 	opts = opts.ApplyDefault()
-	return &Server{
-		Router:      opts.router,
-		opts:        opts,
-		listeners:   map[io.Closer]struct{}{},
-		connections: NewConnSet(),
-		done:        make(chan error, 1),
+	srv := &Server{
+		opts:      opts,
+		listeners: make(map[io.Closer]struct{}, 1),
+		conns:     NewConnSet(),
+		done:      make(chan error, 1),
 	}
+	opts.router = NewRouter(srv)
+	srv.Router = opts.router
+	return srv
 }
 
 func (s *Server) HandleConnClose(fn CloseHandler) {
-	s.closeHandlers = append(s.closeHandlers, fn)
+	s.closes = append(s.closes, fn)
 }
 
 type ConnFilter func(conn *Conn) bool
@@ -114,7 +116,7 @@ func (s *Server) Broadcast(ctx context.Context, method string, in interface{}, f
 	payloads := NewPayloadMap(in)
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	for conn := range s.connections {
+	for conn := range s.conns {
 		if filter(conn) {
 			payload, err := payloads.Marshal(conn)
 			if err != nil {
@@ -201,9 +203,9 @@ func (s *Server) cleanup(c *Conn, se StatusError) {
 		s.mu.Unlock()
 		return
 	}
-	s.connections.Del(c)
+	s.conns.Del(c)
 	s.mu.Unlock()
-	for _, h := range s.closeHandlers {
+	for _, h := range s.closes {
 		h(c, se.Code(), se.Message())
 	}
 }
@@ -243,7 +245,7 @@ func (s *Server) HandleConn(nc net.Conn) (err error) {
 
 	// fine
 	s.mu.Lock()
-	s.connections.Add(c)
+	s.conns.Add(c)
 	s.mu.Unlock()
 	go c.read()
 	go func() {
@@ -315,7 +317,7 @@ func (s *Server) HandleWebsocketConn(wc *websocket.Conn, req *http.Request) (err
 
 	// fine
 	s.mu.Lock()
-	s.connections.Add(c)
+	s.conns.Add(c)
 	s.mu.Unlock()
 	wc.SetReadLimit(int64(s.opts.maxPacketSize))
 	if c.ServerHeader.Get(DeterminePacketFormat) == "text" {
@@ -341,10 +343,10 @@ func (s *Server) shutdown(err error) {
 		// closed already
 		return
 	}
-	for c := range s.connections {
+	for c := range s.conns {
 		c.send(context.Background(), NewClosePacket(StatusServerShutdown, StatusServerShutdown.Message()), true)
 	}
-	s.connections = nil
+	s.conns = nil
 	for l := range s.listeners {
 		l.Close()
 		delete(s.listeners, l)

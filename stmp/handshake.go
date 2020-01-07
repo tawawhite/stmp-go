@@ -64,13 +64,13 @@ func (h *Handshake) MarshalHead() (title []byte, header []byte) {
 	return title[:i+5], header
 }
 
-func (h *Handshake) Read(r io.Reader, limit uint64) error {
+func (h *Handshake) Read(r io.Reader, limit uint64) StatusError {
 	title := make([]byte, 5)
 	if _, err := r.Read(title); err != nil {
-		return NewStatusError(StatusNetworkError, "read title: "+err.Error())
+		return NewStatusError(StatusNetworkError, "read handshake title: "+err.Error())
 	}
 	if !bytes.Equal(title[:4], []byte("STMP")) {
-		return NewStatusError(StatusProtocolError, "magic "+string(title)+" is not STMP")
+		return NewStatusError(StatusProtocolError, "handshake magic "+string(title)+" is not STMP")
 	}
 	if h.Kind == HandshakeKindServer {
 		h.Status = Status(title[4])
@@ -81,17 +81,17 @@ func (h *Handshake) Read(r io.Reader, limit uint64) error {
 	}
 	size, err := readUvarint(r, title[:1])
 	if err != nil {
-		return NewStatusError(StatusNetworkError, "read header size: "+err.Error())
+		return NewStatusError(StatusNetworkError, "read handshake header size: "+err.Error())
 	}
 	if size == 0 {
 		return nil
 	}
 	if size > limit {
-		return NewStatusError(StatusRequestEntityTooLarge, "header size "+strconv.Itoa(int(size))+" too large, limit is "+strconv.Itoa(int(limit)))
+		return NewStatusError(StatusRequestEntityTooLarge, "handshake header size "+strconv.Itoa(int(size))+" too large, limit is "+strconv.Itoa(int(limit)))
 	}
 	head := make([]byte, size)
 	if _, err := r.Read(head); err != nil {
-		return NewStatusError(StatusNetworkError, "read header: "+err.Error())
+		return NewStatusError(StatusNetworkError, "read handshake header: "+err.Error())
 	}
 	sep := bytes.Index(head, []byte("\n\n"))
 	if sep > -1 {
@@ -99,27 +99,24 @@ func (h *Handshake) Read(r io.Reader, limit uint64) error {
 		head = head[:sep]
 	}
 	if err := h.Header.Unmarshal(head); err != nil {
-		return NewStatusError(StatusProtocolError, "parse header: "+err.Error())
+		return NewStatusError(StatusProtocolError, "parse handshake header: "+err.Error())
 	}
 	return nil
 }
 
-func (h *Handshake) Write(r io.Writer) error {
+func (h *Handshake) Write(r io.Writer) StatusError {
 	title, header := h.MarshalHead()
 	if _, err := r.Write(title); err != nil {
-		return err
+		return NewStatusError(StatusNetworkError, "write handshake title: "+err.Error())
 	}
 	if _, err := r.Write(header); err != nil {
-		return err
+		return NewStatusError(StatusNetworkError, "write handshake header: "+err.Error())
 	}
 	if len(h.Message) == 0 {
 		return nil
 	}
-	if _, err := r.Write([]byte("\n\n")); err != nil {
-		return err
-	}
-	if _, err := r.Write([]byte(h.Message)); err != nil {
-		return err
+	if _, err := r.Write(append([]byte("\n\n"), h.Message...)); err != nil {
+		return NewStatusError(StatusNetworkError, "write handshake message: "+err.Error())
 	}
 	return nil
 }
