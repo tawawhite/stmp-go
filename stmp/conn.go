@@ -2,6 +2,7 @@ package stmp
 
 import (
 	"context"
+	"errors"
 	"github.com/gorilla/websocket"
 	"go.uber.org/zap"
 	"io"
@@ -265,7 +266,7 @@ func (c *Conn) terminate() {
 	for _, p := range c.requests {
 		p <- res
 	}
-	c.requests = make(map[uint16]chan *Packet, 0)
+	c.requests = nil
 	c.Unlock()
 	close(c.writeChan)
 	c.Conn.Close()
@@ -309,6 +310,9 @@ func (c *Conn) send(ctx context.Context, p *Packet, wait bool) (se StatusError) 
 
 // close the connection manually
 func (c *Conn) Close(status Status, message string) (err error) {
+	if status == StatusServerShutdown {
+		return errors.New("reserved close status: " + MapStatus[StatusServerShutdown])
+	}
 	return c.send(context.Background(), NewClosePacket(status, message), true)
 }
 
