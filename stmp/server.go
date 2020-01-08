@@ -68,7 +68,7 @@ func (o *ServerOptions) ApplyDefault() *ServerOptions {
 
 func NewServerOptions() *ServerOptions {
 	return &ServerOptions{
-		ConnOptions: NewConnOptions(),
+		ConnOptions: NewConnOptions().WithTimeout(2*time.Minute, time.Hour, time.Second),
 		logAccess:   []string{"host", "user-agent", "referer", AcceptContentType},
 	}
 }
@@ -235,6 +235,8 @@ func (s *Server) HandleConn(nc net.Conn) (err error) {
 	if err = ch.Read(nc, s.opts.maxPacketSize); err != nil {
 		return
 	}
+	c.Major = ch.Major
+	c.Minor = ch.Minor
 	if err = s.prepare(c); err != nil {
 		return
 	}
@@ -310,7 +312,6 @@ func (s *Server) HandleWebsocketConn(wc *websocket.Conn, req *http.Request) (err
 	}
 	c.Major = hexChunks[rawVersion[0]]
 	c.Minor = hexChunks[rawVersion[2]]
-
 	if err = s.prepare(c); err != nil {
 		return
 	}

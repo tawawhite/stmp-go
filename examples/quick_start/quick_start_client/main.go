@@ -6,9 +6,11 @@ import (
 	pb "github.com/acrazing/stmp-go/examples/quick_start/quick_start_pb"
 	"github.com/acrazing/stmp-go/stmp"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"log"
 	"strings"
 	"sync"
+	"time"
 )
 
 type RoomScene struct {
@@ -99,25 +101,39 @@ func (r *RoomScene) Run() {
 	}
 }
 
-func NewRoomScene(rsc pb.STMPRoomServiceClient, conn *stmp.Client) *RoomScene {
+func NewRoomScene(rsc pb.STMPRoomServiceClient, sc *stmp.Client) *RoomScene {
 	return &RoomScene{
 		rsc:   rsc,
-		sc:    conn,
+		sc:    sc,
 		room:  nil,
 		users: nil,
 	}
 }
 
 func main() {
-	logger, err := zap.NewDevelopment()
+	logConfig := zap.NewProductionConfig()
+	logConfig.DisableCaller = true
+	logConfig.EncoderConfig.EncodeTime = func(time time.Time, encoder zapcore.PrimitiveArrayEncoder) {
+		encoder.AppendString(time.Format("2006-01-02 15:04:05.000"))
+	}
+	logConfig.Level = zap.NewAtomicLevelAt(zap.DebugLevel)
+	logger, err := logConfig.Build()
 	if err != nil {
-		log.Fatalf("init logger error: %s", err)
+		log.Fatalf("init logger error: %q.", err)
 	}
 	sc := stmp.NewClient(stmp.NewClientOptions().WithLogger(logger).WithEncoding("gzip"))
 	sc.HandleConnected(func(header stmp.Header, message string) {
+		logger.Info("stmp client connected", zap.String("message", message))
 	})
-	rsc := pb.STMPNewRoomServiceClient(sc)
+	sc.HandleDisconnected(func(reason stmp.StatusError, willRetry bool, retryCount int, retryWait time.Duration) {
+		logger.Info("stmp client disconnected",
+			zap.String("reason", reason.Error()),
+			zap.Bool("willRetry", willRetry),
+			zap.Int("retryCount", retryCount),
+			zap.Duration("retryWait", retryWait))
+	})
 	go sc.DialTCP("127.0.0.1:5001")
+	rsc := pb.STMPNewRoomServiceClient(sc)
 	scene := NewRoomScene(rsc, sc)
 	scene.Run()
 }

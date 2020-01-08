@@ -200,6 +200,7 @@ func (c *Conn) Call(ctx context.Context, method string, payload []byte, opts *Ca
 	if opts.useNotify {
 		p.Kind = MessageKindNotify
 	} else {
+		p.Kind = MessageKindRequest
 		p.Mid = uint16(atomic.AddUint32(c.mid, 1))
 		r = make(chan *Packet, 1)
 		c.Lock()
@@ -315,6 +316,25 @@ func (c *Conn) Close(status Status, message string) (err error) {
 	return c.send(context.Background(), NewClosePacket(status, message), true)
 }
 
+func (c *Conn) logPacket(kind string, p *Packet) {
+	method := ms.actions[p.Action]
+	var m string
+	var a string
+	if method == nil {
+		a = hexFormatUint64(p.Action)
+	} else {
+		m = method.Method
+		a = method.ActionHex
+	}
+	c.opts.logger.Debug(kind,
+		zap.String("kind", string(mapKindText[p.Kind])),
+		zap.String("mid", hexFormatUint64(uint64(p.Mid))),
+		zap.String("method", m),
+		zap.String("action", a),
+		zap.String("status", hexCaches[p.Status]),
+	)
+}
+
 const maxStreamHeadSize = 23
 
 func (c *Conn) read() {
@@ -339,6 +359,7 @@ func (c *Conn) read() {
 			c.send(context.Background(), NewClosePacket(se.Code(), se.Message()), false)
 			break
 		}
+		c.logPacket("rp", p)
 		c.dispatchPacket(p)
 	}
 	r.Close()
@@ -361,13 +382,14 @@ func (c *Conn) write() StatusError {
 	var se StatusError
 	var e writeEvent
 	buf := make([]byte, maxStreamHeadSize, maxStreamHeadSize)
-	ticker := time.NewTicker(c.opts.readTimeout)
+	ticker := time.NewTicker(c.opts.readTimeout / 2)
 	for {
 		select {
 		case <-ticker.C:
 			e = writePingEvent
 		case e = <-c.writeChan:
 		}
+		c.logPacket("wp", e.p)
 		c.Conn.SetWriteDeadline(time.Now().Add(c.opts.writeTimeout))
 		se = e.p.Write(w, buf)
 		if e.r != nil {
@@ -427,7 +449,7 @@ func (c *Conn) writeBinaryWebsocket(wc *websocket.Conn) StatusError {
 	var se StatusError
 	var data []byte
 	buf := make([]byte, maxBinaryHeadSize, maxBinaryHeadSize)
-	ticker := time.NewTicker(c.opts.readTimeout)
+	ticker := time.NewTicker(c.opts.readTimeout / 2)
 	for {
 		select {
 		case <-ticker.C:
@@ -500,7 +522,7 @@ func (c *Conn) writeTextWebsocket(wc *websocket.Conn) StatusError {
 	var se StatusError
 	var data []byte
 	buf := make([]byte, maxTextHeadSize, maxTextHeadSize)
-	ticker := time.NewTicker(c.opts.readTimeout)
+	ticker := time.NewTicker(c.opts.readTimeout / 2)
 	for {
 		select {
 		case <-ticker.C:
@@ -574,40 +596,16 @@ func (c *Conn) handleClose(p *Packet) {
 	c.send(context.Background(), p, false)
 }
 
-// TODO with context
-func (c *Conn) logRequest(p *Packet, status Status, res []byte, err error) {
-	fields := []zap.Field{
-		zap.String("addr", c.RemoteAddr().String()),
-		zap.String("server", c.LocalAddr().String()),
-		zap.String("Mid", hexFormatUint64(uint64(p.Mid))),
-		zap.String("Status", hexFormatUint64(uint64(status))),
-	}
-	method := ms.actions[p.Action]
-	if method == nil {
-		fields = append(fields, zap.String("Action", hexFormatUint64(p.Action)))
-	} else {
-		fields = append(fields, zap.String("Method", method.Method), zap.String("Action", method.ActionHex))
-	}
-	if status != StatusOk {
-		fields = append(fields, zap.String("Reason", status.Error()+": "+string(res)))
-	}
-	if err != nil {
-		fields = append(fields, zap.String("Fail", err.Error()))
-	}
-	if status == StatusOk {
-		c.opts.logger.Debug("packet", fields...)
-	} else {
-		c.opts.logger.Warn("packet error", fields...)
-	}
-}
-
 func (c *Conn) handleRequest(p *Packet) {
 	status, res := c.opts.router.dispatch(c, p)
-	var err error
 	if p.Kind == MessageKindRequest {
-		err = c.send(context.Background(), &Packet{Kind: MessageKindResponse, Payload: res}, true)
+		c.send(context.Background(), &Packet{
+			Kind:    MessageKindResponse,
+			Mid:     p.Mid,
+			Status:  status,
+			Payload: res,
+		}, true)
 	}
-	c.logRequest(p, status, res, err)
 }
 
 func (c *Conn) handleResponse(p *Packet) {

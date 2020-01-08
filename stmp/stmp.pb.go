@@ -22,7 +22,7 @@ var _ = math.Inf
 const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
 
 // the service kind
-// if service is true, will generate server api, such as STMPRegisterXxxServer
+// if service is true, will generate server api, such as STMPRegisterXxxServer, STMPXxxClient
 // if events is true, will generate events api, such as STMPRegisterXxxListener, STMPXxxBroadcaster
 // if both not set, will detect by service name suffix
 // if ends with Service, will treat as service

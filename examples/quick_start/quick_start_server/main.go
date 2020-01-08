@@ -6,8 +6,10 @@ import (
 	"github.com/acrazing/stmp-go/stmp"
 	"github.com/golang/protobuf/ptypes/empty"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"log"
 	"sync"
+	"time"
 )
 
 type RoomService struct {
@@ -76,18 +78,24 @@ func NewRoomServiceServer() pb.STMPRoomServiceServer {
 }
 
 func main() {
-	logger, err := zap.NewDevelopment()
+	logConfig := zap.NewProductionConfig()
+	logConfig.DisableCaller = true
+	logConfig.EncoderConfig.EncodeTime = func(time time.Time, encoder zapcore.PrimitiveArrayEncoder) {
+		encoder.AppendString(time.Format("2006-01-02 15:04:05.000"))
+	}
+	logConfig.Level = zap.NewAtomicLevelAt(zap.DebugLevel)
+	logger, err := logConfig.Build()
 	if err != nil {
-		log.Fatalf("init logger error: %s", err)
+		log.Fatalf("init logger error: %q.", err)
 	}
 	srv := stmp.NewServer(stmp.NewServerOptions().WithLogger(logger))
 	pb.STMPRegisterRoomServiceServer(srv, NewRoomServiceServer())
 	go srv.ListenAndServeTCP("127.0.0.1:5001")
-	log.Println("server is listening at tcp://127.0.0.1:5001")
+	logger.Info("server listen", zap.String("addr", "tcp://127.0.0.1:5001"))
 	go srv.ListenAndServeWebsocket("127.0.0.1:5002", "/quick_start")
-	log.Println("server is listening at  ws://127.0.0.1:5002/quick_start")
+	logger.Info("server listen", zap.String("addr", "ws://127.0.0.1:5002/quick_start"))
 	err = srv.Wait()
 	if err != nil {
-		log.Fatalf("server listen error: %s", err)
+		logger.Fatal("server listen error", zap.Error(err))
 	}
 }

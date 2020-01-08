@@ -204,7 +204,13 @@ type Client struct {
 
 func NewClient(opts *ClientOptions) *Client {
 	opts = opts.ApplyDefault()
-	cc := &Client{opts: opts, Conn: &Conn{State: NewState()}}
+	cc := &Client{
+		opts: opts,
+		Conn: &Conn{
+			State: NewState(),
+			mid:   new(uint32),
+		},
+	}
 	cc.opts.router = NewRouter(cc)
 	cc.Router = cc.opts.router
 	return cc
@@ -222,7 +228,7 @@ func (c *Client) Status() ClientStatus {
 	return ClientStatus(atomic.LoadInt32((*int32)(c.state)))
 }
 
-func (c *Client) Handshake(agent interface{}) (sh *Handshake, se StatusError) {
+func (c *Client) handshake(agent interface{}) (sh *Handshake, se StatusError) {
 	c.SetWriteDeadline(time.Now().Add(c.opts.handshakeTimeout))
 	ch := NewClientHandshake(c.opts.major, c.opts.minor, c.ClientHeader, "")
 	if se = ch.Write(c); se != nil {
@@ -298,7 +304,7 @@ func (c *Client) resolveTLSConfig(addr string) (*tls.Config, error) {
 	return nil, errors.New("cannot resolve server name from " + addr)
 }
 
-func (c *Client) resetConn(nc net.Conn, sh *Handshake) {
+func (c *Client) resetConn(nc net.Conn) {
 	c.Conn = &Conn{
 		Conn:         nc,
 		State:        c.State,
@@ -309,7 +315,6 @@ func (c *Client) resetConn(nc net.Conn, sh *Handshake) {
 		writeChan:    make(chan writeEvent, c.opts.writeQueueSize),
 		requests:     make(map[uint16]chan *Packet),
 		ClientHeader: c.opts.header,
-		ServerHeader: sh.Header,
 	}
 }
 
@@ -351,21 +356,24 @@ func (c *Client) dial(makeConn func() (
 			se = NewStatusError(StatusNetworkError, "dial error: "+err.Error())
 			goto RETRY
 		}
+		c.resetConn(nc)
 		if sh, se = handshake(agent); se != nil {
 			goto RETRY
 		}
+		c.ServerHeader = sh.Header
 		if sh.Status != StatusOk {
 			se = NewStatusError(sh.Status, sh.Message)
 			goto RETRY
 		}
-		c.resetConn(nc, sh)
 		if se = c.initEncoding(); se != nil {
 			goto RETRY
 		}
 		c.opts.reconnect.Reset()
-		for _, fn := range c.connectedHandlers {
-			fn(c.ServerHeader, sh.Message)
-		}
+		go func() {
+			for _, fn := range c.connectedHandlers {
+				fn(c.ServerHeader, sh.Message)
+			}
+		}()
 		go read(agent)
 		se = write(agent)
 	RETRY:
@@ -375,9 +383,11 @@ func (c *Client) dial(makeConn func() (
 		if c.opts.reconnect != nil && se.Code() == StatusNetworkError {
 			retryWait, retryCount, willRetry = c.opts.reconnect.Next()
 		}
-		for _, fn := range c.disconnectedHandlers {
-			fn(se, willRetry, retryCount, retryWait)
-		}
+		go func() {
+			for _, fn := range c.disconnectedHandlers {
+				fn(se, willRetry, retryCount, retryWait)
+			}
+		}()
 		if willRetry {
 			time.Sleep(retryWait)
 		} else {
@@ -392,7 +402,7 @@ func (c *Client) DialTCP(addr string) {
 	c.dial(func() (conn net.Conn, agent interface{}, err error) {
 		conn, err = dialer.DialContext(context.Background(), "tcp", addr)
 		return
-	}, c.Handshake, c.read, c.write)
+	}, c.handshake, c.read, c.write)
 }
 
 // dial method will create *Conn, and setup, and handshake, and serve
@@ -405,7 +415,7 @@ func (c *Client) DialTCPWithTLS(addr string) {
 	c.dial(func() (conn net.Conn, agent interface{}, err error) {
 		conn, err = tls.DialWithDialer(dialer, "tcp", addr, config)
 		return
-	}, c.Handshake, c.read, c.write)
+	}, c.handshake, c.read, c.write)
 }
 
 // dial method will create *Conn, and setup, and handshake, and serve
@@ -413,7 +423,7 @@ func (c *Client) DialKCP(addr string) {
 	c.dial(func() (conn net.Conn, agent interface{}, err error) {
 		conn, err = kcp.Dial(addr)
 		return
-	}, c.Handshake, c.read, c.write)
+	}, c.handshake, c.read, c.write)
 }
 
 func (c *Client) DialKCPWithTLS(addr string) {
@@ -431,7 +441,7 @@ func (c *Client) DialKCPWithTLS(addr string) {
 			return
 		}
 		return tlsConn, nil, nil
-	}, c.Handshake, c.read, c.write)
+	}, c.handshake, c.read, c.write)
 }
 
 func (c *Client) DialWebsocket(urlstr string) {
