@@ -121,18 +121,18 @@ func main() {
 	if err != nil {
 		log.Fatalf("init logger error: %q.", err)
 	}
-	sc := stmp.NewClient(stmp.NewClientOptions().WithLogger(logger).WithEncoding("gzip"))
+	sc := stmp.NewClient(stmp.NewClientOptions().WithLogger(logger).WithEncoding("gzip").WithPacketFormat("text"))
 	sc.HandleConnected(func(header stmp.Header, message string) {
 		logger.Info("stmp client connected", zap.String("message", message))
 	})
 	sc.HandleDisconnected(func(reason stmp.StatusError, willRetry bool, retryCount int, retryWait time.Duration) {
-		logger.Info("stmp client disconnected",
+		logger.Warn("stmp client disconnected",
 			zap.String("reason", reason.Error()),
 			zap.Bool("willRetry", willRetry),
 			zap.Int("retryCount", retryCount),
 			zap.Duration("retryWait", retryWait))
 	})
-	go sc.DialTCP("127.0.0.1:5001")
+	go sc.DialWebsocket("ws://127.0.0.1:5002/quick_start")
 	rsc := pb.STMPNewRoomServiceClient(sc)
 	scene := NewRoomScene(rsc, sc)
 	scene.Run()

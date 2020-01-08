@@ -338,7 +338,6 @@ func (c *Conn) logPacket(kind string, p *Packet) {
 const maxStreamHeadSize = 23
 
 func (c *Conn) read() {
-	p := new(Packet)
 	buf := make([]byte, maxStreamHeadSize, maxStreamHeadSize)
 	var err error
 	var r io.ReadCloser
@@ -353,6 +352,7 @@ func (c *Conn) read() {
 		}
 	}
 	for {
+		p := new(Packet)
 		c.Conn.SetReadDeadline(time.Now().Add(c.opts.readTimeout))
 		se := p.Read(r, buf, c.opts.maxPacketSize)
 		if se != nil {
@@ -424,10 +424,10 @@ func (c *Conn) write() StatusError {
 }
 
 func (c *Conn) readBinaryWebsocket(wc *websocket.Conn) {
-	p := new(Packet)
 	var err error
 	var data []byte
 	for {
+		p := new(Packet)
 		wc.SetReadDeadline(time.Now().Add(c.opts.readTimeout))
 		if _, data, err = wc.ReadMessage(); err != nil {
 			c.send(context.Background(), NewClosePacket(StatusNetworkError, "read packet error: "+err.Error()), false)
@@ -437,6 +437,7 @@ func (c *Conn) readBinaryWebsocket(wc *websocket.Conn) {
 			c.send(context.Background(), NewClosePacket(se.Code(), se.Message()), false)
 			break
 		}
+		c.logPacket("rp", p)
 		c.dispatchPacket(p)
 	}
 }
@@ -456,9 +457,7 @@ func (c *Conn) writeBinaryWebsocket(wc *websocket.Conn) StatusError {
 			e = writePingEvent
 		case e = <-c.writeChan:
 		}
-		if e.p.Kind == MessageKindClose && e.r == nil {
-			break
-		}
+		c.logPacket("wp", e.p)
 		wc.SetWriteDeadline(time.Now().Add(c.opts.writeTimeout))
 		data = e.p.MarshalBinary(buf)
 		err = wc.WriteMessage(websocket.BinaryMessage, data)
@@ -497,10 +496,10 @@ func (c *Conn) writeBinaryWebsocket(wc *websocket.Conn) StatusError {
 }
 
 func (c *Conn) readTextWebsocket(wc *websocket.Conn) {
-	p := new(Packet)
 	var err error
 	var data []byte
 	for {
+		p := new(Packet)
 		wc.SetReadDeadline(time.Now().Add(c.opts.readTimeout))
 		if _, data, err = wc.ReadMessage(); err != nil {
 			c.send(context.Background(), NewClosePacket(StatusNetworkError, "read packet error: "+err.Error()), false)
@@ -510,6 +509,7 @@ func (c *Conn) readTextWebsocket(wc *websocket.Conn) {
 			c.send(context.Background(), NewClosePacket(se.Code(), se.Message()), false)
 			break
 		}
+		c.logPacket("rp", p)
 		c.dispatchPacket(p)
 	}
 }
@@ -529,9 +529,7 @@ func (c *Conn) writeTextWebsocket(wc *websocket.Conn) StatusError {
 			e = writePingEvent
 		case e = <-c.writeChan:
 		}
-		if e.p.Kind == MessageKindClose && e.r == nil {
-			break
-		}
+		c.logPacket("wp", e.p)
 		wc.SetWriteDeadline(time.Now().Add(c.opts.writeTimeout))
 		data = e.p.MarshalText(buf)
 		err = wc.WriteMessage(websocket.BinaryMessage, data)

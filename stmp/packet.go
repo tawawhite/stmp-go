@@ -162,7 +162,7 @@ func (p *Packet) UnmarshalBinary(data []byte) StatusError {
 			return invalidPacketMid
 		}
 		p.Mid = binary.LittleEndian.Uint16(data)
-		data = data[3:]
+		data = data[2:]
 	}
 	if hasAction(p.Kind) {
 		if len(data) < 1 {

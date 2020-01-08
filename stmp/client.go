@@ -64,6 +64,9 @@ func (o *ClientOptions) WithHeader(key string, value ...string) *ClientOptions {
 
 // packet format, only for websocket, could be text or binary, default is binary
 func (o *ClientOptions) WithPacketFormat(format string) *ClientOptions {
+	if format != "text" && format != "binary" {
+		panic("invalid packet format: " + format)
+	}
 	o.header.Set(AcceptPacketFormat, format)
 	return o
 }

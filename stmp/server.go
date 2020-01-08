@@ -280,22 +280,17 @@ func (s *Server) HandleWebsocketConn(wc *websocket.Conn, req *http.Request) (err
 	sh := NewServerHandshake(StatusOk, c.ServerHeader, "")
 	closeSent := false
 	defer func() {
-		if err != nil {
-			sh := NewServerHandshake(StatusOk, c.ServerHeader, "")
-			defer func() {
-				// defer log access, close error connection
-				if !closeSent && err != nil {
-					se := DetectError(err, StatusInternalServerError)
-					sh.Status = se.Code()
-					sh.Message = se.Message()
-					err = s.writeWebsocketHandshake(wc, c, sh)
-					wc.Close()
-				} else if err != nil {
-					wc.Close()
-				}
-				s.logAccess(c, sh, err)
-			}()
+		// defer log access, close error connection
+		if !closeSent && err != nil {
+			se := DetectError(err, StatusInternalServerError)
+			sh.Status = se.Code()
+			sh.Message = se.Message()
+			err = s.writeWebsocketHandshake(wc, c, sh)
+			wc.Close()
+		} else if err != nil {
+			wc.Close()
 		}
+		s.logAccess(c, sh, err)
 	}()
 
 	// transfer headers to conn

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"io"
+	"log"
 	"strconv"
 )
 
@@ -142,6 +143,7 @@ func (h *Handshake) MarshalText() []byte {
 		title = append(title, "\n\n"...)
 		title = append(title, h.Message...)
 	}
+	log.Printf("handshake marshal text: %q.", string(title))
 	return title
 }
 
@@ -203,8 +205,8 @@ func (h *Handshake) UnmarshalBinary(data []byte) StatusError {
 	if len(data) == 0 {
 		return NewStatusError(StatusProtocolError, "empty status")
 	}
-	h.Status = Status(data[4])
-	data = data[5:]
+	h.Status = Status(data[0])
+	data = data[1:]
 	if len(data) == 0 {
 		return nil
 	}
