@@ -73,7 +73,7 @@ func NewServerOptions() *ServerOptions {
 	}
 }
 
-type CloseHandler func(conn *Conn, status Status, message string)
+type ConnCloseHandler func(conn *Conn, status Status, message string)
 
 type Server struct {
 	*Router
@@ -81,8 +81,10 @@ type Server struct {
 	mu        sync.RWMutex
 	listeners map[io.Closer]struct{}
 	conns     ConnSet
-	closes    []CloseHandler
 	done      chan error
+
+	// callbacks
+	connCloseHandlers []ConnCloseHandler
 }
 
 func NewServer(opts *ServerOptions) *Server {
@@ -98,8 +100,8 @@ func NewServer(opts *ServerOptions) *Server {
 	return srv
 }
 
-func (s *Server) HandleConnClose(fn CloseHandler) {
-	s.closes = append(s.closes, fn)
+func (s *Server) HandleConnClose(fn ConnCloseHandler) {
+	s.connCloseHandlers = append(s.connCloseHandlers, fn)
 }
 
 type ConnFilter func(conn *Conn) bool
@@ -205,11 +207,12 @@ func (s *Server) cleanup(c *Conn, se StatusError) {
 	}
 	s.conns.Del(c)
 	s.mu.Unlock()
-	for _, h := range s.closes {
+	for _, h := range s.connCloseHandlers {
 		h(c, se.Code(), se.Message())
 	}
 }
 
+// serve net conn
 func (s *Server) HandleConn(nc net.Conn) (err error) {
 	c := s.newConn(nc)
 	closeSent := false
@@ -269,6 +272,7 @@ func (s *Server) writeWebsocketHandshake(wc *websocket.Conn, c *Conn, sh *Handsh
 	return wc.WriteMessage(typ, data)
 }
 
+// serve websocket conn
 func (s *Server) HandleWebsocketConn(wc *websocket.Conn, req *http.Request) (err error) {
 	c := s.newConn(wc.UnderlyingConn())
 	sh := NewServerHandshake(StatusOk, c.ServerHeader, "")
@@ -327,9 +331,9 @@ func (s *Server) HandleWebsocketConn(wc *websocket.Conn, req *http.Request) (err
 			s.cleanup(c, se)
 		}()
 	} else {
-		go c.readWebsocket(wc)
+		go c.readBinaryWebsocket(wc)
 		go func() {
-			se := c.writeWebsocket(wc)
+			se := c.writeBinaryWebsocket(wc)
 			s.cleanup(c, se)
 		}()
 	}
@@ -355,14 +359,19 @@ func (s *Server) shutdown(err error) {
 	s.done <- err
 }
 
+// wait server close, this should call once at most, it returns when server listen error occurs or call close method
+//
+// if err is not nil, means the listener meet an error, else means the server is closed manually
 func (s *Server) Wait() error {
 	return <-s.done
 }
 
+// close all listeners
 func (s *Server) Close() {
 	s.shutdown(nil)
 }
 
+// serve a net listener
 func (s *Server) Serve(lis net.Listener) {
 	if _, ok := s.listeners[lis]; ok {
 		panic("the listener " + lis.Addr().Network() + ":" + lis.Addr().String() + " is listening already")

@@ -9,7 +9,7 @@ type Backoff interface {
 	// the next wait time
 	// if should stop, the second value should be false
 	// else it should be true
-	Next() (wait time.Duration, ok bool)
+	Next() (wait time.Duration, count int, ok bool)
 	// reset the count to 0
 	Reset()
 }
@@ -22,12 +22,12 @@ type linearBackoff struct {
 	count  int
 }
 
-func (l *linearBackoff) Next() (time.Duration, bool) {
+func (l *linearBackoff) Next() (time.Duration, int, bool) {
 	if l.count >= l.limit {
-		return 0, false
+		return 0, 0, false
 	}
 	l.count += 1
-	return (l.base + l.factor*time.Duration(l.count)) * time.Duration(100+l.jitter-rand.Intn(l.jitter<<1)) / 100, true
+	return (l.base + l.factor*time.Duration(l.count)) * time.Duration(100+l.jitter-rand.Intn(l.jitter<<1)) / 100, l.count, true
 }
 
 func (l *linearBackoff) Reset() {

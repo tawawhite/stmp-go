@@ -1,47 +1,21 @@
 package stmp_test
 
 import (
-	"crypto/tls"
 	"github.com/acrazing/stmp-go/stmp"
 	"log"
+	"time"
 )
 
-func createClient(cc *stmp.Client) {
-}
-
-func ExampleNewClientConn() {
-	nc, err := tls.Dial("tcp", "github.com:443", nil)
-	if err != nil {
-		log.Fatalf("dial error: %q.", err)
-	}
-	cc := stmp.NewClientConn(nc, stmp.NewDialOptions().ApplyDefault())
-	err = cc.Handshake()
-	if err != nil {
-		log.Fatalf("handshake error: %q.", err.Error())
-	}
-	createClient(cc)
-}
-
-func ExampleDialTCP() {
-	cc, err := stmp.DialTCP("github.com:443", nil)
-	if err != nil {
-		log.Fatalf("dial error: %q.", err)
-	}
-	createClient(cc)
-}
-
-func ExampleDialTCP_insecure() {
-	cc, err := stmp.DialTCP("github.com:80", stmp.NewDialOptions().WithInsecure())
-	if err != nil {
-		log.Fatalf("dial error: %q.", err)
-	}
-	createClient(cc)
-}
-
-func ExampleDialTCP_customCertFile() {
-	cc, err := stmp.DialTCP("my.example.com:80", stmp.NewDialOptions().WithCert("./example.crt", true))
-	if err != nil {
-		log.Fatalf("dial error: %q.", err)
-	}
-	createClient(cc)
+func ExampleClient_DialKCP() {
+	sc := stmp.NewClient(nil)
+	sc.HandleConnected(func(header stmp.Header, message string) {
+		log.Printf("stmp connected: %q.", message)
+		time.Sleep(time.Second)
+		// the connection will auto reconnect by default
+		sc.Close(stmp.StatusNetworkError, "test retry")
+	})
+	sc.HandleDisconnected(func(reason stmp.StatusError, willRetry bool, retryCount int, retryWait time.Duration) {
+		log.Printf("stmp disconnected, reason: %q, will retry: %t the %d time in %d seconds.", reason, willRetry, retryCount, retryWait)
+	})
+	sc.DialTCP("127.0.0.1:9991")
 }

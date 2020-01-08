@@ -14,7 +14,7 @@ import (
 type RoomScene struct {
 	mu    sync.Mutex
 	rsc   pb.STMPRoomServiceClient
-	conn  *stmp.Client
+	sc    *stmp.Client
 	room  *string
 	users []string
 }
@@ -79,7 +79,7 @@ func (r *RoomScene) Run() {
 				r.room = nil
 				r.users = nil
 				r.PrintTip()
-				pb.STMPUnregisterRoomEventsListener(r.conn, r)
+				pb.STMPUnregisterRoomEventsListener(r.sc, r)
 			}
 		} else if r.room == nil {
 			if roomInput != "" {
@@ -91,7 +91,7 @@ func (r *RoomScene) Run() {
 					log.Printf("Users in this room: %s.", strings.Join(out.Users, ", "))
 					r.room = &out.Name
 					r.users = out.Users
-					pb.STMPRegisterRoomEventsListener(r.conn, r)
+					pb.STMPRegisterRoomEventsListener(r.sc, r)
 				}
 			}
 		}
@@ -102,7 +102,7 @@ func (r *RoomScene) Run() {
 func NewRoomScene(rsc pb.STMPRoomServiceClient, conn *stmp.Client) *RoomScene {
 	return &RoomScene{
 		rsc:   rsc,
-		conn:  conn,
+		sc:    conn,
 		room:  nil,
 		users: nil,
 	}
@@ -113,11 +113,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("init logger error: %s", err)
 	}
-	conn, err := stmp.DialTCP("127.0.0.1:5001", stmp.NewDialOptions().WithLogger(logger).WithEncoding("gzip"))
-	if err != nil {
-		log.Fatalf("dial error: %s", err)
-	}
-	rsc := pb.STMPNewRoomServiceClient(conn)
-	scene := NewRoomScene(rsc, conn)
+	sc := stmp.NewClient(stmp.NewClientOptions().WithLogger(logger).WithEncoding("gzip"))
+	sc.HandleConnected(func(header stmp.Header, message string) {
+	})
+	rsc := pb.STMPNewRoomServiceClient(sc)
+	go sc.DialTCP("127.0.0.1:5001")
+	scene := NewRoomScene(rsc, sc)
 	scene.Run()
 }

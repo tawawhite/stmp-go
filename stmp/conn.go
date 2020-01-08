@@ -125,10 +125,9 @@ func (o *ConnOptions) ApplyDefault() *ConnOptions {
 func NewConnOptions() *ConnOptions {
 	return &ConnOptions{
 		handshakeTimeout: time.Minute,
-		// ping timeout
+		// ping interval
 		readTimeout:  time.Minute * 2,
 		writeTimeout: time.Minute,
-		router:       nil,
 		// 16 mb
 		maxPacketSize:  1 << 24,
 		writeQueueSize: 8,
@@ -402,7 +401,7 @@ func (c *Conn) write() StatusError {
 	return se
 }
 
-func (c *Conn) readWebsocket(wc *websocket.Conn) {
+func (c *Conn) readBinaryWebsocket(wc *websocket.Conn) {
 	p := new(Packet)
 	var err error
 	var data []byte
@@ -422,7 +421,7 @@ func (c *Conn) readWebsocket(wc *websocket.Conn) {
 
 const maxBinaryHeadSize = 13
 
-func (c *Conn) writeWebsocket(wc *websocket.Conn) StatusError {
+func (c *Conn) writeBinaryWebsocket(wc *websocket.Conn) StatusError {
 	var e writeEvent
 	var err error
 	var se StatusError

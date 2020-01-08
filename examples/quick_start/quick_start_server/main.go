@@ -84,7 +84,7 @@ func main() {
 	pb.STMPRegisterRoomServiceServer(srv, NewRoomServiceServer())
 	go srv.ListenAndServeTCP("127.0.0.1:5001")
 	log.Println("server is listening at tcp://127.0.0.1:5001")
-	go srv.ListenAndServeWebSocket("127.0.0.1:5002", "/quick_start")
+	go srv.ListenAndServeWebsocket("127.0.0.1:5002", "/quick_start")
 	log.Println("server is listening at  ws://127.0.0.1:5002/quick_start")
 	err = srv.Wait()
 	if err != nil {

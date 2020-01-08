@@ -50,17 +50,18 @@ func main() {
 	if err != nil {
 		log.Fatalln("\nERROR:", err)
 	}
-	var conn *stmp.Client
-	var dialOptions = stmp.NewDialOptions().WithHeader("X-User-Name", name)
+	sc := stmp.NewClient(stmp.NewClientOptions().WithHeader("X-User-Name", name))
+	sc.HandleConnected(func(header stmp.Header, message string) {
+		log.Printf("connected to %q, message: %q.", addr, message)
+	})
 	if strings.HasPrefix(addr, "ws://") || strings.HasPrefix(addr, "wss://") {
-		log.Println("dialing", addr)
-		conn, err = stmp.DialWebsocket(addr, dialOptions)
+		go sc.DialWebsocket(addr, "", false)
 	} else if strings.HasPrefix(addr, "kcp://") {
 		log.Println("dialing", addr)
-		conn, err = stmp.DialKCP(addr[6:], dialOptions)
+		sc, err = stmp.DialKCP(addr[6:], dialOptions)
 	} else if strings.HasPrefix(addr, "tcp://") || strings.Index(addr, "://") == -1 {
 		log.Println("dialing", addr)
-		conn, err = stmp.DialTCP(strings.TrimPrefix(addr, "tcp://"), dialOptions)
+		sc, err = stmp.DialTCP(strings.TrimPrefix(addr, "tcp://"), dialOptions)
 	} else {
 		log.Println("ERROR: unsupported address format:", addr)
 		os.Exit(1)
@@ -69,7 +70,7 @@ func main() {
 		log.Fatalln("ERROR:", err)
 	}
 
-	usc := roompb.STMPNewUserServiceClient(conn)
+	usc := roompb.STMPNewUserServiceClient(sc)
 	ls := NewLobbyScene(usc)
 	ls.Mount()
 

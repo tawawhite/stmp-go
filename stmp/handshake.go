@@ -160,7 +160,7 @@ func (h *Handshake) MarshalBinary() []byte {
 }
 
 // client only
-func (h *Handshake) UnmarshalText(data []byte) error {
+func (h *Handshake) UnmarshalText(data []byte) StatusError {
 	if len(data) < 4 || !bytes.Equal(data[:4], []byte("STMP")) {
 		return NewStatusError(StatusProtocolError, "invalid magic: "+string(data[0:min(4, len(data))]))
 	}
@@ -195,7 +195,7 @@ func (h *Handshake) UnmarshalText(data []byte) error {
 }
 
 // client only
-func (h *Handshake) UnmarshalBinary(data []byte) error {
+func (h *Handshake) UnmarshalBinary(data []byte) StatusError {
 	if len(data) < 4 || !bytes.Equal(data[:4], []byte("STMP")) {
 		return NewStatusError(StatusProtocolError, "invalid magic: "+string(data[0:min(4, len(data))]))
 	}
