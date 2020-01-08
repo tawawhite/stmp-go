@@ -16,23 +16,23 @@ init:
 	go mod download
 	go mod vendor
 
-proto-room: gen-stmp
+proto-gomoku: gen-stmp
 	protoc --proto_path=vendor --proto_path=. \
 		--plugin=protoc-gen-stmp=$$PWD/out/protoc-gen-stmp \
 		--gogofast_out=$$GOPATH/src \
 		--validate_out=lang=gogo:$$GOPATH/src \
 		--stmp_out=lang=go:$$GOPATH/src \
-		./examples/room/room_pb/*.proto
-	pbjs -t static-module -w commonjs -p ./vendor \
+		./examples/gomoku/gomoku_pb/*.proto
+	yarn pbjs -t static-module -w commonjs -p ./vendor -p . \
 		--no-create --no-verify \
 		--no-convert --no-delimited --keep-case --sparse \
-		-o ./examples/room/room_pb/room.pb.js ./examples/room/room_pb/*.proto
-	pbts -n pb --no-comments \
-		-o ./examples/room/room_pb/room.pb.d.ts ./examples/room/room_pb/room.pb.js
+		-o ./examples/gomoku/gomoku_pb/gomoku.pb.js ./examples/gomoku/gomoku_pb/*.proto
+	yarn pbts -n pb --no-comments \
+		-o ./examples/gomoku/gomoku_pb/gomoku.pb.d.ts ./examples/gomoku/gomoku_pb/gomoku.pb.js
 	protoc --proto_path=vendor --proto_path=. \
 		--plugin=protoc-gen-stmp=$$PWD/out/protoc-gen-stmp \
-		--stmp_out=lang=js,js.module=cjs,js.pb=./examples/room/room_pb/room.pb.js,js.out=./examples/room/room_pb/room.stmp.js:. \
-		./examples/room/room_pb/*.proto
+		--stmp_out=lang=js,js.module=cjs,js.pb=./examples/gomoku/gomoku_pb/gomoku.pb.js,js.out=./examples/gomoku/gomoku_pb/gomoku.stmp.js:. \
+		./examples/gomoku/gomoku_pb/*.proto
 
 proto-quick-start: gen-stmp
 	protoc --proto_path=vendor --proto_path=. \
@@ -41,13 +41,13 @@ proto-quick-start: gen-stmp
 		--stmp_out=lang=go:$$GOPATH/src \
 		./examples/quick_start/quick_start_pb/*.proto
 
-all: init build proto-room proto-quick-start
+all: init build proto-gomoku proto-quick-start
 
-run-room-server:
-	go run ./examples/room/room_server
+run-gomoku-server:
+	go run ./examples/gomoku/gomoku_server
 
-run-room-client:
-	go run examples/room/room_client
+run-gomoku-client:
+	go run examples/gomoku/gomoku_client
 
 run-quick-start-server:
 	CompileDaemon -build "go build -o ./out/quick_start_server ./examples/quick_start/quick_start_server" \

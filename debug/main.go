@@ -263,7 +263,7 @@ type debugMethodWithField struct {
 func (*debugMethod) echo() {
 }
 
-func usage() {
+func Usage() {
 	print("Available commands: ")
 	keys := make([]string, 0, len(cmds))
 	for k := range cmds {
@@ -275,12 +275,12 @@ func usage() {
 func main() {
 	for _, v := range os.Args {
 		if v == "-h" || v == "--help" {
-			usage()
+			Usage()
 			os.Exit(0)
 		}
 	}
 	if len(os.Args) < 2 || cmds[os.Args[1]] == nil {
-		usage()
+		Usage()
 		os.Exit(1)
 	}
 	cmd := cmds[os.Args[1]]

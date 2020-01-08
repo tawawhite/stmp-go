@@ -1,0 +1,282 @@
+syntax = "proto3";
+package stmp.examples.gomoku;
+
+option go_package = "github.com/acrazing/stmp-go/examples/gomoku/gomoku_pb;pb";
+
+import "github.com/envoyproxy/protoc-gen-validate/validate/validate.proto";
+import "stmp/stmp.proto";
+
+// disable this for avoid pbjs throws error
+//import "github.com/gogo/protobuf/gogoproto/gogo.proto";
+//
+//option (gogoproto.description_all) = false;
+//option (gogoproto.goproto_unrecognized_all) = false;
+//option (gogoproto.goproto_extensions_map_all) = false;
+//option (gogoproto.goproto_unkeyed_all) = false;
+//option (gogoproto.goproto_sizecache_all) = false;
+
+message Empty {
+}
+
+message PlayerModel {
+    enum Status {
+        Reserved = 0;
+        Free = 1;
+        Standby = 2;
+        Unready = 3;
+        Ready = 4;
+        Playing = 5;
+    }
+
+    int64 id = 1;
+    string name = 2;
+    Status status = 3;
+    int64 roomId = 4;
+    int32 seat = 5;
+    int64 gameId = 6;
+    int64 readyTimeout = 7;
+}
+
+message RoomModel {
+    enum Reasons {
+        Reserved = 0;
+        InRoomAlready = 1;
+    }
+
+    int64 id = 1;
+    map<int32, int64> players = 2;
+    int64 gameId = 3;
+    repeated int64 spectators = 4;
+}
+
+message HandModel {
+    int32 x = 1;
+    int32 y = 2;
+    int32 t = 3;
+}
+
+message ApplyModel {
+    enum Kind {
+        Reserved = 0;
+        GiveUp = 1;
+        Draw = 2;
+    }
+}
+
+message GomokuModel {
+    enum Result {
+        Playing = 0;
+        Win = 1;
+        Draw = 2;
+        ApplyGiveUp = 3;
+        ApplyDraw = 4;
+        UserStepTimeout = 5;
+        UserTotalTimeout = 6;
+    }
+
+    int64 id = 1;
+    int64 roomId = 2;
+    int64 playerBlack = 3;
+    int64 playerWhite = 4;
+    int32 seatBlack = 5;
+    int32 seatWhite = 6;
+    repeated HandModel history = 7;
+    int64 createdAt = 8;
+    Result result = 9;
+    int64 winner = 10;
+}
+
+message FullRoomModel {
+    RoomModel room = 1;
+    map<int64, PlayerModel> players = 2;
+    GomokuModel game = 3;
+}
+
+message ListInput {
+    int64 limit = 1;
+    int64 offset = 2;
+}
+
+message ListRoomOutput {
+    int64 total = 1;
+    repeated RoomModel rooms = 2;
+}
+
+message LookonRoomInput {
+    int64 roomId = 1;
+}
+
+message JoinRoomInput {
+    int64 roomId = 1;
+    int32 preferSeat = 2;
+    int32 seat = 3;
+}
+
+service RoomService {
+    option (stmp.service) = 0x01;
+    rpc MatchRoom (Empty) returns (FullRoomModel) {
+        option (stmp.method) = 0x01;
+    }
+    rpc ListRoom (ListInput) returns (ListRoomOutput) {
+        option (stmp.method) = 0x02;
+    }
+    rpc LookonRoom (LookonRoomInput) returns (FullRoomModel) {
+        option (stmp.method) = 0x03;
+    }
+    rpc JoinRoom (JoinRoomInput) returns (FullRoomModel) {
+        option (stmp.method) = 0x04;
+    }
+    rpc Ready (Empty) returns (Empty) {
+        option (stmp.method) = 0x05;
+    }
+    rpc Unready (Empty) returns (Empty) {
+        option (stmp.method) = 0x06;
+    }
+    rpc ExitRoom (Empty) returns (Empty) {
+        option (stmp.method) = 0x07;
+    }
+}
+
+message UserJoinEvent {
+    int64 userId = 1;
+    int32 seat = 2;
+    int32 readyTimeout = 3;
+}
+
+message UserReadyEvent {
+    int64 userId = 1;
+}
+
+message UserUnreadyEvent {
+    int64 userId = 1;
+    int32 readyTimeout = 2;
+}
+
+message UserLookonEvent {
+    int64 userId = 1;
+}
+
+message UserExitEvent {
+    int64 userId = 1;
+}
+
+service RoomEvents {
+    option (stmp.service) = 0x02;
+    rpc UserJoin (UserJoinEvent) returns (Empty) {
+        option (stmp.method) = 0x01;
+    }
+    rpc UserReady (UserReadyEvent) returns (Empty) {
+        option (stmp.method) = 0x02;
+    }
+    rpc UserUnready (UserUnreadyEvent) returns (Empty) {
+        option (stmp.method) = 0x03;
+    }
+    rpc UserLookon (UserLookonEvent) returns (Empty) {
+        option (stmp.method) = 0x04;
+    }
+    rpc UserExit (UserExitEvent) returns (Empty) {
+        option (stmp.method) = 0x05;
+    }
+}
+
+message ApplyInput {
+    ApplyModel.Kind kind = 1;
+}
+
+message ReplyInput {
+    ApplyModel.Kind kind = 1;
+    bool accept = 2;
+}
+
+service GomokuService {
+    option (stmp.service) = 0x03;
+    rpc Play (HandModel) returns (Empty) {
+        option (stmp.method) = 0x01;
+    }
+    rpc Apply (ApplyInput) returns (Empty) {
+        option (stmp.method) = 0x02;
+    }
+    rpc Reply (ReplyInput) returns (Empty) {
+        option (stmp.method) = 0x03;
+    }
+}
+
+message UserPlayEvent {
+    int64 userId = 1;
+    HandModel hand = 2;
+}
+
+message UserApplyEvent {
+    ApplyModel.Kind kind = 1;
+}
+
+message UserReplyEvent {
+    ApplyModel.Kind kind = 1;
+    bool accepted = 2;
+}
+
+message UserDisconnectedEvent {
+    int64 userId = 1;
+    int32 waitTimeout = 2;
+}
+
+message UserConnectedEvent {
+    int64 userId = 1;
+}
+
+service GomokuEvents {
+    option (stmp.service) = 0x04;
+    rpc GameStart (GomokuModel) returns (Empty) {
+        option (stmp.method) = 0x01;
+    }
+    rpc UserPlay (UserPlayEvent) returns (Empty) {
+        option (stmp.method) = 0x02;
+    }
+    rpc UserApply (UserApplyEvent) returns (Empty) {
+        option (stmp.method) = 0x03;
+    }
+    rpc UserReply (UserReplyEvent) returns (Empty) {
+        option (stmp.method) = 0x04;
+    }
+    rpc UserDisconnected (UserDisconnectedEvent) returns (Empty) {
+        option (stmp.method) = 0x05;
+    }
+    rpc UserConnected (UserConnectedEvent) returns (Empty) {
+        option (stmp.method) = 0x06;
+    }
+    rpc GameOver (GomokuModel) returns (Empty) {
+        option (stmp.method) = 0x07;
+    }
+}
+
+message LoginInput {
+    string name = 1 [(validate.rules).string = { min_bytes: 2, max_bytes: 32 }];
+}
+
+message ListPlayerInput {
+    int64 limit = 1;
+    int64 offset = 2;
+    repeated int64 ids = 3;
+}
+
+message ListPlayerOutput {
+    int64 total = 1;
+    repeated PlayerModel players = 2;
+}
+
+service PlayerService {
+    option (stmp.service) = 0x05;
+    rpc Login (LoginInput) returns (PlayerModel) {
+        option (stmp.method) = 0x01;
+    }
+    rpc ListUser (ListPlayerInput) returns (ListPlayerOutput) {
+        option (stmp.method) = 0x02;
+    }
+}
+
+service PlayerEvents {
+    option (stmp.service) = 0x06;
+    rpc StatusUpdated (PlayerModel) returns (Empty) {
+        option (stmp.method) = 0x01;
+    }
+}
