@@ -7,7 +7,7 @@ import (
 	"log"
 )
 
-func ExampleServer_ListenMultiple() {
+func ExampleServer_listenMultiple() {
 	srv := stmp.NewServer(stmp.NewServerOptions())
 	go srv.ListenAndServeTCP("127.0.0.1:9991")
 	log.Printf("stmp server is listening at %q.", "tcp://127.0.0.1:9991")

@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-func ExampleClient_DialKCP() {
+func ExampleClient() {
 	sc := stmp.NewClient(nil)
 	sc.HandleConnected(func(header stmp.Header, message string) {
 		log.Printf("stmp connected: %q.", message)
