@@ -256,11 +256,9 @@ func (m *HandModel) Validate() error {
 		return nil
 	}
 
-	// no validation rules for X
+	// no validation rules for Row
 
-	// no validation rules for Y
-
-	// no validation rules for T
+	// no validation rules for Col
 
 	return nil
 }

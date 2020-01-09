@@ -50,9 +50,8 @@ message RoomModel {
 }
 
 message HandModel {
-    int32 x = 1;
-    int32 y = 2;
-    int32 t = 3;
+    uint32 row = 1;
+    uint32 col = 2;
 }
 
 message ApplyModel {

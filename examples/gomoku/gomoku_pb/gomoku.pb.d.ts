@@ -80,16 +80,14 @@ declare namespace pb {
                 }
 
                 interface IHandModel {
-                    x?: (number|null);
-                    y?: (number|null);
-                    t?: (number|null);
+                    row?: (number|null);
+                    col?: (number|null);
                 }
 
                 class HandModel implements IHandModel {
                     constructor(properties?: stmp.examples.gomoku.IHandModel);
-                    public x: number;
-                    public y: number;
-                    public t: number;
+                    public row: number;
+                    public col: number;
                     public static encode(message: stmp.examples.gomoku.IHandModel, writer?: $protobuf.Writer): $protobuf.Writer;
                     public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): stmp.examples.gomoku.HandModel;
                 }

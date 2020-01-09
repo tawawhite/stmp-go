@@ -452,9 +452,8 @@ $root.stmp = (function() {
                  * Properties of a HandModel.
                  * @memberof stmp.examples.gomoku
                  * @interface IHandModel
-                 * @property {number|null} [x] HandModel x
-                 * @property {number|null} [y] HandModel y
-                 * @property {number|null} [t] HandModel t
+                 * @property {number|null} [row] HandModel row
+                 * @property {number|null} [col] HandModel col
                  */
 
                 /**
@@ -473,28 +472,20 @@ $root.stmp = (function() {
                 }
 
                 /**
-                 * HandModel x.
-                 * @member {number} x
+                 * HandModel row.
+                 * @member {number} row
                  * @memberof stmp.examples.gomoku.HandModel
                  * @instance
                  */
-                HandModel.prototype.x = 0;
+                HandModel.prototype.row = 0;
 
                 /**
-                 * HandModel y.
-                 * @member {number} y
+                 * HandModel col.
+                 * @member {number} col
                  * @memberof stmp.examples.gomoku.HandModel
                  * @instance
                  */
-                HandModel.prototype.y = 0;
-
-                /**
-                 * HandModel t.
-                 * @member {number} t
-                 * @memberof stmp.examples.gomoku.HandModel
-                 * @instance
-                 */
-                HandModel.prototype.t = 0;
+                HandModel.prototype.col = 0;
 
                 /**
                  * Encodes the specified HandModel message. Does not implicitly {@link stmp.examples.gomoku.HandModel.verify|verify} messages.
@@ -508,12 +499,10 @@ $root.stmp = (function() {
                 HandModel.encode = function encode(message, writer) {
                     if (!writer)
                         writer = $Writer.create();
-                    if (message.x != null && message.hasOwnProperty("x"))
-                        writer.uint32(/* id 1, wireType 0 =*/8).int32(message.x);
-                    if (message.y != null && message.hasOwnProperty("y"))
-                        writer.uint32(/* id 2, wireType 0 =*/16).int32(message.y);
-                    if (message.t != null && message.hasOwnProperty("t"))
-                        writer.uint32(/* id 3, wireType 0 =*/24).int32(message.t);
+                    if (message.row != null && message.hasOwnProperty("row"))
+                        writer.uint32(/* id 1, wireType 0 =*/8).uint32(message.row);
+                    if (message.col != null && message.hasOwnProperty("col"))
+                        writer.uint32(/* id 2, wireType 0 =*/16).uint32(message.col);
                     return writer;
                 };
 
@@ -536,13 +525,10 @@ $root.stmp = (function() {
                         var tag = reader.uint32();
                         switch (tag >>> 3) {
                         case 1:
-                            message.x = reader.int32();
+                            message.row = reader.uint32();
                             break;
                         case 2:
-                            message.y = reader.int32();
-                            break;
-                        case 3:
-                            message.t = reader.int32();
+                            message.col = reader.uint32();
                             break;
                         default:
                             reader.skipType(tag & 7);
