@@ -57,8 +57,8 @@ func (o *ClientOptions) WithTimeout(handshake, read, write time.Duration) *Clien
 }
 
 // set a custom handshake header
-func (o *ClientOptions) WithHeader(key string, value ...string) *ClientOptions {
-	o.header.Set(key, value...)
+func (o *ClientOptions) WithHeader(key string, value string) *ClientOptions {
+	o.header.Set(key, value)
 	return o
 }
 

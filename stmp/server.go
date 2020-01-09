@@ -147,7 +147,7 @@ func (s *Server) logAccess(c *Conn, sh *Handshake, err error) {
 	fields := []zap.Field{
 		zap.String("addr", c.RemoteAddr().String()),
 		zap.String("server", c.LocalAddr().String()),
-		zap.String("status", hexFormatUint64(uint64(sh.Status))),
+		zap.ByteString("status", hexFormatUint64(uint64(sh.Status))),
 		zap.String("message", sh.Message),
 	}
 	if err != nil {
@@ -295,10 +295,10 @@ func (s *Server) HandleWebsocketConn(wc *websocket.Conn, req *http.Request) (err
 
 	// transfer headers to conn
 	for k, v := range req.Header {
-		c.ClientHeader.Set(k, v...)
+		c.ClientHeader[k] = v
 	}
 	for k, v := range req.URL.Query() {
-		c.ClientHeader.Set(k, v...)
+		c.ClientHeader[k] = v
 	}
 	rawVersion := c.ClientHeader.Get(DetermineStmpVersion)
 	if len(rawVersion) != 3 {

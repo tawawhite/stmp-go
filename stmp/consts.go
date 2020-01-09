@@ -13,22 +13,6 @@ const (
 	MessageKindClose    = 0x5
 )
 
-func shouldHeadOnly(kind byte) bool {
-	return kind == MessageKindPing || kind == MessageKindPong
-}
-
-func hasMid(kind byte) bool {
-	return kind == MessageKindRequest || kind == MessageKindResponse
-}
-
-func hasAction(kind byte) bool {
-	return kind == MessageKindRequest || kind == MessageKindNotify
-}
-
-func hasStatus(kind byte) bool {
-	return kind == MessageKindResponse || kind == MessageKindClose
-}
-
 func isValidKind(kind byte) bool {
 	switch kind {
 	case MessageKindPing, MessageKindPong, MessageKindRequest, MessageKindNotify, MessageKindResponse, MessageKindClose:
@@ -38,10 +22,6 @@ func isValidKind(kind byte) bool {
 	}
 }
 
-const maskFin = 0x80
-const maskHead = 0b1000
-const offsetKind = 4
-
 var mapTextKind = map[byte]byte{
 	'I': MessageKindPing,
 	'O': MessageKindPong,
@@ -49,7 +29,6 @@ var mapTextKind = map[byte]byte{
 	'N': MessageKindNotify,
 	'S': MessageKindResponse,
 	'C': MessageKindClose,
-	//'F': MessageKindFollowing,
 }
 
 var mapKindText = map[byte]byte{

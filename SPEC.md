@@ -2,19 +2,24 @@
 
 **VERSION: 1.0**
 
-**Note**: `text` is only used for `WebSockets`, it contains message length already, so we do not need `<LENGTH>` field.
+- **Note**: `text` is only used for `WebSockets`, it contains message length already, so we do not need `<LENGTH>` field.
+- **Note**: if transport could split packet, the binary packets should not contains `XXX LENGTH` fields, it should be replaced by `\n`
 
 1. Client handshake
 
    - binary
 
      ```text
-     STMP<VERSION MAJOR><VERSION MINOR><LENGTH>
-     <KEY>:<VALUE>
-     ...
+     STMP<MAJOR|MINOR><HEADER LENGTH><HEADER><PAYLOAD LENGTH><PAYLOAD>
      ```
 
    - text
+   
+     ```text
+     <STMP><MAJOR><MINOR>
+     H<HEADER>
+     M<MESSAGE>
+     ```
 
      _reuse WebSockets handshake request_
 
@@ -34,21 +39,15 @@
    - binary
 
      ```text
-     STMP<HANDSHAKE STATUS><LENGTH>
-     <KEY>:<VALUE>
-     ...
-
-     [MESSAGE]
+     STMP<HANDSHAKE STATUS><HEADER LENGTH><HEADER><PAYLOAD LENGTH><PAYLOAD>
      ```
 
    - text
 
      ```text
      STMP<HANDSHAKE STATUS>
-     <KEY>:<VALUE>
-     ...
-
-     [MESSAGE]
+     H<HEADER>
+     M<MESSAGE>
      ```
 
      - _WebSockets handshake response is deprecated, because client cannot access it_
@@ -70,15 +69,13 @@
 
      ```text
      | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 |
-     | F |     K     | H |     R     |
-     | I |     I     | E |     S     |
-     | N |     N     | A |     V     |
-     |   |     D     | D |           |
+     | F |     K     | W | W | S | R |
+     | I |     I     | P | H | A | S |
+     | N |     N     |   |   |   | V |
+     |   |     D     |   |   |   |   |
      ```
 
-     - `FIN`: only for `Request`, `Notify`, `Response` and `Following`, if fin, means
-       that the message is end, else has more `Following` message with same `MESSAGE ID`,
-       the `PAYLOAD` of the message with same `MESSAGE ID` will be merged.
+     - `FIN`: must be `1` currently
      - `KIND`: message kind
        - `0x0`: Ping message
        - `0x1`: Pong message
@@ -86,117 +83,82 @@
        - `0x3`: Notify message
        - `0x4`: Response message
        - `0x5`: Close message
-       - `0x6`: Following message
-     - `HEAD`: the message is head only or with payload, if is `0`, the `PAYLOAD` and `PAYLOAD LENGTH` field will be omitted.
-     - `RSV`: must be `0` currently
+     - `WP`: with payload or not, if `1`, means the packet has `PAYLOAD LENGTH` and `PAYLOAD` part
+     - `WH`: with header or not, if `1`, means the packet has `HEADER LENGTH` and `HEADER` part
+     - `SA`: action is string or not, if `1`, means the packet action is `METHOD LENGTH` and `METHOD` rather than `ACTION`
 
    - text
 
-     text message is used for `WebSockets` only, so, it only contains
-     `KIND` field with one byte:
+     ```text
+     <KIND>
+     ```
 
-     - `I`: Ping message
-     - `O`: Pong message
-     - `Q`: Request message
-     - `N`: Notify message
-     - `S`: Response message
-     - `C`: Close message
-     - `F`: Following message
+     - `KIND`:
+         - `I`: Ping message
+         - `O`: Pong message
+         - `Q`: Request message
+         - `N`: Notify message
+         - `S`: Response message
+         - `C`: Close message
 
-4. Request message
+4. Request/Notify message
 
    - binary
 
      ```text
-     <HEAD><MESSAGE ID><ACTION>[PAYLOAD LENGTH][PAYLOAD]
+     <HEAD>[MESSAGE ID](<ACTION>|<METHOD LENGTH><METHOD>)([HEADER LENGTH][HEADER])([PAYLOAD LENGTH][PAYLOAD])
      ```
 
    - text
 
      ```text
-     Q<MESSAGE ID>:<ACTION>
-     [PAYLOAD]
+     <HEAD>[MESSAGE ID]:A<ACTION>|M<METHOD>
+     H[HEADER]
+     P[PAYLOAD]
      ```
 
-   - `MESSAGE ID`: a `int16le` represents the message id, used for connecting `Response` and `Request`, `Following` and not `FIN` `Notify` messages.
-      if the message from server, it should be a negative value, else it should be a positive value.
-   - `ACTION`: a `varint` represents method
-   - `PAYLOAD LENGTH`: a `varint` represents the `PAYLOAD` length
+   - `MESSAGE ID`: a `uint16(LE)` represents the message id, for request message only
+   - `ACTION`: a `uvarint` represents method
+   - `METHOD LENGTH`: a `uvarint` represents the `METHOD` length
+   - `METHOD`: the string method
+   - `HEADER LENGTH`: a `uvarint` represents the `HEADER` length
+   - `HEADER`: the header pairs
+   - `PAYLOAD LENGTH`: a `uvarint` represents the `PAYLOAD` length
    - `PAYLOAD`: any content will be explained by codec
 
-5. Notify message
+5. Response message
 
    - binary
 
      ```text
-     <HEAD>[MESSAGE ID]<ACTION>[PAYLOAD LENGTH][PAYLOAD]
-     ```
-
-     - If `FIN`, `MESSAGE ID` should be omitted
-
-   - text
-
-     ```text
-     N<ACTION>
-     [PAYLOAD]
-     ```
-
-6. Response message
-
-   - binary
-
-     ```text
-     <HEAD><RESPONSE STATUS><MESSAGE ID>[PAYLOAD LENGTH][PAYLOAD]
+     <HEAD><MESSAGE ID><RESPONSE STATUS>([HEADER LENGTH][HEADER])[PAYLOAD LENGTH][PAYLOAD]
      ```
 
    - text
 
      ```text
-     S<MESSAGE ID>:<RESPONSE STATUS>
-     [PAYLOAD]
+     <HEAD><MESSAGE ID>:<RESPONSE STATUS>
+     H[HEADER]
+     P[PAYLOAD]
      ```
 
    - `RESPONSE STATUS`: see `Status code`
 
-7. Following message
-
-   - binary
-
-     ```text
-     <HEAD><MESSAGE ID>[PAYLOAD LENGTH][PAYLOAD]
-     ```
-
-8. Close message
+6. Close message
 
    - binary
 
      ```text
      <HEAD><CLOSE STATUS>[PAYLOAD LENGTH][PAYLOAD]
      ```
+   
+   - text
+   
+     ```text
+     <HEAD><CLOSE STATUS>
+     [PAYLOAD]
+     ```
+
+   - `CLOSE STATUS`: see `Status code`
 
 **Status code**
-
-- `0x00`: Ok, 200
-
-_Network error_
-
-- `0x01`: Network error
-- `0x02`: Protocol error
-- `0x03`: Unsupported protocol version
-- `0x04`: Unsupported `Content-Type`
-- `0x05`: Unsupported `Packet-Format`
-
-_Client side error_
-
-- `0x20`: Bad request
-- `0x21`: Unauthorized
-- `0x22`: Not found
-- `0x23`: Request timeout
-- `0x24`: Request entity too large
-- `0x25`: Too many requests
-- `0x26`: Client closed
-
-_Server side error_
-
-- `0x40`: Internal server error
-- `0x41`: Server shutdown

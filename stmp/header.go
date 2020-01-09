@@ -3,58 +3,94 @@ package stmp
 import (
 	"bytes"
 	"errors"
-	"strings"
 )
 
-func escapeHeadKey(key string) string {
-	return strings.ReplaceAll(escapeHeadValue(key), ":", "%3A")
+var escapeCaches = [256]string{':': "%3A", '\n': "%0A", ';': "%3B", '%': "%25"}
+
+func escape(value string) []byte {
+	count := 0
+	for _, c := range value {
+		switch c {
+		case ':', '\n', ';', '%':
+			count++
+		}
+	}
+	if count == 0 {
+		return []byte(value)
+	}
+	buf := make([]byte, len(value)+count*2)
+	j := 0
+	k := 0
+	for i, c := range value {
+		switch c {
+		case ':', '\n', ';', '%':
+			copy(buf[k:], value[j:i])
+			k += i - j + 3
+			j = i + 1
+			copy(buf[k-3:k], escapeCaches[c])
+		}
+	}
+	copy(buf[k:], value[j:])
+	return buf
 }
 
-func escapeHeadValue(value string) string {
-	return strings.ReplaceAll(strings.ReplaceAll(value, "%", "%25"), "\n", "%0A")
-}
+var unescapeCaches = map[string]byte{"3A": ':', "0A": '\n', "3B": ';', "25": '%'}
 
-func unescapeHeadKey(key string) string {
-	return strings.TrimSpace(strings.ReplaceAll(unescapeHeadValue(key), "%3A", ":"))
-}
-
-func unescapeHeadValue(value string) string {
-	return strings.TrimSpace(strings.ReplaceAll(strings.ReplaceAll(value, "%0A", "\n"), "%25", "%"))
+func unescape(value string) string {
+	max := len(value)
+	buf := make([]byte, max, max)
+	j := 0
+	k := 0
+	safe := max - 2
+	for i := 0; i < safe; i++ {
+		if value[i] == '%' {
+			switch value[i+1 : i+3] {
+			case "3A", "0A", "3B", "25":
+				copy(buf[k:], value[j:i])
+				k += i - j
+				buf[k] = unescapeCaches[value[i+1:i+3]]
+				k++
+				i += 2
+				j = i + 1
+			}
+		}
+	}
+	copy(buf[k:], value[j:])
+	return string(buf[:k+max-j])
 }
 
 type Header map[string][]string
 
 func (h Header) Get(key string) string {
-	if v := h[strings.ToLower(key)]; len(v) > 0 {
+	if v := h[key]; len(v) > 0 {
 		return v[0]
 	}
 	return ""
 }
 
 func (h Header) GetAll(key string) []string {
-	return h[strings.ToLower(key)]
+	return h[key]
 }
 
 func (h Header) Has(key string) bool {
-	return h[strings.ToLower(key)] != nil
+	return h[key] != nil
 }
 
-func (h Header) Add(key string, value ...string) {
-	key = strings.ToLower(key)
+func (h Header) Add(key string, value string) {
 	v := h[key]
 	if v == nil {
-		h[key] = value
+		h[key] = []string{value}
 	} else {
-		h[key] = append(h[key], value...)
+		h[key] = append(h[key], value)
 	}
 }
 
-func (h Header) Set(key string, value ...string) {
-	h[strings.ToLower(key)] = value
+func (h Header) Set(key string, value string) {
+	h[key] = []string{value}
 }
 
 func (h Header) Del(key string) {
-	delete(h, strings.ToLower(key))
+	delete(h, key)
 }
 
 func (h Header) Clear() {
@@ -67,13 +103,17 @@ func (h Header) Marshal() []byte {
 	if len(h) == 0 {
 		return nil
 	}
-	chunks := make([]string, 0, len(h))
+	buf := make([]byte, 0, len(h)*25)
 	for k, vs := range h {
+		bk := escape(k)
 		for _, v := range vs {
-			chunks = append(chunks, escapeHeadKey(k)+":"+escapeHeadValue(v))
+			buf = append(buf, bk...)
+			buf = append(buf, ':')
+			buf = append(buf, escape(v)...)
+			buf = append(buf, ';')
 		}
 	}
-	return []byte(strings.Join(chunks, "\n"))
+	return buf[:len(buf)-1]
 }
 
 func (h Header) Unmarshal(data []byte) error {
@@ -86,14 +126,14 @@ func (h Header) Unmarshal(data []byte) error {
 		if sep < 0 {
 			return errors.New("miss ':' in header")
 		}
-		key = unescapeHeadKey(string(data[:sep]))
+		key = unescape(string(data[:sep]))
 		data = data[sep+1:]
-		end = bytes.IndexByte(data, '\n')
+		end = bytes.IndexByte(data, ';')
 		if end == -1 {
-			value = unescapeHeadValue(string(data))
+			value = unescape(string(data))
 			data = nil
 		} else {
-			value = unescapeHeadValue(string(data[:end]))
+			value = unescape(string(data[:end]))
 			data = data[end+1:]
 		}
 		if len(h[key]) > 0 {

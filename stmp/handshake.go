@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"io"
-	"log"
 	"strconv"
 )
 
@@ -80,85 +79,82 @@ func (h *Handshake) Read(r io.Reader, limit uint64) StatusError {
 		h.Major = title[4] >> 4
 		h.Minor = title[4] & 0xF
 	}
-	size, err := readUvarint(r, title[:1])
-	if err != nil {
+	var err error
+	var hs uint64
+	if hs, err = readUvarint(r, title[:1]); err != nil {
 		return NewStatusError(StatusNetworkError, "read handshake header size: "+err.Error())
 	}
-	if size == 0 {
-		return nil
+	if hs > limit {
+		return NewStatusError(StatusRequestEntityTooLarge, "handshake size "+strconv.Itoa(int(hs))+" too large, limit is "+strconv.Itoa(int(limit)))
 	}
-	if size > limit {
-		return NewStatusError(StatusRequestEntityTooLarge, "handshake header size "+strconv.Itoa(int(size))+" too large, limit is "+strconv.Itoa(int(limit)))
+	if hs > 0 {
+		hb := make([]byte, hs)
+		if _, err = r.Read(hb); err != nil {
+			return NewStatusError(StatusNetworkError, "read handshake header: "+err.Error())
+		}
+		if err = h.Header.Unmarshal(hb); err != nil {
+			return NewStatusError(StatusProtocolError, "parse handshake header: "+err.Error())
+		}
 	}
-	head := make([]byte, size)
-	if _, err := r.Read(head); err != nil {
-		return NewStatusError(StatusNetworkError, "read handshake header: "+err.Error())
+	var ms uint64
+	if ms, err = readUvarint(r, title[:1]); err != nil {
+		return NewStatusError(StatusNetworkError, "read handshake message size: "+err.Error())
 	}
-	sep := bytes.Index(head, []byte("\n\n"))
-	if sep > -1 {
-		h.Message = string(head[sep+2:])
-		head = head[:sep]
+	if ms+hs > limit {
+		return NewStatusError(StatusRequestEntityTooLarge, "handshake size "+strconv.Itoa(int(hs+ms))+" too large, limit is "+strconv.Itoa(int(limit)))
 	}
-	if err := h.Header.Unmarshal(head); err != nil {
-		return NewStatusError(StatusProtocolError, "parse handshake header: "+err.Error())
+	if ms > 0 {
+		mb := make([]byte, ms)
+		if _, err = r.Read(mb); err != nil {
+			return NewStatusError(StatusNetworkError, "read handshake message: "+err.Error())
+		}
+		h.Message = string(mb)
 	}
 	return nil
 }
 
-func (h *Handshake) Write(r io.Writer) StatusError {
-	title, header := h.MarshalHead()
-	if _, err := r.Write(title); err != nil {
-		return NewStatusError(StatusNetworkError, "write handshake title: "+err.Error())
-	}
-	if _, err := r.Write(header); err != nil {
-		return NewStatusError(StatusNetworkError, "write handshake header: "+err.Error())
-	}
-	if len(h.Message) == 0 {
-		return nil
-	}
-	if _, err := r.Write(append([]byte("\n\n"), h.Message...)); err != nil {
-		return NewStatusError(StatusNetworkError, "write handshake message: "+err.Error())
+func (h *Handshake) Write(w io.Writer) StatusError {
+	buf := h.MarshalBinary()
+	if _, err := w.Write(buf); err != nil {
+		return NewStatusError(StatusNetworkError, "write handshake: "+err.Error())
 	}
 	return nil
 }
 
 // server only
 func (h *Handshake) MarshalText() []byte {
-	title := make([]byte, 6)
-	copy(title, "STMP")
-	if h.Status > 0xF {
-		title[4] = hexDigits[h.Status>>4]
-		title[5] = hexDigits[h.Status&0xF]
-		title = title[:6]
+	buf := []byte("STMP")
+	if h.Kind == HandshakeKindServer {
+		buf = append(buf, hexFormatUint64(uint64(h.Status))...)
 	} else {
-		title[4] = hexDigits[h.Status]
-		title = title[:5]
+		buf = append(buf, hexDigits[h.Major], hexDigits[h.Minor])
 	}
 	header := h.Header.Marshal()
 	if len(header) > 0 {
-		title = append(title, '\n')
-		title = append(title, header...)
+		buf = append(buf, '\n', 'H')
+		buf = append(buf, header...)
 	}
 	if len(h.Message) > 0 {
-		title = append(title, "\n\n"...)
-		title = append(title, h.Message...)
+		buf = append(buf, '\n', 'M')
+		buf = append(buf, h.Message...)
 	}
-	log.Printf("handshake marshal text: %q.", string(title))
-	return title
+	return buf
 }
 
 func (h *Handshake) MarshalBinary() []byte {
-	title := []byte{'S', 'T', 'M', 'P', byte(h.Status)}
+	buf := []byte("STMP")
+	if h.Kind == HandshakeKindClient {
+		buf = append(buf, h.Major<<4|h.Minor)
+	} else {
+		buf = append(buf, byte(h.Status))
+	}
 	header := h.Header.Marshal()
-	if len(header) > 0 {
-		title = append(title, '\n')
-		title = append(title, header...)
-	}
-	if len(h.Message) > 0 {
-		title = append(title, "\n\n"...)
-		title = append(title, h.Message...)
-	}
-	return title
+	chunk := make([]byte, 10, 10)
+	buf = append(buf, chunk[:binary.PutUvarint(chunk, uint64(len(header)))]...)
+	buf = append(buf, header...)
+	buf = append(buf, chunk[:binary.PutUvarint(chunk, uint64(len(h.Message)))]...)
+	buf = append(buf, h.Message...)
+	return buf
 }
 
 // client only
@@ -167,31 +163,49 @@ func (h *Handshake) UnmarshalText(data []byte) StatusError {
 		return NewStatusError(StatusProtocolError, "invalid magic: "+string(data[0:min(4, len(data))]))
 	}
 	data = data[4:]
-	sep := bytes.IndexByte(data, '\n')
-	if sep == -1 {
-		sep = len(data)
+	i := bytes.IndexByte(data, '\n')
+	if i == -1 {
+		i = len(data)
 	}
 	var err error
-	h.Status, err = hexParseStatus(data[:sep])
-	if err != nil {
-		return NewStatusError(StatusProtocolError, "invalid status: "+err.Error())
+	if h.Kind == HandshakeKindServer {
+		if h.Status, err = hexParseStatus(data[0:i]); err != nil {
+			return NewStatusError(StatusProtocolError, "invalid status: "+err.Error())
+		}
+	} else if i != 2 {
+		return NewStatusError(StatusProtocolError, "invalid protocol version: "+string(data[0:i]))
+	} else {
+		h.Major = hexChunks[data[0]]
+		h.Minor = hexChunks[data[1]]
+		if h.Major > 0xF || h.Minor > 0xF {
+			return NewStatusError(StatusProtocolError, "invalid protocol version: "+string(data[:2]))
+		}
 	}
-	if len(data) == sep {
+	if i == len(data) {
 		return nil
 	}
-	data = data[sep:]
-	sep = bytes.Index(data, []byte("\n\n"))
-	if sep != -1 {
-		h.Message = string(data[sep+2:])
+	data = data[i+1:]
+	if len(data) == 0 {
+		return nil
 	}
-	if sep > 0 {
-		data = data[1:sep]
-	} else {
-		data = data[1:]
+	if data[0] == 'H' {
+		i = bytes.IndexByte(data, '\n')
+		if i == -1 {
+			i = len(data)
+		}
+		if err = h.Header.Unmarshal(data[1:i]); err != nil {
+			return NewStatusError(StatusProtocolError, "invalid header: "+err.Error())
+		}
+		if i == len(data) {
+			return nil
+		}
+		data = data[i+1:]
 	}
-	err = h.Header.Unmarshal(data)
-	if err != nil {
-		return NewStatusError(StatusProtocolError, "invalid header: "+err.Error())
+	if len(data) == 0 {
+		return nil
+	}
+	if data[0] == 'M' {
+		h.Message = string(data[1:])
 	}
 	return nil
 }
@@ -202,26 +216,40 @@ func (h *Handshake) UnmarshalBinary(data []byte) StatusError {
 		return NewStatusError(StatusProtocolError, "invalid magic: "+string(data[0:min(4, len(data))]))
 	}
 	data = data[4:]
-	if len(data) == 0 {
-		return NewStatusError(StatusProtocolError, "empty status")
-	}
-	h.Status = Status(data[0])
-	data = data[1:]
-	if len(data) == 0 {
-		return nil
-	}
-	sep := bytes.Index(data, []byte("\n\n"))
-	if sep != -1 {
-		h.Message = string(data[sep+2:])
-	}
-	if sep > 0 {
-		data = data[1:sep]
+	if h.Kind == HandshakeKindServer {
+		if len(data) == 0 {
+			return NewStatusError(StatusProtocolError, "invalid status")
+		}
+		h.Status = Status(data[0])
+		data = data[1:]
 	} else {
+		if len(data) == 0 {
+			return NewStatusError(StatusProtocolError, "invalid protocol version")
+		}
+		h.Major = data[0] >> 4
+		h.Minor = data[0] & 0xF
 		data = data[1:]
 	}
-	err := h.Header.Unmarshal(data)
-	if err != nil {
+	hs, n := binary.Uvarint(data)
+	if n <= 0 {
+		return NewStatusError(StatusProtocolError, "invalid header size")
+	}
+	data = data[n:]
+	if len(data) < int(hs) {
+		return NewStatusError(StatusProtocolError, "invalid header")
+	}
+	if err := h.Header.Unmarshal(data[:hs]); err != nil {
 		return NewStatusError(StatusProtocolError, "invalid header: "+err.Error())
 	}
+	data = data[hs:]
+	ms, n := binary.Uvarint(data)
+	if n <= 0 {
+		return NewStatusError(StatusProtocolError, "invalid message size")
+	}
+	data = data[n:]
+	if len(data) != int(ms) {
+		return NewStatusError(StatusProtocolError, "invalid message")
+	}
+	h.Message = string(data)
 	return nil
 }

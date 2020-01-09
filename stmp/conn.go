@@ -319,26 +319,23 @@ func (c *Conn) Close(status Status, message string) (err error) {
 func (c *Conn) logPacket(kind string, p *Packet) {
 	method := ms.actions[p.Action]
 	var m string
-	var a string
+	var a []byte
 	if method == nil {
 		a = hexFormatUint64(p.Action)
 	} else {
 		m = method.Method
-		a = method.ActionHex
+		a = []byte(method.ActionHex)
 	}
 	c.opts.logger.Debug(kind,
 		zap.String("kind", string(mapKindText[p.Kind])),
-		zap.String("mid", hexFormatUint64(uint64(p.Mid))),
+		zap.ByteString("mid", hexFormatUint64(uint64(p.Mid))),
 		zap.String("method", m),
-		zap.String("action", a),
+		zap.ByteString("action", a),
 		zap.String("status", hexCaches[p.Status]),
 	)
 }
 
-const maxStreamHeadSize = 23
-
 func (c *Conn) read() {
-	buf := make([]byte, maxStreamHeadSize, maxStreamHeadSize)
 	var err error
 	var r io.ReadCloser
 	ec := GetEncodingCodec(c.ServerHeader.Get(DetermineEncoding))
@@ -354,7 +351,7 @@ func (c *Conn) read() {
 	for {
 		p := new(Packet)
 		c.Conn.SetReadDeadline(time.Now().Add(c.opts.readTimeout))
-		se := p.Read(r, buf, c.opts.maxPacketSize)
+		se := p.Read(r, c.opts.maxPacketSize)
 		if se != nil {
 			c.send(context.Background(), NewClosePacket(se.Code(), se.Message()), false)
 			break
@@ -381,7 +378,6 @@ func (c *Conn) write() StatusError {
 	}
 	var se StatusError
 	var e writeEvent
-	buf := make([]byte, maxStreamHeadSize, maxStreamHeadSize)
 	ticker := time.NewTicker(c.opts.readTimeout / 2)
 	for {
 		select {
@@ -391,7 +387,7 @@ func (c *Conn) write() StatusError {
 		}
 		c.logPacket("wp", e.p)
 		c.Conn.SetWriteDeadline(time.Now().Add(c.opts.writeTimeout))
-		se = e.p.Write(w, buf)
+		se = e.p.Write(w)
 		if e.r != nil {
 			e.r <- se
 		}
@@ -442,14 +438,11 @@ func (c *Conn) readBinaryWebsocket(wc *websocket.Conn) {
 	}
 }
 
-const maxBinaryHeadSize = 13
-
 func (c *Conn) writeBinaryWebsocket(wc *websocket.Conn) StatusError {
 	var e writeEvent
 	var err error
 	var se StatusError
 	var data []byte
-	buf := make([]byte, maxBinaryHeadSize, maxBinaryHeadSize)
 	ticker := time.NewTicker(c.opts.readTimeout / 2)
 	for {
 		select {
@@ -459,7 +452,7 @@ func (c *Conn) writeBinaryWebsocket(wc *websocket.Conn) StatusError {
 		}
 		c.logPacket("wp", e.p)
 		wc.SetWriteDeadline(time.Now().Add(c.opts.writeTimeout))
-		data = e.p.MarshalBinary(buf)
+		data = e.p.MarshalBinary()
 		err = wc.WriteMessage(websocket.BinaryMessage, data)
 		if err != nil {
 			se = NewStatusError(StatusNetworkError, "write packet error: "+err.Error())
@@ -514,14 +507,11 @@ func (c *Conn) readTextWebsocket(wc *websocket.Conn) {
 	}
 }
 
-const maxTextHeadSize = 21
-
 func (c *Conn) writeTextWebsocket(wc *websocket.Conn) StatusError {
 	var e writeEvent
 	var err error
 	var se StatusError
 	var data []byte
-	buf := make([]byte, maxTextHeadSize, maxTextHeadSize)
 	ticker := time.NewTicker(c.opts.readTimeout / 2)
 	for {
 		select {
@@ -531,7 +521,7 @@ func (c *Conn) writeTextWebsocket(wc *websocket.Conn) StatusError {
 		}
 		c.logPacket("wp", e.p)
 		wc.SetWriteDeadline(time.Now().Add(c.opts.writeTimeout))
-		data = e.p.MarshalText(buf)
+		data = e.p.MarshalText()
 		err = wc.WriteMessage(websocket.BinaryMessage, data)
 		if err != nil {
 			se = NewStatusError(StatusNetworkError, "write packet error: "+err.Error())

@@ -105,9 +105,9 @@ func hexAppend(u uint64, buf []byte) int {
 	return len(buf) - i
 }
 
-func hexFormatUint64(u uint64) string {
-	buf := make([]byte, 8, 8)
-	i := 8
+func hexFormatUint64(u uint64) []byte {
+	buf := make([]byte, 16, 16)
+	i := 16
 	for u > 15 {
 		i--
 		buf[i] = hexDigits[u&0xF]
@@ -115,7 +115,7 @@ func hexFormatUint64(u uint64) string {
 	}
 	i--
 	buf[i] = hexDigits[u]
-	return string(buf[i:])
+	return buf[i:]
 }
 
 func hexFormatProtocolVersion(major byte, minor byte) string {

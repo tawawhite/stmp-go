@@ -7,12 +7,13 @@ type ctxStmpValue struct {
 	conn   *Conn
 	method *Method
 	router *Router
+	header Header
 }
 
 type ctxStmpKey struct{}
 
 func withStmp(ctx context.Context, p *Packet, c *Conn, m *Method, r *Router) context.Context {
-	return context.WithValue(ctx, ctxStmpKey{}, ctxStmpValue{packet: p, conn: c, method: m, router: r})
+	return context.WithValue(ctx, ctxStmpKey{}, ctxStmpValue{packet: p, conn: c, method: m, router: r, header: NewHeader()})
 }
 
 func SelectPacket(ctx context.Context) *Packet {
@@ -37,4 +38,12 @@ func SelectServer(ctx context.Context) *Server {
 
 func SelectClient(ctx context.Context) *Client {
 	return ctx.Value(ctxStmpKey{}).(ctxStmpValue).router.host.(*Client)
+}
+
+func SelectOutputHeader(ctx context.Context) Header {
+	return ctx.Value(ctxStmpKey{}).(ctxStmpValue).header
+}
+
+func SelectInputHeader(ctx context.Context) Header {
+	return ctx.Value(ctxStmpKey{}).(ctxStmpValue).packet.Header
 }
