@@ -25,7 +25,7 @@ var (
 	ErrOverflow = errors.New("overflow")
 )
 
-func stou64(s string) (uint64, error) {
+func parse(s string) (uint64, error) {
 	l := len(s)
 	var n uint64
 	var i = 0
@@ -42,7 +42,7 @@ func stou64(s string) (uint64, error) {
 	return n, nil
 }
 
-func Stouint32(s string) (uint32, error) {
+func ParseUint32(s string) (uint32, error) {
 	l := len(s)
 	if l == 0 {
 		return 0, ErrEmpty
@@ -50,11 +50,11 @@ func Stouint32(s string) (uint32, error) {
 	if l > 6 || (l == 6 && bytes[s[0]] >= 4) {
 		return 0, ErrOverflow
 	}
-	n, err := stou64(s)
+	n, err := parse(s)
 	return uint32(n), err
 }
 
-func Stouint64(s string) (uint64, error) {
+func ParseUint64(s string) (uint64, error) {
 	l := len(s)
 	if l == 0 {
 		return 0, ErrEmpty
@@ -62,10 +62,10 @@ func Stouint64(s string) (uint64, error) {
 	if l > 11 || (l == 11 && bytes[s[0]] >= 16) {
 		return 0, ErrOverflow
 	}
-	return stou64(s)
+	return parse(s)
 }
 
-func Uint64tos(n uint64) string {
+func FormatUint64(n uint64) string {
 	buf := make([]byte, 11, 11)
 	i := 10
 	for n > 63 {
@@ -77,6 +77,6 @@ func Uint64tos(n uint64) string {
 	return string(buf[i-1:])
 }
 
-func Uint32tos(n uint32) string {
-	return Uint64tos(uint64(n))
+func FormatUint32(n uint32) string {
+	return FormatUint64(uint64(n))
 }

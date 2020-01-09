@@ -5,6 +5,7 @@ package gomoku
 import (
 	"fmt"
 	"github.com/acrazing/stmp-go/examples/gomoku/gomoku/num"
+	"time"
 )
 
 type Hand struct {
@@ -14,13 +15,13 @@ type Hand struct {
 	Ts uint32
 }
 
-type History []Hand
+type History []*Hand
 
 func (h History) String() string {
 	var buf []byte
 	for _, h := range h {
 		buf = append(buf, num.Digits[h.Row], num.Digits[h.Col])
-		buf = append(buf, num.Uint32tos(h.Ts)...)
+		buf = append(buf, num.FormatUint32(h.Ts)...)
 		buf = append(buf, '.')
 	}
 	if len(buf) > 0 {
@@ -50,9 +51,9 @@ type Machine struct {
 	Cols           uint32
 	History        History
 	Board          [][]uint32
+	CreatedAt      int64
 	Winner         uint32
 	WinnerLocation *Hand
-	CreatedAt      uint64
 }
 
 func NewMachine(rows uint32, cols uint32, history History) *Machine {
@@ -75,20 +76,25 @@ func (m *Machine) IsForbidden(row, col uint32) bool {
 	return false
 }
 
-func (m *Machine) Play(piece uint32, h *Hand) Code {
+func (m *Machine) Play(piece, row, col uint32) Code {
 	if piece != uint32(len(m.History))%2+1 {
 		return CodeInvalidPiece
 	}
-	if h.Col > m.Cols || h.Row > m.Rows {
+	if col > m.Cols || row > m.Rows {
 		return CodeInvalidLocation
 	}
-	if m.Board[h.Row][h.Col] != PieceNone {
+	if m.Board[row][col] != PieceNone {
 		return CodeUnavailableLocation
 	}
-	if m.IsForbidden(h.Row, h.Col) {
+	if m.IsForbidden(row, col) {
 		return CodeForbiddenLocation
 	}
-	m.Board[h.Row][h.Col] = piece
+	m.History = append(m.History, &Hand{
+		Row: row,
+		Col: col,
+		Ts:  uint32(time.Now().UnixNano()/int64(time.Millisecond/100) - m.CreatedAt),
+	})
+	m.Board[row][col] = piece
 	m.Compute()
 	return CodeOk
 }
