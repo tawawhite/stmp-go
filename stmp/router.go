@@ -49,113 +49,167 @@ func RegisterMethodAction(method string, action uint64, input ModelFactory, outp
 	ms.methods[method] = action
 }
 
-// middleware, which will not intercept the request, just update the context, or do arbitrary check
-// if the err is not nil, will intercept the request.
-type MiddlewareFunc func(inCtx context.Context) (outCtx context.Context, err error)
-
-// the arbitrary interceptor
-//
-// if done is true, means the request is intercepted, then if the err is nil, the out will be treated as
-// the output content, and status is OK.
-// if err is not nil, the request will always be intercepted.
+type PreHandlerFunc func(inCtx context.Context) (outCtx context.Context, err error)
+type PostHandlerFunc func(ctx context.Context, status Status, header Header, payload []byte) error
 type InterceptFunc func(inCtx context.Context) (outCtx context.Context, done bool, out []byte, err error)
-
-// the handler for protoc-gen-stmp to register specific action handler
 type HandlerFunc func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error)
+type ListenerFunc func(ctx context.Context, in interface{}, inst interface{})
 
 type handlerOptions struct {
 	fn   HandlerFunc
 	inst interface{}
 }
 
+type listenerOptions struct {
+	fn   ListenerFunc
+	inst interface{}
+}
+
+// Core router for dispatch a request
+//
+// The process order is: pre -> interceptor -> handler -> post -> response -> listener
+//
+// Please note the handler is not routine-safe
 type Router struct {
 	sync.RWMutex
-	middlewares  []MiddlewareFunc
+	preHandlers  []PreHandlerFunc
 	interceptors []InterceptFunc
-	handlers     map[uint64][]handlerOptions
+	listeners    map[uint64][]listenerOptions
+	handlers     map[uint64]handlerOptions
+	postHandlers []PostHandlerFunc
 	host         interface{}
 }
 
-// create a new router
+// Create a router
 //
-// the host could be *Server or *Client, which is use for dispatch action to hold it in context
+// The host is a *Server or *Client, which is used for create a stmp context
+// you can use SelectServer(ctx) or SelectClient(ctx) to get it in handler
 func NewRouter(host interface{}) *Router {
 	return &Router{
-		middlewares:  []MiddlewareFunc{},
-		interceptors: []InterceptFunc{},
-		handlers:     map[uint64][]handlerOptions{},
-		host:         host,
+		listeners: map[uint64][]listenerOptions{},
+		handlers:  map[uint64]handlerOptions{},
+		host:      host,
 	}
 }
 
-// add bypass handler, the handler will not intercept the request
-// unless the handler returns error
-func (r *Router) Middleware(handlers ...MiddlewareFunc) {
-	r.Lock()
-	r.middlewares = append(r.middlewares, handlers...)
-	r.Unlock()
+// Add a pre handler, which is executed at fist,
+// and could update the context or stop the dispatch chain by emit an error
+func (r *Router) Pre(handlers ...PreHandlerFunc) {
+	r.preHandlers = append(r.preHandlers, handlers...)
 }
 
-// intercept will intercept request, if done == true, will not pass
-// the request to next handlers
+// Add a post handler, which is executed just before response the packet,
+// it could emit an error to change the response status and payload, or update the response header
+func (r *Router) Post(handlers ...PostHandlerFunc) {
+	r.postHandlers = append(r.postHandlers, handlers...)
+}
+
+// Add an interceptor, which is executed after pre, and before handler
 func (r *Router) Intercept(handlers ...InterceptFunc) {
-	r.Lock()
 	r.interceptors = append(r.interceptors, handlers...)
-	r.Unlock()
 }
 
-// register handler for specified action
+// Add a handler, which is executed after interceptor, and before post handler,
+// it is the core handler to generate the response packet.
 //
-// the inst is the server/client instance, which is use for unregister check equals, for func is not comparable in go.
-// if registered multiple handler for same action, the last one's response will be used as the final response.
-func (r *Router) Register(inst interface{}, method string, fn HandlerFunc) {
-	r.Lock()
+// Please note the handlers of pre, interceptor, handler, post, listener is executed serially in the read channel,
+// which means it will block the read from the connection, so it should run A.S.A.P.
+func (r *Router) Handle(method string, inst interface{}, fn HandlerFunc) {
 	action, ok := ms.methods[method]
 	if !ok {
 		panic("method " + method + " is not registered")
 	}
-	if r.handlers[action] == nil {
-		r.handlers[action] = []handlerOptions{{fn: fn, inst: inst}}
+	if _, ok := r.handlers[action]; ok {
+		panic("method " + method + " is handled already")
+	}
+	r.handlers[action] = handlerOptions{fn: fn, inst: inst}
+}
+
+// Add a listener, which is executed after response
+func (r *Router) AddListener(method string, inst interface{}, fn ListenerFunc) {
+	action, ok := ms.methods[method]
+	if !ok {
+		panic("method " + method + " is not registered")
+	}
+	if r.listeners[action] == nil {
+		r.listeners[action] = []listenerOptions{{fn: fn, inst: inst}}
 	} else {
-		for _, v := range r.handlers[action] {
+		for _, v := range r.listeners[action] {
 			if v.inst == inst {
 				panic("register on method " + method + " multi-times with same instance")
 			}
 		}
-		r.handlers[action] = append(r.handlers[action], handlerOptions{fn: fn, inst: inst})
+		r.listeners[action] = append(r.listeners[action], listenerOptions{fn: fn, inst: inst})
 	}
-	r.Unlock()
 }
 
-// unregister handler
-func (r *Router) Unregister(inst interface{}, method string) {
-	r.Lock()
+// Remove a listener
+func (r *Router) RemoveListener(method string, inst interface{}) {
 	action, ok := ms.methods[method]
 	if !ok {
 		panic("method " + method + " is not registered")
 	}
-	hs := r.handlers[action]
+	hs := r.listeners[action]
 	if hs == nil {
 		return
 	}
 	for i, hc := range hs {
 		if hc.inst == inst {
 			copy(hs[i:], hs[i+1:])
-			r.handlers[action] = hs[:len(hs)-1]
+			r.listeners[action] = hs[:len(hs)-1]
 			break
 		}
 	}
-	r.Unlock()
+}
+
+func (r *Router) res(ctx context.Context, c *Conn, q *Packet, in interface{}, status Status, payload []byte) {
+	header := selectStmp(ctx).header
+	for _, p := range r.postHandlers {
+		if err := p(ctx, status, header, payload); err != nil {
+			status, payload = DetectError(err, StatusInternalServerError).Spread()
+			break
+		}
+	}
+	if q.Kind != MessageKindResponse {
+		c.send(ctx, &Packet{
+			Kind:    MessageKindResponse,
+			Status:  status,
+			Mid:     q.Mid,
+			Header:  header,
+			Payload: payload,
+		}, false)
+	}
+	r.RLock()
+	defer r.RUnlock()
+	if in == nil && q.Payload != nil {
+		m := ms.actions[q.Action]
+		if m == nil {
+			return
+		}
+		in = m.Input()
+		if err := c.Media.Unmarshal(q.Payload, in); err != nil {
+			return
+		}
+	}
+	for _, hc := range r.listeners[q.Action] {
+		hc.fn(ctx, in, hc.inst)
+	}
+}
+
+func (r *Router) err(ctx context.Context, c *Conn, q *Packet, in interface{}, err error, rs Status) {
+	se := DetectError(err, rs)
+	r.res(ctx, c, q, in, se.Code(), []byte(se.Message()))
 }
 
 // dispatch a request to handlers
-func (r *Router) dispatch(c *Conn, p *Packet) (status Status, ret []byte) {
-	m := ms.actions[p.Action]
-	ctx := withStmp(context.Background(), p, c, m, r)
-	for _, f := range r.middlewares {
+func (r *Router) dispatch(c *Conn, q *Packet) {
+	m := ms.actions[q.Action]
+	ctx := withStmp(context.Background(), q, c, m, r.host)
+	for _, f := range r.preHandlers {
 		newCtx, err := f(ctx)
 		if err != nil {
-			return DetectError(err, StatusInternalServerError).Spread()
+			r.err(ctx, c, q, nil, err, StatusInternalServerError)
+			return
 		}
 		if newCtx != nil {
 			ctx = newCtx
@@ -164,40 +218,44 @@ func (r *Router) dispatch(c *Conn, p *Packet) (status Status, ret []byte) {
 	for _, f := range r.interceptors {
 		newCtx, done, ret, err := f(ctx)
 		if err != nil {
-			return DetectError(err, StatusInternalServerError).Spread()
+			r.err(ctx, c, q, nil, err, StatusInternalServerError)
+			return
 		}
 		if done {
-			return StatusOk, ret
+			r.res(ctx, c, q, nil, StatusOk, ret)
+			return
 		}
 		if newCtx != nil {
 			ctx = newCtx
 		}
 	}
-	h, ok := r.handlers[p.Action]
+	h, ok := r.handlers[q.Action]
 	if m == nil || !ok {
-		return StatusNotFound.Spread()
+		r.err(ctx, c, q, nil, StatusNotFound, StatusNotFound)
+		return
 	}
-	// thinking: should this be nil when input payload is nil?
 	in := m.Input()
-	if p.Payload != nil {
-		err := c.Media.Unmarshal(p.Payload, in)
+	if q.Payload != nil {
+		err := c.Media.Unmarshal(q.Payload, in)
 		if err != nil {
-			return DetectError(err, StatusBadRequest).Spread()
+			r.err(ctx, c, q, nil, err, StatusBadRequest)
+			return
 		}
 	}
-	var err error
-	var out interface{}
-	for _, hc := range h {
-		out, err = hc.fn(ctx, in, hc.inst)
+	out, err := h.fn(ctx, in, h.inst)
+	if err != nil {
+		r.err(ctx, c, q, in, err, StatusInternalServerError)
+		return
+	}
+	if isNil(out) {
+		r.res(ctx, c, q, in, StatusOk, nil)
+		return
+	} else if !isNil(out) {
+		ret, err := c.Media.Marshal(out)
 		if err != nil {
-			return DetectError(err, StatusInternalServerError).Spread()
+			r.err(ctx, c, q, in, err, StatusInternalServerError)
+		} else {
+			r.res(ctx, c, q, in, StatusOk, ret)
 		}
 	}
-	if !isNil(out) {
-		ret, err = c.Media.Marshal(out)
-		if err != nil {
-			return DetectError(err, StatusInternalServerError).Spread()
-		}
-	}
-	return StatusOk, ret
 }

@@ -36,3 +36,21 @@ func (s State) Del(key interface{}) {
 	delete(s.state, key)
 	s.Unlock()
 }
+
+func (s State) SetUnsafe(key, value interface{}) {
+	s.state[key] = value
+}
+
+func (s State) GetUnsafe(key interface{}) interface{} {
+	v := s.state[key]
+	return v
+}
+
+func (s State) HasUnsafe(key interface{}) interface{} {
+	ok := s.state[key]
+	return ok
+}
+
+func (s State) DelUnsafe(key interface{}) {
+	delete(s.state, key)
+}

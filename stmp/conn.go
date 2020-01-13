@@ -21,8 +21,9 @@ import (
 //      // Output: Kind=4, Mid=1, Status=0, Payload=.
 //  }
 type CallOptions struct {
-	useNotify  bool
-	keepPacket *Packet
+	useNotify          bool
+	keepPacket         *Packet
+	preferStringAction bool
 }
 
 // set default options
@@ -43,6 +44,11 @@ func (o *CallOptions) Notify() *CallOptions {
 // keep response packet, you can get the raw information from the packet
 func (o *CallOptions) KeepPacket(p *Packet) *CallOptions {
 	o.keepPacket = p
+	return o
+}
+
+func (o *CallOptions) PreferStringAction() *CallOptions {
+	o.preferStringAction = true
 	return o
 }
 
@@ -68,10 +74,13 @@ type ConnOptions struct {
 	handshakeTimeout time.Duration
 	readTimeout      time.Duration
 	writeTimeout     time.Duration
-	router           *Router
-	maxPacketSize    uint64
-	writeQueueSize   int
-	compressLevel    int
+	dispatch         func(c *Conn, p *Packet)
+	// this is used for broker stmp server, which means the server side
+	// does not has the action/string map to get method from action.
+	preferStringAction bool
+	maxPacketSize      uint64
+	writeQueueSize     int
+	compressLevel      int
 }
 
 // set custom logger, default is zap.NewProduction()
@@ -102,6 +111,11 @@ func (o *ConnOptions) WithTimeout(handshake, read, write time.Duration) *ConnOpt
 	o.handshakeTimeout = handshake
 	o.readTimeout = read
 	o.writeTimeout = write
+	return o
+}
+
+func (o *ConnOptions) PreferStringAction() *ConnOptions {
+	o.preferStringAction = true
 	return o
 }
 
@@ -191,11 +205,7 @@ func NewConn(nc net.Conn, opts *ConnOptions) *Conn {
 // invoke a method a marshaled payload
 func (c *Conn) Call(ctx context.Context, method string, payload []byte, opts *CallOptions) (out interface{}, err error) {
 	action, ok := ms.methods[method]
-	if !ok {
-		err = NewStatusError(StatusBadRequest, "method "+method+" is not registered")
-		return
-	}
-	p := &Packet{Action: action, Payload: payload}
+	p := &Packet{Action: action, Method: method, StringAction: opts.preferStringAction || !ok, Payload: payload}
 	var r chan *Packet
 	if opts.useNotify {
 		p.Kind = MessageKindNotify
@@ -560,50 +570,21 @@ func (c *Conn) writeTextWebsocket(wc *websocket.Conn) StatusError {
 func (c *Conn) dispatchPacket(p *Packet) {
 	switch p.Kind {
 	case MessageKindPing:
-		c.handlePing()
-	case MessageKindPong:
-		c.handlePong()
+		c.send(context.Background(), &Packet{Kind: MessageKindPong}, false)
 	case MessageKindRequest, MessageKindNotify:
-		go c.handleRequest(p)
+		// TODO dispatch in new channel or implement the Async feature
+		c.opts.dispatch(c, p)
 	case MessageKindResponse:
-		c.handleResponse(p)
+		c.Lock()
+		q, ok := c.requests[p.Mid]
+		if ok {
+			delete(c.requests, p.Mid)
+			q <- p
+		}
+		c.Unlock()
 	case MessageKindClose:
-		c.handleClose(p)
+		c.send(context.Background(), p, false)
 	}
-}
-
-func (c *Conn) handlePing() {
-	c.send(context.Background(), &Packet{Kind: MessageKindPong}, false)
-}
-
-func (c *Conn) handlePong() {
-	// do nothing for deadline limited pong message receive rate
-}
-
-func (c *Conn) handleClose(p *Packet) {
-	c.send(context.Background(), p, false)
-}
-
-func (c *Conn) handleRequest(p *Packet) {
-	status, res := c.opts.router.dispatch(c, p)
-	if p.Kind == MessageKindRequest {
-		c.send(context.Background(), &Packet{
-			Kind:    MessageKindResponse,
-			Mid:     p.Mid,
-			Status:  status,
-			Payload: res,
-		}, true)
-	}
-}
-
-func (c *Conn) handleResponse(p *Packet) {
-	c.Lock()
-	q, ok := c.requests[p.Mid]
-	if ok {
-		delete(c.requests, p.Mid)
-		q <- p
-	}
-	c.Unlock()
 }
 
 func (c *Conn) negotiate() error {

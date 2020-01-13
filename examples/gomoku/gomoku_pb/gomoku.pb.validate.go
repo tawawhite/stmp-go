@@ -33,9 +33,6 @@ var (
 	_ = types.DynamicAny{}
 )
 
-// define the regex for a UUID once up-front
-var _gomoku_uuidPattern = regexp.MustCompile("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
-
 // Validate checks the field values on Empty with the rules defined in the
 // proto definition for this message. If any rules are violated, an error is returned.
 func (m *Empty) Validate() error {
@@ -507,27 +504,7 @@ func (m *FullRoomModel) Validate() error {
 		}
 	}
 
-	for key, val := range m.GetPlayers() {
-		_ = val
-
-		// no validation rules for Players[key]
-
-		{
-			tmp := val
-
-			if v, ok := interface{}(tmp).(interface{ Validate() error }); ok {
-
-				if err := v.Validate(); err != nil {
-					return FullRoomModelValidationError{
-						field:  fmt.Sprintf("Players[%v]", key),
-						reason: "embedded message failed validation",
-						cause:  err,
-					}
-				}
-			}
-		}
-
-	}
+	// no validation rules for Players
 
 	{
 		tmp := m.GetGame()
@@ -1734,7 +1711,12 @@ func (m *LoginInput) Validate() error {
 		return nil
 	}
 
-	// no validation rules for Name
+	if l := len(m.GetName()); l < 2 || l > 32 {
+		return LoginInputValidationError{
+			field:  "Name",
+			reason: "value length must be between 2 and 32 bytes, inclusive",
+		}
+	}
 
 	return nil
 }

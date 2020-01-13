@@ -81,7 +81,7 @@ func (r *RoomScene) Run() {
 				r.room = nil
 				r.users = nil
 				r.PrintTip()
-				pb.STMPUnregisterRoomEventsListener(r.sc, r)
+				pb.STMPDetachRoomEventsListener(r.sc, r)
 			}
 		} else if r.room == nil {
 			if roomInput != "" {
@@ -93,7 +93,7 @@ func (r *RoomScene) Run() {
 					log.Printf("Users in this room: %s.", strings.Join(out.Users, ", "))
 					r.room = &out.Name
 					r.users = out.Users
-					pb.STMPRegisterRoomEventsListener(r.sc, r)
+					pb.STMPAttachRoomEventsListener(r.sc, r)
 				}
 			}
 		}

@@ -33,11 +33,7 @@ type STMP{{$service.ServiceName}}Server interface {
 {{end}}}
 
 func STMPRegister{{$service.ServiceName}}Server(srv *stmp.Server, s STMP{{$service.ServiceName}}Server) {
-{{range $index, $method := $service.Methods}}	srv.Register(s, "{{$method.FullMethod}}", func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMP{{$service.ServiceName}}Server).{{$method.MethodName}}(ctx, in.(*{{$method.Input}})) })
-{{end}}}
-
-func STMPUnregister{{$service.ServiceName}}Server(srv *stmp.Server, s STMP{{$service.ServiceName}}Server) {
-{{range $index, $method := $service.Methods}}	srv.Unregister(s, "{{$method.FullMethod}}")
+{{range $index, $method := $service.Methods}}	srv.Handle("{{$method.FullMethod}}", s, func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMP{{$service.ServiceName}}Server).{{$method.MethodName}}(ctx, in.(*{{$method.Input}})) })
 {{end}}}
 
 type STMP{{$service.ServiceName}}Client interface {
@@ -62,16 +58,17 @@ type STMP{{$service.ServiceName}}Listener interface {
 {{range $index, $method := $service.Methods}}	Handle{{$method.MethodName}}(ctx context.Context, in *{{$method.Input}})
 {{end}}}
 
-func STMPRegister{{$service.ServiceName}}Listener(cc *stmp.Client, s STMP{{$service.ServiceName}}Listener) {
-{{range $index, $method := $service.Methods}}	cc.Register(s, "{{$method.FullMethod}}", func(ctx context.Context, in interface{}, inst interface{}) (interface{}, error) {
-		inst.(STMP{{$service.ServiceName}}Listener).Handle{{$method.MethodName}}(ctx, in.(*{{$method.Input}}))
-		return nil, nil
-	})
-{{end}}}
+func STMPAttach{{$service.ServiceName}}Listener(c *stmp.Client, s STMP{{$service.ServiceName}}Listener) {
+	c.Lock()
+{{range $index, $method := $service.Methods}}	c.AddListener("{{$method.FullMethod}}", s, func(ctx context.Context, in interface{}, inst interface{}) { inst.(STMP{{$service.ServiceName}}Listener).Handle{{$method.MethodName}}(ctx, in.(*{{$method.Input}})) })
+{{end}}	c.Unlock()
+}
 
-func STMPUnregister{{$service.ServiceName}}Listener(cc *stmp.Client, s STMP{{$service.ServiceName}}Listener) {
-{{range $index, $method := $service.Methods}}	cc.Unregister(s, "{{$method.FullMethod}}")
-{{end}}}
+func STMPDetach{{$service.ServiceName}}Listener(c *stmp.Client, s STMP{{$service.ServiceName}}Listener) {
+	c.Lock()
+{{range $index, $method := $service.Methods}}	c.RemoveListener("{{$method.FullMethod}}", s)
+{{end}}	c.Unlock()
+}
 
 type STMP{{$service.ServiceName}}Broadcaster struct{}
 {{range $index, $method := $service.Methods}}
@@ -80,22 +77,18 @@ func (s STMP{{$service.ServiceName}}Broadcaster) {{$method.MethodName}}(ctx cont
 	return err
 }
 
-func (s STMP{{$service.ServiceName}}Broadcaster) {{$method.MethodName}}ToList(ctx context.Context, in *{{$method.Input}}, conns ...*stmp.Conn) error {
+func (s STMP{{$service.ServiceName}}Broadcaster) {{$method.MethodName}}ToList(ctx context.Context, in *{{$method.Input}}, conns ...*stmp.Conn) {
 	payloads := stmp.NewPayloadMap(in)
 	for _, conn := range conns {
 		payload, err := payloads.Marshal(conn)
 		if err != nil {
-			return err
+			continue
 		}
-		_, err = conn.Call(ctx, "{{$method.FullMethod}}", payload, stmp.NotifyOptions)
-		if err != nil {
-			return err
-		}
+		conn.Call(ctx, "{{$method.FullMethod}}", payload, stmp.NotifyOptions)
 	}
-	return nil
 }
 
-func (s STMP{{$service.ServiceName}}Broadcaster) {{$method.MethodName}}ToSet(ctx context.Context, in *{{$method.Input}}, conns stmp.ConnSet, exclude ...*stmp.Conn) error {
+func (s STMP{{$service.ServiceName}}Broadcaster) {{$method.MethodName}}ToSet(ctx context.Context, in *{{$method.Input}}, conns stmp.ConnSet, exclude ...*stmp.Conn) {
 	payloads := stmp.NewPayloadMap(in)
 	for conn := range conns {
 		for _, e := range exclude {
@@ -109,19 +102,16 @@ func (s STMP{{$service.ServiceName}}Broadcaster) {{$method.MethodName}}ToSet(ctx
 		}
 		payload, err := payloads.Marshal(conn)
 		if err != nil {
-			return err
+			continue
 		}
-		_, err = conn.Call(ctx, "{{$method.FullMethod}}", payload, stmp.NotifyOptions)
-		if err != nil {
-			return err
-		}
+		conn.Call(ctx, "{{$method.FullMethod}}", payload, stmp.NotifyOptions)
 	}
-	return nil
 }
 
-func (s STMP{{$service.ServiceName}}Broadcaster) {{$method.MethodName}}ToAll(ctx context.Context, in *{{$method.Input}}, srv *stmp.Server, filter ...stmp.ConnFilter) error {
-	return srv.Broadcast(ctx, "{{$method.FullMethod}}", in, filter...)
-}{{end}}{{/* broadcaster.methods */}}{{end}}{{/* service.isEvents */}}{{end}}{{/* range $services */}}
+func (s STMP{{$service.ServiceName}}Broadcaster) {{$method.MethodName}}ToAll(ctx context.Context, in *{{$method.Input}}, srv *stmp.Server, filter ...stmp.ConnFilter) { srv.Broadcast(ctx, "{{$method.FullMethod}}", in, filter...) }
+{{end}}{{/* broadcaster.methods */}}
+{{end}}{{/* service.isEvents */}}
+{{end}}{{/* range $services */}}
 `)
 	if err != nil {
 		panic(err)

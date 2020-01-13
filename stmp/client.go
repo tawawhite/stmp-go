@@ -214,8 +214,8 @@ func NewClient(opts *ClientOptions) *Client {
 			mid:   new(uint32),
 		},
 	}
-	cc.opts.router = NewRouter(cc)
-	cc.Router = cc.opts.router
+	cc.Router = NewRouter(cc)
+	opts.dispatch = cc.dispatch
 	return cc
 }
 

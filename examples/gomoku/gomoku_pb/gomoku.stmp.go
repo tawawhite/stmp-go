@@ -29,23 +29,13 @@ type STMPRoomServiceServer interface {
 }
 
 func STMPRegisterRoomServiceServer(srv *stmp.Server, s STMPRoomServiceServer) {
-	srv.Register(s, "stmp.examples.gomoku.RoomService.MatchRoom", func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMPRoomServiceServer).MatchRoom(ctx, in.(*Empty)) })
-	srv.Register(s, "stmp.examples.gomoku.RoomService.ListRoom", func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMPRoomServiceServer).ListRoom(ctx, in.(*ListInput)) })
-	srv.Register(s, "stmp.examples.gomoku.RoomService.LookonRoom", func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMPRoomServiceServer).LookonRoom(ctx, in.(*LookonRoomInput)) })
-	srv.Register(s, "stmp.examples.gomoku.RoomService.JoinRoom", func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMPRoomServiceServer).JoinRoom(ctx, in.(*JoinRoomInput)) })
-	srv.Register(s, "stmp.examples.gomoku.RoomService.Ready", func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMPRoomServiceServer).Ready(ctx, in.(*Empty)) })
-	srv.Register(s, "stmp.examples.gomoku.RoomService.Unready", func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMPRoomServiceServer).Unready(ctx, in.(*Empty)) })
-	srv.Register(s, "stmp.examples.gomoku.RoomService.ExitRoom", func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMPRoomServiceServer).ExitRoom(ctx, in.(*Empty)) })
-}
-
-func STMPUnregisterRoomServiceServer(srv *stmp.Server, s STMPRoomServiceServer) {
-	srv.Unregister(s, "stmp.examples.gomoku.RoomService.MatchRoom")
-	srv.Unregister(s, "stmp.examples.gomoku.RoomService.ListRoom")
-	srv.Unregister(s, "stmp.examples.gomoku.RoomService.LookonRoom")
-	srv.Unregister(s, "stmp.examples.gomoku.RoomService.JoinRoom")
-	srv.Unregister(s, "stmp.examples.gomoku.RoomService.Ready")
-	srv.Unregister(s, "stmp.examples.gomoku.RoomService.Unready")
-	srv.Unregister(s, "stmp.examples.gomoku.RoomService.ExitRoom")
+	srv.Handle("stmp.examples.gomoku.RoomService.MatchRoom", s, func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMPRoomServiceServer).MatchRoom(ctx, in.(*Empty)) })
+	srv.Handle("stmp.examples.gomoku.RoomService.ListRoom", s, func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMPRoomServiceServer).ListRoom(ctx, in.(*ListInput)) })
+	srv.Handle("stmp.examples.gomoku.RoomService.LookonRoom", s, func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMPRoomServiceServer).LookonRoom(ctx, in.(*LookonRoomInput)) })
+	srv.Handle("stmp.examples.gomoku.RoomService.JoinRoom", s, func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMPRoomServiceServer).JoinRoom(ctx, in.(*JoinRoomInput)) })
+	srv.Handle("stmp.examples.gomoku.RoomService.Ready", s, func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMPRoomServiceServer).Ready(ctx, in.(*Empty)) })
+	srv.Handle("stmp.examples.gomoku.RoomService.Unready", s, func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMPRoomServiceServer).Unready(ctx, in.(*Empty)) })
+	srv.Handle("stmp.examples.gomoku.RoomService.ExitRoom", s, func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMPRoomServiceServer).ExitRoom(ctx, in.(*Empty)) })
 }
 
 type STMPRoomServiceClient interface {
@@ -102,6 +92,7 @@ func STMPNewRoomServiceClient(c *stmp.Client) STMPRoomServiceClient {
 }
 
 
+
 func init() {
 	stmp.RegisterMethodAction("stmp.examples.gomoku.RoomEvents.UserJoin", 0x201, func() interface{} { return &UserJoinEvent{} }, func() interface{} { return &Empty{} })
 	stmp.RegisterMethodAction("stmp.examples.gomoku.RoomEvents.UserReady", 0x202, func() interface{} { return &UserReadyEvent{} }, func() interface{} { return &Empty{} })
@@ -119,35 +110,24 @@ type STMPRoomEventsListener interface {
 	HandleUserExit(ctx context.Context, in *UserExitEvent)
 }
 
-func STMPRegisterRoomEventsListener(cc *stmp.Client, s STMPRoomEventsListener) {
-	cc.Register(s, "stmp.examples.gomoku.RoomEvents.UserJoin", func(ctx context.Context, in interface{}, inst interface{}) (interface{}, error) {
-		inst.(STMPRoomEventsListener).HandleUserJoin(ctx, in.(*UserJoinEvent))
-		return nil, nil
-	})
-	cc.Register(s, "stmp.examples.gomoku.RoomEvents.UserReady", func(ctx context.Context, in interface{}, inst interface{}) (interface{}, error) {
-		inst.(STMPRoomEventsListener).HandleUserReady(ctx, in.(*UserReadyEvent))
-		return nil, nil
-	})
-	cc.Register(s, "stmp.examples.gomoku.RoomEvents.UserUnready", func(ctx context.Context, in interface{}, inst interface{}) (interface{}, error) {
-		inst.(STMPRoomEventsListener).HandleUserUnready(ctx, in.(*UserUnreadyEvent))
-		return nil, nil
-	})
-	cc.Register(s, "stmp.examples.gomoku.RoomEvents.UserLookon", func(ctx context.Context, in interface{}, inst interface{}) (interface{}, error) {
-		inst.(STMPRoomEventsListener).HandleUserLookon(ctx, in.(*UserLookonEvent))
-		return nil, nil
-	})
-	cc.Register(s, "stmp.examples.gomoku.RoomEvents.UserExit", func(ctx context.Context, in interface{}, inst interface{}) (interface{}, error) {
-		inst.(STMPRoomEventsListener).HandleUserExit(ctx, in.(*UserExitEvent))
-		return nil, nil
-	})
+func STMPAttachRoomEventsListener(c *stmp.Client, s STMPRoomEventsListener) {
+	c.Lock()
+	c.AddListener("stmp.examples.gomoku.RoomEvents.UserJoin", s, func(ctx context.Context, in interface{}, inst interface{}) { inst.(STMPRoomEventsListener).HandleUserJoin(ctx, in.(*UserJoinEvent)) })
+	c.AddListener("stmp.examples.gomoku.RoomEvents.UserReady", s, func(ctx context.Context, in interface{}, inst interface{}) { inst.(STMPRoomEventsListener).HandleUserReady(ctx, in.(*UserReadyEvent)) })
+	c.AddListener("stmp.examples.gomoku.RoomEvents.UserUnready", s, func(ctx context.Context, in interface{}, inst interface{}) { inst.(STMPRoomEventsListener).HandleUserUnready(ctx, in.(*UserUnreadyEvent)) })
+	c.AddListener("stmp.examples.gomoku.RoomEvents.UserLookon", s, func(ctx context.Context, in interface{}, inst interface{}) { inst.(STMPRoomEventsListener).HandleUserLookon(ctx, in.(*UserLookonEvent)) })
+	c.AddListener("stmp.examples.gomoku.RoomEvents.UserExit", s, func(ctx context.Context, in interface{}, inst interface{}) { inst.(STMPRoomEventsListener).HandleUserExit(ctx, in.(*UserExitEvent)) })
+	c.Unlock()
 }
 
-func STMPUnregisterRoomEventsListener(cc *stmp.Client, s STMPRoomEventsListener) {
-	cc.Unregister(s, "stmp.examples.gomoku.RoomEvents.UserJoin")
-	cc.Unregister(s, "stmp.examples.gomoku.RoomEvents.UserReady")
-	cc.Unregister(s, "stmp.examples.gomoku.RoomEvents.UserUnready")
-	cc.Unregister(s, "stmp.examples.gomoku.RoomEvents.UserLookon")
-	cc.Unregister(s, "stmp.examples.gomoku.RoomEvents.UserExit")
+func STMPDetachRoomEventsListener(c *stmp.Client, s STMPRoomEventsListener) {
+	c.Lock()
+	c.RemoveListener("stmp.examples.gomoku.RoomEvents.UserJoin", s)
+	c.RemoveListener("stmp.examples.gomoku.RoomEvents.UserReady", s)
+	c.RemoveListener("stmp.examples.gomoku.RoomEvents.UserUnready", s)
+	c.RemoveListener("stmp.examples.gomoku.RoomEvents.UserLookon", s)
+	c.RemoveListener("stmp.examples.gomoku.RoomEvents.UserExit", s)
+	c.Unlock()
 }
 
 type STMPRoomEventsBroadcaster struct{}
@@ -157,22 +137,18 @@ func (s STMPRoomEventsBroadcaster) UserJoin(ctx context.Context, in *UserJoinEve
 	return err
 }
 
-func (s STMPRoomEventsBroadcaster) UserJoinToList(ctx context.Context, in *UserJoinEvent, conns ...*stmp.Conn) error {
+func (s STMPRoomEventsBroadcaster) UserJoinToList(ctx context.Context, in *UserJoinEvent, conns ...*stmp.Conn) {
 	payloads := stmp.NewPayloadMap(in)
 	for _, conn := range conns {
 		payload, err := payloads.Marshal(conn)
 		if err != nil {
-			return err
+			continue
 		}
-		_, err = conn.Call(ctx, "stmp.examples.gomoku.RoomEvents.UserJoin", payload, stmp.NotifyOptions)
-		if err != nil {
-			return err
-		}
+		conn.Call(ctx, "stmp.examples.gomoku.RoomEvents.UserJoin", payload, stmp.NotifyOptions)
 	}
-	return nil
 }
 
-func (s STMPRoomEventsBroadcaster) UserJoinToSet(ctx context.Context, in *UserJoinEvent, conns stmp.ConnSet, exclude ...*stmp.Conn) error {
+func (s STMPRoomEventsBroadcaster) UserJoinToSet(ctx context.Context, in *UserJoinEvent, conns stmp.ConnSet, exclude ...*stmp.Conn) {
 	payloads := stmp.NewPayloadMap(in)
 	for conn := range conns {
 		for _, e := range exclude {
@@ -186,40 +162,31 @@ func (s STMPRoomEventsBroadcaster) UserJoinToSet(ctx context.Context, in *UserJo
 		}
 		payload, err := payloads.Marshal(conn)
 		if err != nil {
-			return err
+			continue
 		}
-		_, err = conn.Call(ctx, "stmp.examples.gomoku.RoomEvents.UserJoin", payload, stmp.NotifyOptions)
-		if err != nil {
-			return err
-		}
+		conn.Call(ctx, "stmp.examples.gomoku.RoomEvents.UserJoin", payload, stmp.NotifyOptions)
 	}
-	return nil
 }
 
-func (s STMPRoomEventsBroadcaster) UserJoinToAll(ctx context.Context, in *UserJoinEvent, srv *stmp.Server, filter ...stmp.ConnFilter) error {
-	return srv.Broadcast(ctx, "stmp.examples.gomoku.RoomEvents.UserJoin", in, filter...)
-}
+func (s STMPRoomEventsBroadcaster) UserJoinToAll(ctx context.Context, in *UserJoinEvent, srv *stmp.Server, filter ...stmp.ConnFilter) { srv.Broadcast(ctx, "stmp.examples.gomoku.RoomEvents.UserJoin", in, filter...) }
+
 func (s STMPRoomEventsBroadcaster) UserReady(ctx context.Context, in *UserReadyEvent, conn *stmp.Conn, opts ...*stmp.CallOptions) error {
 	_, err := conn.Invoke(ctx, "stmp.examples.gomoku.RoomEvents.UserReady", in, stmp.PickCallOptions(opts...).Notify())
 	return err
 }
 
-func (s STMPRoomEventsBroadcaster) UserReadyToList(ctx context.Context, in *UserReadyEvent, conns ...*stmp.Conn) error {
+func (s STMPRoomEventsBroadcaster) UserReadyToList(ctx context.Context, in *UserReadyEvent, conns ...*stmp.Conn) {
 	payloads := stmp.NewPayloadMap(in)
 	for _, conn := range conns {
 		payload, err := payloads.Marshal(conn)
 		if err != nil {
-			return err
+			continue
 		}
-		_, err = conn.Call(ctx, "stmp.examples.gomoku.RoomEvents.UserReady", payload, stmp.NotifyOptions)
-		if err != nil {
-			return err
-		}
+		conn.Call(ctx, "stmp.examples.gomoku.RoomEvents.UserReady", payload, stmp.NotifyOptions)
 	}
-	return nil
 }
 
-func (s STMPRoomEventsBroadcaster) UserReadyToSet(ctx context.Context, in *UserReadyEvent, conns stmp.ConnSet, exclude ...*stmp.Conn) error {
+func (s STMPRoomEventsBroadcaster) UserReadyToSet(ctx context.Context, in *UserReadyEvent, conns stmp.ConnSet, exclude ...*stmp.Conn) {
 	payloads := stmp.NewPayloadMap(in)
 	for conn := range conns {
 		for _, e := range exclude {
@@ -233,40 +200,31 @@ func (s STMPRoomEventsBroadcaster) UserReadyToSet(ctx context.Context, in *UserR
 		}
 		payload, err := payloads.Marshal(conn)
 		if err != nil {
-			return err
+			continue
 		}
-		_, err = conn.Call(ctx, "stmp.examples.gomoku.RoomEvents.UserReady", payload, stmp.NotifyOptions)
-		if err != nil {
-			return err
-		}
+		conn.Call(ctx, "stmp.examples.gomoku.RoomEvents.UserReady", payload, stmp.NotifyOptions)
 	}
-	return nil
 }
 
-func (s STMPRoomEventsBroadcaster) UserReadyToAll(ctx context.Context, in *UserReadyEvent, srv *stmp.Server, filter ...stmp.ConnFilter) error {
-	return srv.Broadcast(ctx, "stmp.examples.gomoku.RoomEvents.UserReady", in, filter...)
-}
+func (s STMPRoomEventsBroadcaster) UserReadyToAll(ctx context.Context, in *UserReadyEvent, srv *stmp.Server, filter ...stmp.ConnFilter) { srv.Broadcast(ctx, "stmp.examples.gomoku.RoomEvents.UserReady", in, filter...) }
+
 func (s STMPRoomEventsBroadcaster) UserUnready(ctx context.Context, in *UserUnreadyEvent, conn *stmp.Conn, opts ...*stmp.CallOptions) error {
 	_, err := conn.Invoke(ctx, "stmp.examples.gomoku.RoomEvents.UserUnready", in, stmp.PickCallOptions(opts...).Notify())
 	return err
 }
 
-func (s STMPRoomEventsBroadcaster) UserUnreadyToList(ctx context.Context, in *UserUnreadyEvent, conns ...*stmp.Conn) error {
+func (s STMPRoomEventsBroadcaster) UserUnreadyToList(ctx context.Context, in *UserUnreadyEvent, conns ...*stmp.Conn) {
 	payloads := stmp.NewPayloadMap(in)
 	for _, conn := range conns {
 		payload, err := payloads.Marshal(conn)
 		if err != nil {
-			return err
+			continue
 		}
-		_, err = conn.Call(ctx, "stmp.examples.gomoku.RoomEvents.UserUnready", payload, stmp.NotifyOptions)
-		if err != nil {
-			return err
-		}
+		conn.Call(ctx, "stmp.examples.gomoku.RoomEvents.UserUnready", payload, stmp.NotifyOptions)
 	}
-	return nil
 }
 
-func (s STMPRoomEventsBroadcaster) UserUnreadyToSet(ctx context.Context, in *UserUnreadyEvent, conns stmp.ConnSet, exclude ...*stmp.Conn) error {
+func (s STMPRoomEventsBroadcaster) UserUnreadyToSet(ctx context.Context, in *UserUnreadyEvent, conns stmp.ConnSet, exclude ...*stmp.Conn) {
 	payloads := stmp.NewPayloadMap(in)
 	for conn := range conns {
 		for _, e := range exclude {
@@ -280,40 +238,31 @@ func (s STMPRoomEventsBroadcaster) UserUnreadyToSet(ctx context.Context, in *Use
 		}
 		payload, err := payloads.Marshal(conn)
 		if err != nil {
-			return err
+			continue
 		}
-		_, err = conn.Call(ctx, "stmp.examples.gomoku.RoomEvents.UserUnready", payload, stmp.NotifyOptions)
-		if err != nil {
-			return err
-		}
+		conn.Call(ctx, "stmp.examples.gomoku.RoomEvents.UserUnready", payload, stmp.NotifyOptions)
 	}
-	return nil
 }
 
-func (s STMPRoomEventsBroadcaster) UserUnreadyToAll(ctx context.Context, in *UserUnreadyEvent, srv *stmp.Server, filter ...stmp.ConnFilter) error {
-	return srv.Broadcast(ctx, "stmp.examples.gomoku.RoomEvents.UserUnready", in, filter...)
-}
+func (s STMPRoomEventsBroadcaster) UserUnreadyToAll(ctx context.Context, in *UserUnreadyEvent, srv *stmp.Server, filter ...stmp.ConnFilter) { srv.Broadcast(ctx, "stmp.examples.gomoku.RoomEvents.UserUnready", in, filter...) }
+
 func (s STMPRoomEventsBroadcaster) UserLookon(ctx context.Context, in *UserLookonEvent, conn *stmp.Conn, opts ...*stmp.CallOptions) error {
 	_, err := conn.Invoke(ctx, "stmp.examples.gomoku.RoomEvents.UserLookon", in, stmp.PickCallOptions(opts...).Notify())
 	return err
 }
 
-func (s STMPRoomEventsBroadcaster) UserLookonToList(ctx context.Context, in *UserLookonEvent, conns ...*stmp.Conn) error {
+func (s STMPRoomEventsBroadcaster) UserLookonToList(ctx context.Context, in *UserLookonEvent, conns ...*stmp.Conn) {
 	payloads := stmp.NewPayloadMap(in)
 	for _, conn := range conns {
 		payload, err := payloads.Marshal(conn)
 		if err != nil {
-			return err
+			continue
 		}
-		_, err = conn.Call(ctx, "stmp.examples.gomoku.RoomEvents.UserLookon", payload, stmp.NotifyOptions)
-		if err != nil {
-			return err
-		}
+		conn.Call(ctx, "stmp.examples.gomoku.RoomEvents.UserLookon", payload, stmp.NotifyOptions)
 	}
-	return nil
 }
 
-func (s STMPRoomEventsBroadcaster) UserLookonToSet(ctx context.Context, in *UserLookonEvent, conns stmp.ConnSet, exclude ...*stmp.Conn) error {
+func (s STMPRoomEventsBroadcaster) UserLookonToSet(ctx context.Context, in *UserLookonEvent, conns stmp.ConnSet, exclude ...*stmp.Conn) {
 	payloads := stmp.NewPayloadMap(in)
 	for conn := range conns {
 		for _, e := range exclude {
@@ -327,40 +276,31 @@ func (s STMPRoomEventsBroadcaster) UserLookonToSet(ctx context.Context, in *User
 		}
 		payload, err := payloads.Marshal(conn)
 		if err != nil {
-			return err
+			continue
 		}
-		_, err = conn.Call(ctx, "stmp.examples.gomoku.RoomEvents.UserLookon", payload, stmp.NotifyOptions)
-		if err != nil {
-			return err
-		}
+		conn.Call(ctx, "stmp.examples.gomoku.RoomEvents.UserLookon", payload, stmp.NotifyOptions)
 	}
-	return nil
 }
 
-func (s STMPRoomEventsBroadcaster) UserLookonToAll(ctx context.Context, in *UserLookonEvent, srv *stmp.Server, filter ...stmp.ConnFilter) error {
-	return srv.Broadcast(ctx, "stmp.examples.gomoku.RoomEvents.UserLookon", in, filter...)
-}
+func (s STMPRoomEventsBroadcaster) UserLookonToAll(ctx context.Context, in *UserLookonEvent, srv *stmp.Server, filter ...stmp.ConnFilter) { srv.Broadcast(ctx, "stmp.examples.gomoku.RoomEvents.UserLookon", in, filter...) }
+
 func (s STMPRoomEventsBroadcaster) UserExit(ctx context.Context, in *UserExitEvent, conn *stmp.Conn, opts ...*stmp.CallOptions) error {
 	_, err := conn.Invoke(ctx, "stmp.examples.gomoku.RoomEvents.UserExit", in, stmp.PickCallOptions(opts...).Notify())
 	return err
 }
 
-func (s STMPRoomEventsBroadcaster) UserExitToList(ctx context.Context, in *UserExitEvent, conns ...*stmp.Conn) error {
+func (s STMPRoomEventsBroadcaster) UserExitToList(ctx context.Context, in *UserExitEvent, conns ...*stmp.Conn) {
 	payloads := stmp.NewPayloadMap(in)
 	for _, conn := range conns {
 		payload, err := payloads.Marshal(conn)
 		if err != nil {
-			return err
+			continue
 		}
-		_, err = conn.Call(ctx, "stmp.examples.gomoku.RoomEvents.UserExit", payload, stmp.NotifyOptions)
-		if err != nil {
-			return err
-		}
+		conn.Call(ctx, "stmp.examples.gomoku.RoomEvents.UserExit", payload, stmp.NotifyOptions)
 	}
-	return nil
 }
 
-func (s STMPRoomEventsBroadcaster) UserExitToSet(ctx context.Context, in *UserExitEvent, conns stmp.ConnSet, exclude ...*stmp.Conn) error {
+func (s STMPRoomEventsBroadcaster) UserExitToSet(ctx context.Context, in *UserExitEvent, conns stmp.ConnSet, exclude ...*stmp.Conn) {
 	payloads := stmp.NewPayloadMap(in)
 	for conn := range conns {
 		for _, e := range exclude {
@@ -374,19 +314,16 @@ func (s STMPRoomEventsBroadcaster) UserExitToSet(ctx context.Context, in *UserEx
 		}
 		payload, err := payloads.Marshal(conn)
 		if err != nil {
-			return err
+			continue
 		}
-		_, err = conn.Call(ctx, "stmp.examples.gomoku.RoomEvents.UserExit", payload, stmp.NotifyOptions)
-		if err != nil {
-			return err
-		}
+		conn.Call(ctx, "stmp.examples.gomoku.RoomEvents.UserExit", payload, stmp.NotifyOptions)
 	}
-	return nil
 }
 
-func (s STMPRoomEventsBroadcaster) UserExitToAll(ctx context.Context, in *UserExitEvent, srv *stmp.Server, filter ...stmp.ConnFilter) error {
-	return srv.Broadcast(ctx, "stmp.examples.gomoku.RoomEvents.UserExit", in, filter...)
-}
+func (s STMPRoomEventsBroadcaster) UserExitToAll(ctx context.Context, in *UserExitEvent, srv *stmp.Server, filter ...stmp.ConnFilter) { srv.Broadcast(ctx, "stmp.examples.gomoku.RoomEvents.UserExit", in, filter...) }
+
+
+
 func init() {
 	stmp.RegisterMethodAction("stmp.examples.gomoku.GomokuService.Play", 0x301, func() interface{} { return &HandModel{} }, func() interface{} { return &Empty{} })
 	stmp.RegisterMethodAction("stmp.examples.gomoku.GomokuService.Apply", 0x302, func() interface{} { return &ApplyInput{} }, func() interface{} { return &Empty{} })
@@ -400,15 +337,9 @@ type STMPGomokuServiceServer interface {
 }
 
 func STMPRegisterGomokuServiceServer(srv *stmp.Server, s STMPGomokuServiceServer) {
-	srv.Register(s, "stmp.examples.gomoku.GomokuService.Play", func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMPGomokuServiceServer).Play(ctx, in.(*HandModel)) })
-	srv.Register(s, "stmp.examples.gomoku.GomokuService.Apply", func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMPGomokuServiceServer).Apply(ctx, in.(*ApplyInput)) })
-	srv.Register(s, "stmp.examples.gomoku.GomokuService.Reply", func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMPGomokuServiceServer).Reply(ctx, in.(*ReplyInput)) })
-}
-
-func STMPUnregisterGomokuServiceServer(srv *stmp.Server, s STMPGomokuServiceServer) {
-	srv.Unregister(s, "stmp.examples.gomoku.GomokuService.Play")
-	srv.Unregister(s, "stmp.examples.gomoku.GomokuService.Apply")
-	srv.Unregister(s, "stmp.examples.gomoku.GomokuService.Reply")
+	srv.Handle("stmp.examples.gomoku.GomokuService.Play", s, func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMPGomokuServiceServer).Play(ctx, in.(*HandModel)) })
+	srv.Handle("stmp.examples.gomoku.GomokuService.Apply", s, func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMPGomokuServiceServer).Apply(ctx, in.(*ApplyInput)) })
+	srv.Handle("stmp.examples.gomoku.GomokuService.Reply", s, func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMPGomokuServiceServer).Reply(ctx, in.(*ReplyInput)) })
 }
 
 type STMPGomokuServiceClient interface {
@@ -441,6 +372,7 @@ func STMPNewGomokuServiceClient(c *stmp.Client) STMPGomokuServiceClient {
 }
 
 
+
 func init() {
 	stmp.RegisterMethodAction("stmp.examples.gomoku.GomokuEvents.GameStart", 0x401, func() interface{} { return &GomokuModel{} }, func() interface{} { return &Empty{} })
 	stmp.RegisterMethodAction("stmp.examples.gomoku.GomokuEvents.UserPlay", 0x402, func() interface{} { return &UserPlayEvent{} }, func() interface{} { return &Empty{} })
@@ -462,45 +394,28 @@ type STMPGomokuEventsListener interface {
 	HandleGameOver(ctx context.Context, in *GomokuModel)
 }
 
-func STMPRegisterGomokuEventsListener(cc *stmp.Client, s STMPGomokuEventsListener) {
-	cc.Register(s, "stmp.examples.gomoku.GomokuEvents.GameStart", func(ctx context.Context, in interface{}, inst interface{}) (interface{}, error) {
-		inst.(STMPGomokuEventsListener).HandleGameStart(ctx, in.(*GomokuModel))
-		return nil, nil
-	})
-	cc.Register(s, "stmp.examples.gomoku.GomokuEvents.UserPlay", func(ctx context.Context, in interface{}, inst interface{}) (interface{}, error) {
-		inst.(STMPGomokuEventsListener).HandleUserPlay(ctx, in.(*UserPlayEvent))
-		return nil, nil
-	})
-	cc.Register(s, "stmp.examples.gomoku.GomokuEvents.UserApply", func(ctx context.Context, in interface{}, inst interface{}) (interface{}, error) {
-		inst.(STMPGomokuEventsListener).HandleUserApply(ctx, in.(*UserApplyEvent))
-		return nil, nil
-	})
-	cc.Register(s, "stmp.examples.gomoku.GomokuEvents.UserReply", func(ctx context.Context, in interface{}, inst interface{}) (interface{}, error) {
-		inst.(STMPGomokuEventsListener).HandleUserReply(ctx, in.(*UserReplyEvent))
-		return nil, nil
-	})
-	cc.Register(s, "stmp.examples.gomoku.GomokuEvents.UserDisconnected", func(ctx context.Context, in interface{}, inst interface{}) (interface{}, error) {
-		inst.(STMPGomokuEventsListener).HandleUserDisconnected(ctx, in.(*UserDisconnectedEvent))
-		return nil, nil
-	})
-	cc.Register(s, "stmp.examples.gomoku.GomokuEvents.UserConnected", func(ctx context.Context, in interface{}, inst interface{}) (interface{}, error) {
-		inst.(STMPGomokuEventsListener).HandleUserConnected(ctx, in.(*UserConnectedEvent))
-		return nil, nil
-	})
-	cc.Register(s, "stmp.examples.gomoku.GomokuEvents.GameOver", func(ctx context.Context, in interface{}, inst interface{}) (interface{}, error) {
-		inst.(STMPGomokuEventsListener).HandleGameOver(ctx, in.(*GomokuModel))
-		return nil, nil
-	})
+func STMPAttachGomokuEventsListener(c *stmp.Client, s STMPGomokuEventsListener) {
+	c.Lock()
+	c.AddListener("stmp.examples.gomoku.GomokuEvents.GameStart", s, func(ctx context.Context, in interface{}, inst interface{}) { inst.(STMPGomokuEventsListener).HandleGameStart(ctx, in.(*GomokuModel)) })
+	c.AddListener("stmp.examples.gomoku.GomokuEvents.UserPlay", s, func(ctx context.Context, in interface{}, inst interface{}) { inst.(STMPGomokuEventsListener).HandleUserPlay(ctx, in.(*UserPlayEvent)) })
+	c.AddListener("stmp.examples.gomoku.GomokuEvents.UserApply", s, func(ctx context.Context, in interface{}, inst interface{}) { inst.(STMPGomokuEventsListener).HandleUserApply(ctx, in.(*UserApplyEvent)) })
+	c.AddListener("stmp.examples.gomoku.GomokuEvents.UserReply", s, func(ctx context.Context, in interface{}, inst interface{}) { inst.(STMPGomokuEventsListener).HandleUserReply(ctx, in.(*UserReplyEvent)) })
+	c.AddListener("stmp.examples.gomoku.GomokuEvents.UserDisconnected", s, func(ctx context.Context, in interface{}, inst interface{}) { inst.(STMPGomokuEventsListener).HandleUserDisconnected(ctx, in.(*UserDisconnectedEvent)) })
+	c.AddListener("stmp.examples.gomoku.GomokuEvents.UserConnected", s, func(ctx context.Context, in interface{}, inst interface{}) { inst.(STMPGomokuEventsListener).HandleUserConnected(ctx, in.(*UserConnectedEvent)) })
+	c.AddListener("stmp.examples.gomoku.GomokuEvents.GameOver", s, func(ctx context.Context, in interface{}, inst interface{}) { inst.(STMPGomokuEventsListener).HandleGameOver(ctx, in.(*GomokuModel)) })
+	c.Unlock()
 }
 
-func STMPUnregisterGomokuEventsListener(cc *stmp.Client, s STMPGomokuEventsListener) {
-	cc.Unregister(s, "stmp.examples.gomoku.GomokuEvents.GameStart")
-	cc.Unregister(s, "stmp.examples.gomoku.GomokuEvents.UserPlay")
-	cc.Unregister(s, "stmp.examples.gomoku.GomokuEvents.UserApply")
-	cc.Unregister(s, "stmp.examples.gomoku.GomokuEvents.UserReply")
-	cc.Unregister(s, "stmp.examples.gomoku.GomokuEvents.UserDisconnected")
-	cc.Unregister(s, "stmp.examples.gomoku.GomokuEvents.UserConnected")
-	cc.Unregister(s, "stmp.examples.gomoku.GomokuEvents.GameOver")
+func STMPDetachGomokuEventsListener(c *stmp.Client, s STMPGomokuEventsListener) {
+	c.Lock()
+	c.RemoveListener("stmp.examples.gomoku.GomokuEvents.GameStart", s)
+	c.RemoveListener("stmp.examples.gomoku.GomokuEvents.UserPlay", s)
+	c.RemoveListener("stmp.examples.gomoku.GomokuEvents.UserApply", s)
+	c.RemoveListener("stmp.examples.gomoku.GomokuEvents.UserReply", s)
+	c.RemoveListener("stmp.examples.gomoku.GomokuEvents.UserDisconnected", s)
+	c.RemoveListener("stmp.examples.gomoku.GomokuEvents.UserConnected", s)
+	c.RemoveListener("stmp.examples.gomoku.GomokuEvents.GameOver", s)
+	c.Unlock()
 }
 
 type STMPGomokuEventsBroadcaster struct{}
@@ -510,22 +425,18 @@ func (s STMPGomokuEventsBroadcaster) GameStart(ctx context.Context, in *GomokuMo
 	return err
 }
 
-func (s STMPGomokuEventsBroadcaster) GameStartToList(ctx context.Context, in *GomokuModel, conns ...*stmp.Conn) error {
+func (s STMPGomokuEventsBroadcaster) GameStartToList(ctx context.Context, in *GomokuModel, conns ...*stmp.Conn) {
 	payloads := stmp.NewPayloadMap(in)
 	for _, conn := range conns {
 		payload, err := payloads.Marshal(conn)
 		if err != nil {
-			return err
+			continue
 		}
-		_, err = conn.Call(ctx, "stmp.examples.gomoku.GomokuEvents.GameStart", payload, stmp.NotifyOptions)
-		if err != nil {
-			return err
-		}
+		conn.Call(ctx, "stmp.examples.gomoku.GomokuEvents.GameStart", payload, stmp.NotifyOptions)
 	}
-	return nil
 }
 
-func (s STMPGomokuEventsBroadcaster) GameStartToSet(ctx context.Context, in *GomokuModel, conns stmp.ConnSet, exclude ...*stmp.Conn) error {
+func (s STMPGomokuEventsBroadcaster) GameStartToSet(ctx context.Context, in *GomokuModel, conns stmp.ConnSet, exclude ...*stmp.Conn) {
 	payloads := stmp.NewPayloadMap(in)
 	for conn := range conns {
 		for _, e := range exclude {
@@ -539,40 +450,31 @@ func (s STMPGomokuEventsBroadcaster) GameStartToSet(ctx context.Context, in *Gom
 		}
 		payload, err := payloads.Marshal(conn)
 		if err != nil {
-			return err
+			continue
 		}
-		_, err = conn.Call(ctx, "stmp.examples.gomoku.GomokuEvents.GameStart", payload, stmp.NotifyOptions)
-		if err != nil {
-			return err
-		}
+		conn.Call(ctx, "stmp.examples.gomoku.GomokuEvents.GameStart", payload, stmp.NotifyOptions)
 	}
-	return nil
 }
 
-func (s STMPGomokuEventsBroadcaster) GameStartToAll(ctx context.Context, in *GomokuModel, srv *stmp.Server, filter ...stmp.ConnFilter) error {
-	return srv.Broadcast(ctx, "stmp.examples.gomoku.GomokuEvents.GameStart", in, filter...)
-}
+func (s STMPGomokuEventsBroadcaster) GameStartToAll(ctx context.Context, in *GomokuModel, srv *stmp.Server, filter ...stmp.ConnFilter) { srv.Broadcast(ctx, "stmp.examples.gomoku.GomokuEvents.GameStart", in, filter...) }
+
 func (s STMPGomokuEventsBroadcaster) UserPlay(ctx context.Context, in *UserPlayEvent, conn *stmp.Conn, opts ...*stmp.CallOptions) error {
 	_, err := conn.Invoke(ctx, "stmp.examples.gomoku.GomokuEvents.UserPlay", in, stmp.PickCallOptions(opts...).Notify())
 	return err
 }
 
-func (s STMPGomokuEventsBroadcaster) UserPlayToList(ctx context.Context, in *UserPlayEvent, conns ...*stmp.Conn) error {
+func (s STMPGomokuEventsBroadcaster) UserPlayToList(ctx context.Context, in *UserPlayEvent, conns ...*stmp.Conn) {
 	payloads := stmp.NewPayloadMap(in)
 	for _, conn := range conns {
 		payload, err := payloads.Marshal(conn)
 		if err != nil {
-			return err
+			continue
 		}
-		_, err = conn.Call(ctx, "stmp.examples.gomoku.GomokuEvents.UserPlay", payload, stmp.NotifyOptions)
-		if err != nil {
-			return err
-		}
+		conn.Call(ctx, "stmp.examples.gomoku.GomokuEvents.UserPlay", payload, stmp.NotifyOptions)
 	}
-	return nil
 }
 
-func (s STMPGomokuEventsBroadcaster) UserPlayToSet(ctx context.Context, in *UserPlayEvent, conns stmp.ConnSet, exclude ...*stmp.Conn) error {
+func (s STMPGomokuEventsBroadcaster) UserPlayToSet(ctx context.Context, in *UserPlayEvent, conns stmp.ConnSet, exclude ...*stmp.Conn) {
 	payloads := stmp.NewPayloadMap(in)
 	for conn := range conns {
 		for _, e := range exclude {
@@ -586,40 +488,31 @@ func (s STMPGomokuEventsBroadcaster) UserPlayToSet(ctx context.Context, in *User
 		}
 		payload, err := payloads.Marshal(conn)
 		if err != nil {
-			return err
+			continue
 		}
-		_, err = conn.Call(ctx, "stmp.examples.gomoku.GomokuEvents.UserPlay", payload, stmp.NotifyOptions)
-		if err != nil {
-			return err
-		}
+		conn.Call(ctx, "stmp.examples.gomoku.GomokuEvents.UserPlay", payload, stmp.NotifyOptions)
 	}
-	return nil
 }
 
-func (s STMPGomokuEventsBroadcaster) UserPlayToAll(ctx context.Context, in *UserPlayEvent, srv *stmp.Server, filter ...stmp.ConnFilter) error {
-	return srv.Broadcast(ctx, "stmp.examples.gomoku.GomokuEvents.UserPlay", in, filter...)
-}
+func (s STMPGomokuEventsBroadcaster) UserPlayToAll(ctx context.Context, in *UserPlayEvent, srv *stmp.Server, filter ...stmp.ConnFilter) { srv.Broadcast(ctx, "stmp.examples.gomoku.GomokuEvents.UserPlay", in, filter...) }
+
 func (s STMPGomokuEventsBroadcaster) UserApply(ctx context.Context, in *UserApplyEvent, conn *stmp.Conn, opts ...*stmp.CallOptions) error {
 	_, err := conn.Invoke(ctx, "stmp.examples.gomoku.GomokuEvents.UserApply", in, stmp.PickCallOptions(opts...).Notify())
 	return err
 }
 
-func (s STMPGomokuEventsBroadcaster) UserApplyToList(ctx context.Context, in *UserApplyEvent, conns ...*stmp.Conn) error {
+func (s STMPGomokuEventsBroadcaster) UserApplyToList(ctx context.Context, in *UserApplyEvent, conns ...*stmp.Conn) {
 	payloads := stmp.NewPayloadMap(in)
 	for _, conn := range conns {
 		payload, err := payloads.Marshal(conn)
 		if err != nil {
-			return err
+			continue
 		}
-		_, err = conn.Call(ctx, "stmp.examples.gomoku.GomokuEvents.UserApply", payload, stmp.NotifyOptions)
-		if err != nil {
-			return err
-		}
+		conn.Call(ctx, "stmp.examples.gomoku.GomokuEvents.UserApply", payload, stmp.NotifyOptions)
 	}
-	return nil
 }
 
-func (s STMPGomokuEventsBroadcaster) UserApplyToSet(ctx context.Context, in *UserApplyEvent, conns stmp.ConnSet, exclude ...*stmp.Conn) error {
+func (s STMPGomokuEventsBroadcaster) UserApplyToSet(ctx context.Context, in *UserApplyEvent, conns stmp.ConnSet, exclude ...*stmp.Conn) {
 	payloads := stmp.NewPayloadMap(in)
 	for conn := range conns {
 		for _, e := range exclude {
@@ -633,40 +526,31 @@ func (s STMPGomokuEventsBroadcaster) UserApplyToSet(ctx context.Context, in *Use
 		}
 		payload, err := payloads.Marshal(conn)
 		if err != nil {
-			return err
+			continue
 		}
-		_, err = conn.Call(ctx, "stmp.examples.gomoku.GomokuEvents.UserApply", payload, stmp.NotifyOptions)
-		if err != nil {
-			return err
-		}
+		conn.Call(ctx, "stmp.examples.gomoku.GomokuEvents.UserApply", payload, stmp.NotifyOptions)
 	}
-	return nil
 }
 
-func (s STMPGomokuEventsBroadcaster) UserApplyToAll(ctx context.Context, in *UserApplyEvent, srv *stmp.Server, filter ...stmp.ConnFilter) error {
-	return srv.Broadcast(ctx, "stmp.examples.gomoku.GomokuEvents.UserApply", in, filter...)
-}
+func (s STMPGomokuEventsBroadcaster) UserApplyToAll(ctx context.Context, in *UserApplyEvent, srv *stmp.Server, filter ...stmp.ConnFilter) { srv.Broadcast(ctx, "stmp.examples.gomoku.GomokuEvents.UserApply", in, filter...) }
+
 func (s STMPGomokuEventsBroadcaster) UserReply(ctx context.Context, in *UserReplyEvent, conn *stmp.Conn, opts ...*stmp.CallOptions) error {
 	_, err := conn.Invoke(ctx, "stmp.examples.gomoku.GomokuEvents.UserReply", in, stmp.PickCallOptions(opts...).Notify())
 	return err
 }
 
-func (s STMPGomokuEventsBroadcaster) UserReplyToList(ctx context.Context, in *UserReplyEvent, conns ...*stmp.Conn) error {
+func (s STMPGomokuEventsBroadcaster) UserReplyToList(ctx context.Context, in *UserReplyEvent, conns ...*stmp.Conn) {
 	payloads := stmp.NewPayloadMap(in)
 	for _, conn := range conns {
 		payload, err := payloads.Marshal(conn)
 		if err != nil {
-			return err
+			continue
 		}
-		_, err = conn.Call(ctx, "stmp.examples.gomoku.GomokuEvents.UserReply", payload, stmp.NotifyOptions)
-		if err != nil {
-			return err
-		}
+		conn.Call(ctx, "stmp.examples.gomoku.GomokuEvents.UserReply", payload, stmp.NotifyOptions)
 	}
-	return nil
 }
 
-func (s STMPGomokuEventsBroadcaster) UserReplyToSet(ctx context.Context, in *UserReplyEvent, conns stmp.ConnSet, exclude ...*stmp.Conn) error {
+func (s STMPGomokuEventsBroadcaster) UserReplyToSet(ctx context.Context, in *UserReplyEvent, conns stmp.ConnSet, exclude ...*stmp.Conn) {
 	payloads := stmp.NewPayloadMap(in)
 	for conn := range conns {
 		for _, e := range exclude {
@@ -680,40 +564,31 @@ func (s STMPGomokuEventsBroadcaster) UserReplyToSet(ctx context.Context, in *Use
 		}
 		payload, err := payloads.Marshal(conn)
 		if err != nil {
-			return err
+			continue
 		}
-		_, err = conn.Call(ctx, "stmp.examples.gomoku.GomokuEvents.UserReply", payload, stmp.NotifyOptions)
-		if err != nil {
-			return err
-		}
+		conn.Call(ctx, "stmp.examples.gomoku.GomokuEvents.UserReply", payload, stmp.NotifyOptions)
 	}
-	return nil
 }
 
-func (s STMPGomokuEventsBroadcaster) UserReplyToAll(ctx context.Context, in *UserReplyEvent, srv *stmp.Server, filter ...stmp.ConnFilter) error {
-	return srv.Broadcast(ctx, "stmp.examples.gomoku.GomokuEvents.UserReply", in, filter...)
-}
+func (s STMPGomokuEventsBroadcaster) UserReplyToAll(ctx context.Context, in *UserReplyEvent, srv *stmp.Server, filter ...stmp.ConnFilter) { srv.Broadcast(ctx, "stmp.examples.gomoku.GomokuEvents.UserReply", in, filter...) }
+
 func (s STMPGomokuEventsBroadcaster) UserDisconnected(ctx context.Context, in *UserDisconnectedEvent, conn *stmp.Conn, opts ...*stmp.CallOptions) error {
 	_, err := conn.Invoke(ctx, "stmp.examples.gomoku.GomokuEvents.UserDisconnected", in, stmp.PickCallOptions(opts...).Notify())
 	return err
 }
 
-func (s STMPGomokuEventsBroadcaster) UserDisconnectedToList(ctx context.Context, in *UserDisconnectedEvent, conns ...*stmp.Conn) error {
+func (s STMPGomokuEventsBroadcaster) UserDisconnectedToList(ctx context.Context, in *UserDisconnectedEvent, conns ...*stmp.Conn) {
 	payloads := stmp.NewPayloadMap(in)
 	for _, conn := range conns {
 		payload, err := payloads.Marshal(conn)
 		if err != nil {
-			return err
+			continue
 		}
-		_, err = conn.Call(ctx, "stmp.examples.gomoku.GomokuEvents.UserDisconnected", payload, stmp.NotifyOptions)
-		if err != nil {
-			return err
-		}
+		conn.Call(ctx, "stmp.examples.gomoku.GomokuEvents.UserDisconnected", payload, stmp.NotifyOptions)
 	}
-	return nil
 }
 
-func (s STMPGomokuEventsBroadcaster) UserDisconnectedToSet(ctx context.Context, in *UserDisconnectedEvent, conns stmp.ConnSet, exclude ...*stmp.Conn) error {
+func (s STMPGomokuEventsBroadcaster) UserDisconnectedToSet(ctx context.Context, in *UserDisconnectedEvent, conns stmp.ConnSet, exclude ...*stmp.Conn) {
 	payloads := stmp.NewPayloadMap(in)
 	for conn := range conns {
 		for _, e := range exclude {
@@ -727,40 +602,31 @@ func (s STMPGomokuEventsBroadcaster) UserDisconnectedToSet(ctx context.Context, 
 		}
 		payload, err := payloads.Marshal(conn)
 		if err != nil {
-			return err
+			continue
 		}
-		_, err = conn.Call(ctx, "stmp.examples.gomoku.GomokuEvents.UserDisconnected", payload, stmp.NotifyOptions)
-		if err != nil {
-			return err
-		}
+		conn.Call(ctx, "stmp.examples.gomoku.GomokuEvents.UserDisconnected", payload, stmp.NotifyOptions)
 	}
-	return nil
 }
 
-func (s STMPGomokuEventsBroadcaster) UserDisconnectedToAll(ctx context.Context, in *UserDisconnectedEvent, srv *stmp.Server, filter ...stmp.ConnFilter) error {
-	return srv.Broadcast(ctx, "stmp.examples.gomoku.GomokuEvents.UserDisconnected", in, filter...)
-}
+func (s STMPGomokuEventsBroadcaster) UserDisconnectedToAll(ctx context.Context, in *UserDisconnectedEvent, srv *stmp.Server, filter ...stmp.ConnFilter) { srv.Broadcast(ctx, "stmp.examples.gomoku.GomokuEvents.UserDisconnected", in, filter...) }
+
 func (s STMPGomokuEventsBroadcaster) UserConnected(ctx context.Context, in *UserConnectedEvent, conn *stmp.Conn, opts ...*stmp.CallOptions) error {
 	_, err := conn.Invoke(ctx, "stmp.examples.gomoku.GomokuEvents.UserConnected", in, stmp.PickCallOptions(opts...).Notify())
 	return err
 }
 
-func (s STMPGomokuEventsBroadcaster) UserConnectedToList(ctx context.Context, in *UserConnectedEvent, conns ...*stmp.Conn) error {
+func (s STMPGomokuEventsBroadcaster) UserConnectedToList(ctx context.Context, in *UserConnectedEvent, conns ...*stmp.Conn) {
 	payloads := stmp.NewPayloadMap(in)
 	for _, conn := range conns {
 		payload, err := payloads.Marshal(conn)
 		if err != nil {
-			return err
+			continue
 		}
-		_, err = conn.Call(ctx, "stmp.examples.gomoku.GomokuEvents.UserConnected", payload, stmp.NotifyOptions)
-		if err != nil {
-			return err
-		}
+		conn.Call(ctx, "stmp.examples.gomoku.GomokuEvents.UserConnected", payload, stmp.NotifyOptions)
 	}
-	return nil
 }
 
-func (s STMPGomokuEventsBroadcaster) UserConnectedToSet(ctx context.Context, in *UserConnectedEvent, conns stmp.ConnSet, exclude ...*stmp.Conn) error {
+func (s STMPGomokuEventsBroadcaster) UserConnectedToSet(ctx context.Context, in *UserConnectedEvent, conns stmp.ConnSet, exclude ...*stmp.Conn) {
 	payloads := stmp.NewPayloadMap(in)
 	for conn := range conns {
 		for _, e := range exclude {
@@ -774,40 +640,31 @@ func (s STMPGomokuEventsBroadcaster) UserConnectedToSet(ctx context.Context, in 
 		}
 		payload, err := payloads.Marshal(conn)
 		if err != nil {
-			return err
+			continue
 		}
-		_, err = conn.Call(ctx, "stmp.examples.gomoku.GomokuEvents.UserConnected", payload, stmp.NotifyOptions)
-		if err != nil {
-			return err
-		}
+		conn.Call(ctx, "stmp.examples.gomoku.GomokuEvents.UserConnected", payload, stmp.NotifyOptions)
 	}
-	return nil
 }
 
-func (s STMPGomokuEventsBroadcaster) UserConnectedToAll(ctx context.Context, in *UserConnectedEvent, srv *stmp.Server, filter ...stmp.ConnFilter) error {
-	return srv.Broadcast(ctx, "stmp.examples.gomoku.GomokuEvents.UserConnected", in, filter...)
-}
+func (s STMPGomokuEventsBroadcaster) UserConnectedToAll(ctx context.Context, in *UserConnectedEvent, srv *stmp.Server, filter ...stmp.ConnFilter) { srv.Broadcast(ctx, "stmp.examples.gomoku.GomokuEvents.UserConnected", in, filter...) }
+
 func (s STMPGomokuEventsBroadcaster) GameOver(ctx context.Context, in *GomokuModel, conn *stmp.Conn, opts ...*stmp.CallOptions) error {
 	_, err := conn.Invoke(ctx, "stmp.examples.gomoku.GomokuEvents.GameOver", in, stmp.PickCallOptions(opts...).Notify())
 	return err
 }
 
-func (s STMPGomokuEventsBroadcaster) GameOverToList(ctx context.Context, in *GomokuModel, conns ...*stmp.Conn) error {
+func (s STMPGomokuEventsBroadcaster) GameOverToList(ctx context.Context, in *GomokuModel, conns ...*stmp.Conn) {
 	payloads := stmp.NewPayloadMap(in)
 	for _, conn := range conns {
 		payload, err := payloads.Marshal(conn)
 		if err != nil {
-			return err
+			continue
 		}
-		_, err = conn.Call(ctx, "stmp.examples.gomoku.GomokuEvents.GameOver", payload, stmp.NotifyOptions)
-		if err != nil {
-			return err
-		}
+		conn.Call(ctx, "stmp.examples.gomoku.GomokuEvents.GameOver", payload, stmp.NotifyOptions)
 	}
-	return nil
 }
 
-func (s STMPGomokuEventsBroadcaster) GameOverToSet(ctx context.Context, in *GomokuModel, conns stmp.ConnSet, exclude ...*stmp.Conn) error {
+func (s STMPGomokuEventsBroadcaster) GameOverToSet(ctx context.Context, in *GomokuModel, conns stmp.ConnSet, exclude ...*stmp.Conn) {
 	payloads := stmp.NewPayloadMap(in)
 	for conn := range conns {
 		for _, e := range exclude {
@@ -821,19 +678,16 @@ func (s STMPGomokuEventsBroadcaster) GameOverToSet(ctx context.Context, in *Gomo
 		}
 		payload, err := payloads.Marshal(conn)
 		if err != nil {
-			return err
+			continue
 		}
-		_, err = conn.Call(ctx, "stmp.examples.gomoku.GomokuEvents.GameOver", payload, stmp.NotifyOptions)
-		if err != nil {
-			return err
-		}
+		conn.Call(ctx, "stmp.examples.gomoku.GomokuEvents.GameOver", payload, stmp.NotifyOptions)
 	}
-	return nil
 }
 
-func (s STMPGomokuEventsBroadcaster) GameOverToAll(ctx context.Context, in *GomokuModel, srv *stmp.Server, filter ...stmp.ConnFilter) error {
-	return srv.Broadcast(ctx, "stmp.examples.gomoku.GomokuEvents.GameOver", in, filter...)
-}
+func (s STMPGomokuEventsBroadcaster) GameOverToAll(ctx context.Context, in *GomokuModel, srv *stmp.Server, filter ...stmp.ConnFilter) { srv.Broadcast(ctx, "stmp.examples.gomoku.GomokuEvents.GameOver", in, filter...) }
+
+
+
 func init() {
 	stmp.RegisterMethodAction("stmp.examples.gomoku.PlayerService.Login", 0x501, func() interface{} { return &LoginInput{} }, func() interface{} { return &PlayerModel{} })
 	stmp.RegisterMethodAction("stmp.examples.gomoku.PlayerService.ListUser", 0x502, func() interface{} { return &ListPlayerInput{} }, func() interface{} { return &ListPlayerOutput{} })
@@ -845,13 +699,8 @@ type STMPPlayerServiceServer interface {
 }
 
 func STMPRegisterPlayerServiceServer(srv *stmp.Server, s STMPPlayerServiceServer) {
-	srv.Register(s, "stmp.examples.gomoku.PlayerService.Login", func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMPPlayerServiceServer).Login(ctx, in.(*LoginInput)) })
-	srv.Register(s, "stmp.examples.gomoku.PlayerService.ListUser", func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMPPlayerServiceServer).ListUser(ctx, in.(*ListPlayerInput)) })
-}
-
-func STMPUnregisterPlayerServiceServer(srv *stmp.Server, s STMPPlayerServiceServer) {
-	srv.Unregister(s, "stmp.examples.gomoku.PlayerService.Login")
-	srv.Unregister(s, "stmp.examples.gomoku.PlayerService.ListUser")
+	srv.Handle("stmp.examples.gomoku.PlayerService.Login", s, func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMPPlayerServiceServer).Login(ctx, in.(*LoginInput)) })
+	srv.Handle("stmp.examples.gomoku.PlayerService.ListUser", s, func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMPPlayerServiceServer).ListUser(ctx, in.(*ListPlayerInput)) })
 }
 
 type STMPPlayerServiceClient interface {
@@ -878,6 +727,7 @@ func STMPNewPlayerServiceClient(c *stmp.Client) STMPPlayerServiceClient {
 }
 
 
+
 func init() {
 	stmp.RegisterMethodAction("stmp.examples.gomoku.PlayerEvents.StatusUpdated", 0x601, func() interface{} { return &PlayerModel{} }, func() interface{} { return &Empty{} })
 }
@@ -887,15 +737,16 @@ type STMPPlayerEventsListener interface {
 	HandleStatusUpdated(ctx context.Context, in *PlayerModel)
 }
 
-func STMPRegisterPlayerEventsListener(cc *stmp.Client, s STMPPlayerEventsListener) {
-	cc.Register(s, "stmp.examples.gomoku.PlayerEvents.StatusUpdated", func(ctx context.Context, in interface{}, inst interface{}) (interface{}, error) {
-		inst.(STMPPlayerEventsListener).HandleStatusUpdated(ctx, in.(*PlayerModel))
-		return nil, nil
-	})
+func STMPAttachPlayerEventsListener(c *stmp.Client, s STMPPlayerEventsListener) {
+	c.Lock()
+	c.AddListener("stmp.examples.gomoku.PlayerEvents.StatusUpdated", s, func(ctx context.Context, in interface{}, inst interface{}) { inst.(STMPPlayerEventsListener).HandleStatusUpdated(ctx, in.(*PlayerModel)) })
+	c.Unlock()
 }
 
-func STMPUnregisterPlayerEventsListener(cc *stmp.Client, s STMPPlayerEventsListener) {
-	cc.Unregister(s, "stmp.examples.gomoku.PlayerEvents.StatusUpdated")
+func STMPDetachPlayerEventsListener(c *stmp.Client, s STMPPlayerEventsListener) {
+	c.Lock()
+	c.RemoveListener("stmp.examples.gomoku.PlayerEvents.StatusUpdated", s)
+	c.Unlock()
 }
 
 type STMPPlayerEventsBroadcaster struct{}
@@ -905,22 +756,18 @@ func (s STMPPlayerEventsBroadcaster) StatusUpdated(ctx context.Context, in *Play
 	return err
 }
 
-func (s STMPPlayerEventsBroadcaster) StatusUpdatedToList(ctx context.Context, in *PlayerModel, conns ...*stmp.Conn) error {
+func (s STMPPlayerEventsBroadcaster) StatusUpdatedToList(ctx context.Context, in *PlayerModel, conns ...*stmp.Conn) {
 	payloads := stmp.NewPayloadMap(in)
 	for _, conn := range conns {
 		payload, err := payloads.Marshal(conn)
 		if err != nil {
-			return err
+			continue
 		}
-		_, err = conn.Call(ctx, "stmp.examples.gomoku.PlayerEvents.StatusUpdated", payload, stmp.NotifyOptions)
-		if err != nil {
-			return err
-		}
+		conn.Call(ctx, "stmp.examples.gomoku.PlayerEvents.StatusUpdated", payload, stmp.NotifyOptions)
 	}
-	return nil
 }
 
-func (s STMPPlayerEventsBroadcaster) StatusUpdatedToSet(ctx context.Context, in *PlayerModel, conns stmp.ConnSet, exclude ...*stmp.Conn) error {
+func (s STMPPlayerEventsBroadcaster) StatusUpdatedToSet(ctx context.Context, in *PlayerModel, conns stmp.ConnSet, exclude ...*stmp.Conn) {
 	payloads := stmp.NewPayloadMap(in)
 	for conn := range conns {
 		for _, e := range exclude {
@@ -934,16 +781,13 @@ func (s STMPPlayerEventsBroadcaster) StatusUpdatedToSet(ctx context.Context, in 
 		}
 		payload, err := payloads.Marshal(conn)
 		if err != nil {
-			return err
+			continue
 		}
-		_, err = conn.Call(ctx, "stmp.examples.gomoku.PlayerEvents.StatusUpdated", payload, stmp.NotifyOptions)
-		if err != nil {
-			return err
-		}
+		conn.Call(ctx, "stmp.examples.gomoku.PlayerEvents.StatusUpdated", payload, stmp.NotifyOptions)
 	}
-	return nil
 }
 
-func (s STMPPlayerEventsBroadcaster) StatusUpdatedToAll(ctx context.Context, in *PlayerModel, srv *stmp.Server, filter ...stmp.ConnFilter) error {
-	return srv.Broadcast(ctx, "stmp.examples.gomoku.PlayerEvents.StatusUpdated", in, filter...)
-}
+func (s STMPPlayerEventsBroadcaster) StatusUpdatedToAll(ctx context.Context, in *PlayerModel, srv *stmp.Server, filter ...stmp.ConnFilter) { srv.Broadcast(ctx, "stmp.examples.gomoku.PlayerEvents.StatusUpdated", in, filter...) }
+
+
+

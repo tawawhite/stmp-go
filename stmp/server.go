@@ -95,8 +95,8 @@ func NewServer(opts *ServerOptions) *Server {
 		conns:     NewConnSet(),
 		done:      make(chan error, 1),
 	}
-	opts.router = NewRouter(srv)
-	srv.Router = opts.router
+	srv.Router = NewRouter(srv)
+	opts.dispatch = srv.dispatch
 	return srv
 }
 
@@ -108,7 +108,7 @@ type ConnFilter func(conn *Conn) bool
 
 var AllowAll ConnFilter = func(conn *Conn) bool { return true }
 
-func (s *Server) Broadcast(ctx context.Context, method string, in interface{}, filters ...ConnFilter) error {
+func (s *Server) Broadcast(ctx context.Context, method string, in interface{}, filters ...ConnFilter) {
 	var filter ConnFilter
 	if len(filters) == 0 {
 		filter = AllowAll
@@ -122,15 +122,11 @@ func (s *Server) Broadcast(ctx context.Context, method string, in interface{}, f
 		if filter(conn) {
 			payload, err := payloads.Marshal(conn)
 			if err != nil {
-				return err
+				continue
 			}
-			_, err = conn.Call(ctx, method, payload, NotifyOptions)
-			if err != nil {
-				return err
-			}
+			conn.Call(ctx, method, payload, NotifyOptions)
 		}
 	}
-	return nil
 }
 
 func (s *Server) newConn(nc net.Conn) *Conn {

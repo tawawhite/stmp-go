@@ -10,7 +10,7 @@ import (
 
 
 func init() {
-	stmp.RegisterMethodAction("stmp.examples.quick_start.RoomService.JoinRoom", 0x833648F7, func() interface{} { return &JoinRoomInput{} }, func() interface{} { return &RoomModel{} })
+	stmp.RegisterMethodAction("stmp.examples.quick_start.RoomService.JoinRoom", 0x33648F7, func() interface{} { return &JoinRoomInput{} }, func() interface{} { return &RoomModel{} })
 	stmp.RegisterMethodAction("stmp.examples.quick_start.RoomService.ExitRoom", 0xA7FFD932, func() interface{} { return &ExitRoomInput{} }, func() interface{} { return &empty.Empty{} })
 }
 
@@ -20,13 +20,8 @@ type STMPRoomServiceServer interface {
 }
 
 func STMPRegisterRoomServiceServer(srv *stmp.Server, s STMPRoomServiceServer) {
-	srv.Register(s, "stmp.examples.quick_start.RoomService.JoinRoom", func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMPRoomServiceServer).JoinRoom(ctx, in.(*JoinRoomInput)) })
-	srv.Register(s, "stmp.examples.quick_start.RoomService.ExitRoom", func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMPRoomServiceServer).ExitRoom(ctx, in.(*ExitRoomInput)) })
-}
-
-func STMPUnregisterRoomServiceServer(srv *stmp.Server, s STMPRoomServiceServer) {
-	srv.Unregister(s, "stmp.examples.quick_start.RoomService.JoinRoom")
-	srv.Unregister(s, "stmp.examples.quick_start.RoomService.ExitRoom")
+	srv.Handle("stmp.examples.quick_start.RoomService.JoinRoom", s, func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMPRoomServiceServer).JoinRoom(ctx, in.(*JoinRoomInput)) })
+	srv.Handle("stmp.examples.quick_start.RoomService.ExitRoom", s, func(ctx context.Context, in interface{}, inst interface{}) (out interface{}, err error) { return inst.(STMPRoomServiceServer).ExitRoom(ctx, in.(*ExitRoomInput)) })
 }
 
 type STMPRoomServiceClient interface {
@@ -53,6 +48,7 @@ func STMPNewRoomServiceClient(c *stmp.Client) STMPRoomServiceClient {
 }
 
 
+
 func init() {
 	stmp.RegisterMethodAction("stmp.examples.quick_start.RoomEvents.UserJoin", 0x999B2807, func() interface{} { return &UserJoinEvent{} }, func() interface{} { return &empty.Empty{} })
 	stmp.RegisterMethodAction("stmp.examples.quick_start.RoomEvents.UserExit", 0x827247A2, func() interface{} { return &UserExitEvent{} }, func() interface{} { return &empty.Empty{} })
@@ -64,20 +60,18 @@ type STMPRoomEventsListener interface {
 	HandleUserExit(ctx context.Context, in *UserExitEvent)
 }
 
-func STMPRegisterRoomEventsListener(cc *stmp.Client, s STMPRoomEventsListener) {
-	cc.Register(s, "stmp.examples.quick_start.RoomEvents.UserJoin", func(ctx context.Context, in interface{}, inst interface{}) (interface{}, error) {
-		inst.(STMPRoomEventsListener).HandleUserJoin(ctx, in.(*UserJoinEvent))
-		return nil, nil
-	})
-	cc.Register(s, "stmp.examples.quick_start.RoomEvents.UserExit", func(ctx context.Context, in interface{}, inst interface{}) (interface{}, error) {
-		inst.(STMPRoomEventsListener).HandleUserExit(ctx, in.(*UserExitEvent))
-		return nil, nil
-	})
+func STMPAttachRoomEventsListener(c *stmp.Client, s STMPRoomEventsListener) {
+	c.Lock()
+	c.AddListener("stmp.examples.quick_start.RoomEvents.UserJoin", s, func(ctx context.Context, in interface{}, inst interface{}) { inst.(STMPRoomEventsListener).HandleUserJoin(ctx, in.(*UserJoinEvent)) })
+	c.AddListener("stmp.examples.quick_start.RoomEvents.UserExit", s, func(ctx context.Context, in interface{}, inst interface{}) { inst.(STMPRoomEventsListener).HandleUserExit(ctx, in.(*UserExitEvent)) })
+	c.Unlock()
 }
 
-func STMPUnregisterRoomEventsListener(cc *stmp.Client, s STMPRoomEventsListener) {
-	cc.Unregister(s, "stmp.examples.quick_start.RoomEvents.UserJoin")
-	cc.Unregister(s, "stmp.examples.quick_start.RoomEvents.UserExit")
+func STMPDetachRoomEventsListener(c *stmp.Client, s STMPRoomEventsListener) {
+	c.Lock()
+	c.RemoveListener("stmp.examples.quick_start.RoomEvents.UserJoin", s)
+	c.RemoveListener("stmp.examples.quick_start.RoomEvents.UserExit", s)
+	c.Unlock()
 }
 
 type STMPRoomEventsBroadcaster struct{}
@@ -87,22 +81,18 @@ func (s STMPRoomEventsBroadcaster) UserJoin(ctx context.Context, in *UserJoinEve
 	return err
 }
 
-func (s STMPRoomEventsBroadcaster) UserJoinToList(ctx context.Context, in *UserJoinEvent, conns ...*stmp.Conn) error {
+func (s STMPRoomEventsBroadcaster) UserJoinToList(ctx context.Context, in *UserJoinEvent, conns ...*stmp.Conn) {
 	payloads := stmp.NewPayloadMap(in)
 	for _, conn := range conns {
 		payload, err := payloads.Marshal(conn)
 		if err != nil {
-			return err
+			continue
 		}
-		_, err = conn.Call(ctx, "stmp.examples.quick_start.RoomEvents.UserJoin", payload, stmp.NotifyOptions)
-		if err != nil {
-			return err
-		}
+		conn.Call(ctx, "stmp.examples.quick_start.RoomEvents.UserJoin", payload, stmp.NotifyOptions)
 	}
-	return nil
 }
 
-func (s STMPRoomEventsBroadcaster) UserJoinToSet(ctx context.Context, in *UserJoinEvent, conns stmp.ConnSet, exclude ...*stmp.Conn) error {
+func (s STMPRoomEventsBroadcaster) UserJoinToSet(ctx context.Context, in *UserJoinEvent, conns stmp.ConnSet, exclude ...*stmp.Conn) {
 	payloads := stmp.NewPayloadMap(in)
 	for conn := range conns {
 		for _, e := range exclude {
@@ -116,40 +106,31 @@ func (s STMPRoomEventsBroadcaster) UserJoinToSet(ctx context.Context, in *UserJo
 		}
 		payload, err := payloads.Marshal(conn)
 		if err != nil {
-			return err
+			continue
 		}
-		_, err = conn.Call(ctx, "stmp.examples.quick_start.RoomEvents.UserJoin", payload, stmp.NotifyOptions)
-		if err != nil {
-			return err
-		}
+		conn.Call(ctx, "stmp.examples.quick_start.RoomEvents.UserJoin", payload, stmp.NotifyOptions)
 	}
-	return nil
 }
 
-func (s STMPRoomEventsBroadcaster) UserJoinToAll(ctx context.Context, in *UserJoinEvent, srv *stmp.Server, filter ...stmp.ConnFilter) error {
-	return srv.Broadcast(ctx, "stmp.examples.quick_start.RoomEvents.UserJoin", in, filter...)
-}
+func (s STMPRoomEventsBroadcaster) UserJoinToAll(ctx context.Context, in *UserJoinEvent, srv *stmp.Server, filter ...stmp.ConnFilter) { srv.Broadcast(ctx, "stmp.examples.quick_start.RoomEvents.UserJoin", in, filter...) }
+
 func (s STMPRoomEventsBroadcaster) UserExit(ctx context.Context, in *UserExitEvent, conn *stmp.Conn, opts ...*stmp.CallOptions) error {
 	_, err := conn.Invoke(ctx, "stmp.examples.quick_start.RoomEvents.UserExit", in, stmp.PickCallOptions(opts...).Notify())
 	return err
 }
 
-func (s STMPRoomEventsBroadcaster) UserExitToList(ctx context.Context, in *UserExitEvent, conns ...*stmp.Conn) error {
+func (s STMPRoomEventsBroadcaster) UserExitToList(ctx context.Context, in *UserExitEvent, conns ...*stmp.Conn) {
 	payloads := stmp.NewPayloadMap(in)
 	for _, conn := range conns {
 		payload, err := payloads.Marshal(conn)
 		if err != nil {
-			return err
+			continue
 		}
-		_, err = conn.Call(ctx, "stmp.examples.quick_start.RoomEvents.UserExit", payload, stmp.NotifyOptions)
-		if err != nil {
-			return err
-		}
+		conn.Call(ctx, "stmp.examples.quick_start.RoomEvents.UserExit", payload, stmp.NotifyOptions)
 	}
-	return nil
 }
 
-func (s STMPRoomEventsBroadcaster) UserExitToSet(ctx context.Context, in *UserExitEvent, conns stmp.ConnSet, exclude ...*stmp.Conn) error {
+func (s STMPRoomEventsBroadcaster) UserExitToSet(ctx context.Context, in *UserExitEvent, conns stmp.ConnSet, exclude ...*stmp.Conn) {
 	payloads := stmp.NewPayloadMap(in)
 	for conn := range conns {
 		for _, e := range exclude {
@@ -163,16 +144,13 @@ func (s STMPRoomEventsBroadcaster) UserExitToSet(ctx context.Context, in *UserEx
 		}
 		payload, err := payloads.Marshal(conn)
 		if err != nil {
-			return err
+			continue
 		}
-		_, err = conn.Call(ctx, "stmp.examples.quick_start.RoomEvents.UserExit", payload, stmp.NotifyOptions)
-		if err != nil {
-			return err
-		}
+		conn.Call(ctx, "stmp.examples.quick_start.RoomEvents.UserExit", payload, stmp.NotifyOptions)
 	}
-	return nil
 }
 
-func (s STMPRoomEventsBroadcaster) UserExitToAll(ctx context.Context, in *UserExitEvent, srv *stmp.Server, filter ...stmp.ConnFilter) error {
-	return srv.Broadcast(ctx, "stmp.examples.quick_start.RoomEvents.UserExit", in, filter...)
-}
+func (s STMPRoomEventsBroadcaster) UserExitToAll(ctx context.Context, in *UserExitEvent, srv *stmp.Server, filter ...stmp.ConnFilter) { srv.Broadcast(ctx, "stmp.examples.quick_start.RoomEvents.UserExit", in, filter...) }
+
+
+
