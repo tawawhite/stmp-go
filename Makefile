@@ -16,6 +16,9 @@ init:
 	go mod download
 	go mod vendor
 
+get:
+	go get -u ./...
+
 proto-gomoku: gen-stmp
 	protoc --proto_path=vendor --proto_path=. \
 		--plugin=protoc-gen-stmp=$$PWD/out/protoc-gen-stmp \

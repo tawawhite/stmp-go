@@ -41,7 +41,7 @@ func (g *generator) golangFile(filename string) (res *plugin_go.CodeGeneratorRes
 	res = new(plugin_go.CodeGeneratorResponse_File)
 	pkg, name := resolveGolangFile(req)
 	res.Name = &name
-	ds := newDepSet(g, path.Dir(req.GetName()))
+	ds := newDepSet(g, pkg)
 	data := new(GolangRenderData)
 	data.Filename = req.GetName()
 	data.Package = pkg
@@ -67,15 +67,15 @@ func (g *generator) golangFile(filename string) (res *plugin_go.CodeGeneratorRes
 
 type GoDepSet struct {
 	g     *generator
-	dir   string
+	pkg   string
 	bases map[string]string
 	paths map[string]string
 }
 
-func newDepSet(g *generator, dir string) *GoDepSet {
+func newDepSet(g *generator, pkg string) *GoDepSet {
 	return &GoDepSet{
 		g:     g,
-		dir:   dir,
+		pkg:   pkg,
 		bases: map[string]string{},
 		paths: map[string]string{},
 	}
@@ -91,10 +91,10 @@ func (s *GoDepSet) Resolve(typ string) string {
 		return ""
 	}
 	typ = upFirst(strings.ReplaceAll(strings.TrimPrefix(typ, file.GetPackage()+"."), ".", "_"))
-	if path.Dir(file.GetName()) == s.dir {
+	pkg, name := resolveGolangFile(file)
+	if pkg == s.pkg {
 		return typ
 	}
-	pkg, name := resolveGolangFile(file)
 	ident := path.Dir(name)
 	if old, ok := s.paths[ident]; ok {
 		return old + "." + typ
