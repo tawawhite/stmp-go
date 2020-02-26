@@ -264,7 +264,7 @@ func (g *generator) parseMethod(req *descriptor.FileDescriptorProto, m *descript
 	if method.Id != nil && service.Id != nil {
 		method.Action = *service.Id<<8 | *method.Id
 	} else {
-		method.Action = uint64(murmur3.Sum32([]byte(method.FullMethod)))
+		method.Action = uint64(murmur3.StringSum32(method.FullMethod))
 	}
 	method.ActionHex = strings.ToUpper(strconv.FormatUint(method.Action, 16))
 	method.Input = m.GetInputType()[1:]

@@ -33,7 +33,7 @@ var ms = methodStore{
 // register a method, this is used for protoc-gen-stmp
 func RegisterMethodAction(method string, action uint64, input ModelFactory, output ModelFactory) {
 	if action == 0 {
-		action, _ = murmur3.Sum128([]byte(method))
+		action, _ = murmur3.StringSum128(method)
 		action |= 1 << 63
 	}
 	if ms.actions[action] != nil && ms.actions[action].Method != method {
