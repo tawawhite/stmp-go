@@ -22,7 +22,7 @@ require (
 	github.com/templexxx/xor v0.0.0-20191217153810-f85b25db303b // indirect
 	github.com/tinylib/msgp v1.1.1
 	github.com/tjfoc/gmsm v1.2.0 // indirect
-	github.com/twmb/murmur3 v1.0.0
+	github.com/twmb/murmur3 v1.1.1
 	github.com/vmihailenco/msgpack v4.0.4+incompatible
 	github.com/xtaci/kcp-go v5.4.20+incompatible
 	github.com/xtaci/lossyconn v0.0.0-20190602105132-8df528c0c9ae // indirect
